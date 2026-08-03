@@ -1,17 +1,126 @@
-# docuai
+# DocuAI
 
-A new Flutter project.
+**Intelligent Document Scanner & Offline AI Assistant**
 
-## Getting Started
+An Android document scanner that captures, enhances, reads and answers questions
+about your documents — entirely on-device. No account, no server, no analytics,
+no network layer at all.
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## Status
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+| Phase | Scope | State |
+|---|---|---|
+| 0 | Foundation: tooling, architecture, theme, routing, storage | ✅ Complete |
+| 1 | Domain entities, repository contracts, use cases | ⬜ Not started |
+| 2 | Hive persistence and the document library | ⬜ Not started |
+| 3 | ML Kit document scanning | ⬜ Not started |
+| 4 | On-device OCR (ML Kit Text Recognition) | ⬜ Not started |
+| 5 | PDF generation and sharing | ⬜ Not started |
+| 6 | Full-text search over extracted text | ⬜ Not started |
+| 7 | Offline assistant (retrieval; optional on-device LLM) | ⬜ Not started |
+| 8 | Polish, accessibility and Play Store release | ⬜ Not started |
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Unbuilt screens render a `PhasePlaceholder` naming the phase that replaces them.
+`grep -r PhasePlaceholder lib` lists all remaining work.
+
+---
+
+## Tech stack
+
+| Concern | Choice |
+|---|---|
+| Framework | Flutter 3.41 · Dart 3.11 |
+| UI | Material 3, seeded colour scheme, light + dark |
+| State | Riverpod 3 |
+| Navigation | GoRouter 17 (`StatefulShellRoute`) |
+| Storage | Hive CE (metadata) + app-sandbox files (images, PDFs) |
+| Scanning | Google ML Kit Document Scanner |
+| OCR | Google ML Kit Text Recognition |
+| Export | `pdf` + `share_plus` |
+| Backend | **None** — by design |
+
+---
+
+## Architecture
+
+Feature-first Clean Architecture with a strict inward dependency rule.
+
+```
+lib/
+├── main.dart               entry point (one line)
+├── bootstrap.dart          composition root: error handlers, Hive, DI, runApp
+└── src/
+    ├── app.dart            MaterialApp.router
+    ├── core/               cross-cutting: theme, router, storage, errors, widgets
+    └── features/<feature>/
+        ├── domain/         entities · repository interfaces · use cases
+        ├── data/           Hive models · data sources · repository impls
+        └── presentation/   Riverpod providers · screens · widgets
+```
+
+**The rule:** `presentation → domain ← data`.
+
+The `domain` layer is pure Dart. It imports no Flutter, no Hive, no ML Kit —
+which is what makes use cases unit-testable with no emulator, and what allows
+the storage engine to be swapped without touching business logic.
+
+Two deliberate consequences:
+
+- **Entities are separate from models.** `Document` (domain) and
+  `DocumentModel` (`@HiveType`, data) are distinct classes with explicit
+  mapping. This is the step most tutorials skip.
+- **Errors change shape at the boundary.** Data sources throw
+  `CacheException` / `MlKitException`; repositories catch them and return a
+  sealed `Failure`, so the UI handles errors with an exhaustive `switch` the
+  compiler verifies.
+
+### Storage model
+
+Hive holds **metadata only** — ids, titles, timestamps, tags, extracted text and
+page paths. Images and PDFs live on disk under the app documents directory.
+
+Paths are persisted **relative** and resolved through `StoragePaths` at read
+time, because Android does not guarantee the absolute sandbox path survives a
+reinstall or update.
+
+---
+
+## Getting started
+
+```bash
+flutter pub get
+flutter run
+```
+
+Requires the Flutter stable channel and an Android device or emulator.
+
+> **Scanning needs a real device.** ML Kit Document Scanner is a Google Play
+> Services module downloaded on demand, so it does not work on emulator images
+> without the Play Store, or on non-GMS devices.
+
+### Quality gates
+
+```bash
+flutter analyze   # must be clean
+flutter test      # widget + unit tests, no emulator required
+```
+
+---
+
+## Privacy
+
+DocuAI has no network permission, no backend and no telemetry. Scanning, text
+recognition, search and the assistant all execute locally. Documents never leave
+the device.
+
+---
+
+## Release checklist (Phase 8)
+
+- [ ] Create the release keystore and `android/key.properties` (both git-ignored)
+- [ ] Enable R8 with ML Kit keep-rules, then re-test scanning in release mode
+- [ ] Adaptive launcher icon and splash screen
+- [ ] Accessibility pass (contrast, touch targets, TalkBack)
+- [ ] Build the app bundle and publish the privacy policy

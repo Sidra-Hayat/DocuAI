@@ -1,0 +1,79 @@
+/// Domain-level error type.
+///
+/// The domain layer never sees a `HiveError`, a `PlatformException` or an
+/// `IOException`. The data layer catches those and maps them onto one of the
+/// subtypes below, which keeps the domain pure Dart and makes error handling
+/// exhaustively checkable by the compiler:
+///
+/// ```dart
+/// final message = switch (failure) {
+///   StorageFailure() => 'Could not read your documents.',
+///   ScanFailure()    => 'Scanning was cancelled.',
+///   // the analyzer errors if a case is missing
+/// };
+/// ```
+sealed class Failure {
+  const Failure(this.message, {this.cause, this.stackTrace});
+
+  /// Human-readable, already-localised description safe to show to the user.
+  final String message;
+
+  /// The original error, kept for logging. Never surfaced in the UI.
+  final Object? cause;
+
+  final StackTrace? stackTrace;
+
+  @override
+  String toString() => '$runtimeType: $message';
+}
+
+/// Reading from or writing to local storage failed (Hive or the file system).
+final class StorageFailure extends Failure {
+  const StorageFailure(super.message, {super.cause, super.stackTrace});
+}
+
+/// The document scanner failed or was dismissed by the user.
+final class ScanFailure extends Failure {
+  const ScanFailure(super.message, {super.cause, super.stackTrace});
+}
+
+/// Text recognition failed on one or more pages.
+final class OcrFailure extends Failure {
+  const OcrFailure(super.message, {super.cause, super.stackTrace});
+}
+
+/// PDF composition or export failed.
+final class ExportFailure extends Failure {
+  const ExportFailure(super.message, {super.cause, super.stackTrace});
+}
+
+/// A required runtime permission was denied.
+final class PermissionFailure extends Failure {
+  const PermissionFailure(
+    super.message, {
+    this.permanentlyDenied = false,
+    super.cause,
+    super.stackTrace,
+  });
+
+  /// When true the user selected "don't ask again" and must be sent to the
+  /// system settings page rather than re-prompted.
+  final bool permanentlyDenied;
+}
+
+/// The offline assistant could not produce an answer.
+final class AssistantFailure extends Failure {
+  const AssistantFailure(super.message, {super.cause, super.stackTrace});
+}
+
+/// Anything that escaped the cases above. Should be rare; investigate if seen.
+final class UnexpectedFailure extends Failure {
+  /// [message] is named here rather than positional so it can carry a default
+  /// while still allowing [cause] and [stackTrace] — Dart does not permit
+  /// optional positional and named parameters in the same signature.
+  const UnexpectedFailure({
+    String message = 'Something went wrong.',
+    Object? cause,
+    StackTrace? stackTrace,
+  }) : super(message, cause: cause, stackTrace: stackTrace);
+}

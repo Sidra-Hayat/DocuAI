@@ -1,28 +1,63 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# Static analysis configuration for DocuAI.
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
-
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
+# Stricter than the Flutter default: the extra rules below are the ones that
+# catch real defects in an offline, storage-heavy app (unawaited futures, silent
+# type coercion, leaked resources) rather than stylistic preferences.
 include: package:flutter_lints/flutter.yaml
 
-linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
-  rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+analyzer:
+  errors:
+    # An unawaited Future around a Hive write silently loses data — promote it
+    # from a hint to a build failure.
+    unawaited_futures: error
+    missing_required_param: error
+    # Freezed/Hive generators legitimately annotate private constructors.
+    invalid_annotation_target: ignore
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "build/**"
+
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    # --- Correctness -------------------------------------------------------
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    avoid_slow_async_io: true
+    cancel_subscriptions: true
+    close_sinks: true
+    only_throw_errors: true
+    throw_in_finally: true
+    unawaited_futures: true
+    unnecessary_statements: true
+
+    # --- Architecture boundaries -------------------------------------------
+    # Relative imports inside lib/ keep layer violations visible in review;
+    # an absolute `package:docuai/...` import in a feature is a smell.
+    prefer_relative_imports: true
+    avoid_relative_lib_imports: true
+    implementation_imports: true
+
+    # --- Style / readability ------------------------------------------------
+    prefer_single_quotes: true
+    prefer_final_locals: true
+    prefer_final_in_for_each: true
+    directives_ordering: true
+    sort_child_properties_last: true
+    use_super_parameters: true
+    require_trailing_commas: true
+    unnecessary_parenthesis: true
+    unnecessary_lambdas: true
+
+    # --- Flutter-specific ---------------------------------------------------
+    use_build_context_synchronously: true
+    use_colored_box: true
+    use_decorated_box: true
+    avoid_unnecessary_containers: true
+    sized_box_for_whitespace: true
