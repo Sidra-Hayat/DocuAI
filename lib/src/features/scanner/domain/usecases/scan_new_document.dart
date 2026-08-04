@@ -45,9 +45,12 @@ class ScanNewDocument {
 
     // The user opened the scanner and backed out. Nothing to save, and nothing
     // went wrong — but there is no document to return either, so this is the
-    // one cancellation the caller has to handle.
+    // one cancellation the caller has to handle. The `cancelled` flag is what
+    // lets the UI tell it apart from a scanner that genuinely failed.
     if (imagePaths.isEmpty) {
-      return const Failed(ScanFailure('No pages were captured.'));
+      return const Failed(
+        ScanFailure('No pages were captured.', cancelled: true),
+      );
     }
 
     final trimmed = title?.trim();

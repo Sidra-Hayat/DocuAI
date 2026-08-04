@@ -15,7 +15,7 @@ no network layer at all.
 | 0 | Foundation: tooling, architecture, theme, routing, storage | ✅ Complete |
 | 1 | Domain entities, repository contracts, use cases | ✅ Complete |
 | 2 | Hive persistence and the document library | ✅ Complete |
-| 3 | ML Kit document scanning | ⬜ Not started |
+| 3 | ML Kit document scanning | ✅ Complete |
 | 4 | On-device OCR (ML Kit Text Recognition) | ⬜ Not started |
 | 5 | PDF generation and sharing | ⬜ Not started |
 | 6 | Full-text search over extracted text | ⬜ Not started |
@@ -147,7 +147,32 @@ Requires the Flutter stable channel and an Android device or emulator.
 
 > **Scanning needs a real device.** ML Kit Document Scanner is a Google Play
 > Services module downloaded on demand, so it does not work on emulator images
-> without the Play Store, or on non-GMS devices.
+> without the Play Store, or on non-GMS devices. DocuAI detects this rather
+> than failing on tap — see below.
+
+### Scanning
+
+The scanner is a native activity, so `ScanScreen` shows no camera of its own.
+It reports whether the module is usable, starts the flow, and handles what
+comes back.
+
+`MainActivity` carries one method channel of its own, asking
+`GoogleApiAvailability` whether Play Services is present. Without it the only
+way to discover a non-GMS device is to launch the scanner and watch it fail,
+which puts an error where an explanation belongs.
+
+Three details come from the plugin's Android source rather than its docs, and
+`MlKitDocumentScanner` exists to normalise them:
+
+| Plugin behaviour | What the wrapper does |
+|---|---|
+| Cancelling answers with `result.error(...)`, not an empty result | Translates to an empty page list, matching `ScannerRepository`'s contract |
+| Returned paths are `Uri.path` values in the app cache | Left absolute — they belong to the scanner, so `createFromImages` copies rather than moves |
+| Scanner instances live in a Kotlin map until `close()` | One instance per scan, always closed in a `finally` |
+
+`ScanScreen` starts on an explicit tap rather than automatically. An
+auto-launching screen relaunches the scanner every time the user navigates back
+onto it, so backing out of a freshly saved document would reopen the camera.
 
 ### Quality gates
 

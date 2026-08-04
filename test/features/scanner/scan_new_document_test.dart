@@ -46,8 +46,31 @@ void main() {
 
     final result = await scan();
 
-    expect(result.failureOrNull, isA<ScanFailure>());
+    expect(
+      result.failureOrNull,
+      isA<ScanFailure>().having(
+        (failure) => failure.cancelled,
+        'cancelled',
+        isTrue,
+      ),
+      reason: 'the UI must be able to stay silent about a deliberate back-out',
+    );
     expect(documents.store, isEmpty);
+  });
+
+  test('a scanner error is not flagged as a cancellation', () async {
+    scanner.result = const Failed(ScanFailure('Play Services unavailable.'));
+
+    final result = await scan();
+
+    expect(
+      result.failureOrNull,
+      isA<ScanFailure>().having(
+        (failure) => failure.cancelled,
+        'cancelled',
+        isFalse,
+      ),
+    );
   });
 
   test('propagates a scanner failure unchanged', () async {

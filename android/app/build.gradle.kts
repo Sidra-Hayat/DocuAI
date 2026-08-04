@@ -76,3 +76,12 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Declared explicitly rather than relied on transitively through
+    // play-services-mlkit-document-scanner: MainActivity calls
+    // GoogleApiAvailability directly, and a transitive dependency that the
+    // scanner plugin later drops would break the build for a non-obvious
+    // reason.
+    implementation("com.google.android.gms:play-services-base:18.5.0")
+}

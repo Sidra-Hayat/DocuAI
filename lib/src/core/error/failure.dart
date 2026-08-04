@@ -34,7 +34,18 @@ final class StorageFailure extends Failure {
 
 /// The document scanner failed or was dismissed by the user.
 final class ScanFailure extends Failure {
-  const ScanFailure(super.message, {super.cause, super.stackTrace});
+  const ScanFailure(
+    super.message, {
+    this.cancelled = false,
+    super.cause,
+    super.stackTrace,
+  });
+
+  /// True when the user backed out of the scanner instead of something going
+  /// wrong. There is no document to show either way, so it still travels as a
+  /// failure — but the UI must stay silent rather than report a problem the
+  /// user already knows about, having caused it.
+  final bool cancelled;
 }
 
 /// Text recognition failed on one or more pages.
