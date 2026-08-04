@@ -10,6 +10,7 @@ import 'src/core/observers/app_provider_observer.dart';
 import 'src/core/storage/hive_initializer.dart';
 import 'src/core/storage/storage_paths.dart';
 import 'src/core/storage/storage_providers.dart';
+import 'src/features/assistant/data/datasources/chat_history_local_data_source.dart';
 import 'src/features/documents/data/datasources/documents_box.dart';
 import 'src/features/search/data/datasources/search_index_local_data_source.dart';
 
@@ -55,6 +56,7 @@ Future<void> bootstrap() async {
       final settingsBox = await HiveInitializer.init();
       final documentsBox = await openDocumentsBox();
       final searchIndexBox = await openSearchIndexBox();
+      final chatHistoryBox = await openChatHistoryBox();
       final storagePaths = await createStoragePaths();
 
       runApp(
@@ -64,6 +66,7 @@ Future<void> bootstrap() async {
             settingsBoxProvider.overrideWithValue(settingsBox),
             documentsBoxProvider.overrideWithValue(documentsBox),
             searchIndexBoxProvider.overrideWithValue(searchIndexBox),
+            chatHistoryBoxProvider.overrideWithValue(chatHistoryBox),
             storagePathsProvider.overrideWithValue(storagePaths),
           ],
           child: const DocuAiApp(),

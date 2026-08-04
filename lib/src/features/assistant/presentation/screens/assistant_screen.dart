@@ -1,27 +1,269 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/widgets/phase_placeholder.dart';
+import '../../../../core/widgets/app_empty_state.dart';
+import '../../domain/entities/chat_message.dart';
+import '../../domain/usecases/ask_assistant.dart';
+import '../providers/assistant_providers.dart';
+import '../widgets/chat_bubble.dart';
 
-/// Offline document assistant.
+/// Offline question answering over the user's own documents.
 ///
-/// Phase 7 builds the retrieval engine (BM25 over OCR text) and the chat UI;
-/// the optional on-device language model is layered on afterwards behind a
-/// settings toggle.
-class AssistantScreen extends ConsumerWidget {
+/// Answers are quoted from recognised text, never composed, so every reply can
+/// be traced back to a page. The screen makes that visible: each answer carries
+/// citation chips that open the document it came from.
+class AssistantScreen extends ConsumerStatefulWidget {
   const AssistantScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
+}
+
+class _AssistantScreenState extends ConsumerState<AssistantScreen> {
+  final TextEditingController _composer = TextEditingController();
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _composer.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final question = _composer.text;
+    if (question.trim().isEmpty) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    _composer.clear();
+
+    final rejection = await ref
+        .read(assistantControllerProvider.notifier)
+        .ask(question);
+
+    // Only a question rejected before it was recorded needs telling; anything
+    // else is already in the transcript as a failed turn.
+    if (rejection != null) {
+      messenger.showSnackBar(SnackBar(content: Text(rejection)));
+    }
+  }
+
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Future<void> _confirmClear() async {
+    final clear = ref.read(assistantControllerProvider.notifier).clear;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear conversation?'),
+        content: const Text(
+          'The questions and answers will be removed. Your documents are not '
+          'affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed ?? false) await clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final history = ref.watch(chatHistoryProvider);
+    final busy = ref.watch(assistantControllerProvider);
+
+    ref.listen(chatHistoryProvider, (previous, next) => _scrollToLatest());
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Assistant')),
-      body: const PhasePlaceholder(
-        icon: Icons.auto_awesome_outlined,
-        title: 'Ask about your documents',
-        description:
-            'Ask questions and get answers drawn from your own scans. Runs '
-            'entirely offline — nothing is ever uploaded.',
-        phase: 'Phase 7',
+      appBar: AppBar(
+        title: const Text('Assistant'),
+        actions: [
+          if ((history.value?.isNotEmpty ?? false) && !busy)
+            IconButton(
+              tooltip: 'Clear conversation',
+              onPressed: _confirmClear,
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: history.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stackTrace) => const AppEmptyState(
+                icon: Icons.error_outline,
+                title: 'The conversation could not be loaded',
+              ),
+              data: (messages) => messages.isEmpty
+                  ? const _Introduction()
+                  : _Transcript(
+                      messages: messages,
+                      controller: _scroll,
+                      busy: busy,
+                    ),
+            ),
+          ),
+          _Composer(controller: _composer, busy: busy, onSend: _send),
+        ],
+      ),
+    );
+  }
+}
+
+class _Transcript extends StatelessWidget {
+  const _Transcript({
+    required this.messages,
+    required this.controller,
+    required this.busy,
+  });
+
+  final List<ChatMessage> messages;
+  final ScrollController controller;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: controller,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      itemCount: messages.length + (busy ? 1 : 0),
+      itemBuilder: (context, index) => index < messages.length
+          ? ChatBubble(message: messages[index])
+          : const _Thinking(),
+    );
+  }
+}
+
+class _Thinking extends StatelessWidget {
+  const _Thinking();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Reading your documents…',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown before the first question.
+///
+/// States the two things that are not obvious and that determine whether the
+/// assistant appears to work at all: it can only read documents whose text has
+/// been recognised, and it quotes rather than composes.
+class _Introduction extends StatelessWidget {
+  const _Introduction();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AppEmptyState(
+      icon: Icons.auto_awesome_outlined,
+      title: 'Ask about your documents',
+      message:
+          'Questions are answered by quoting the documents whose text has been '
+          'recognised — nothing is sent anywhere, and nothing is made up. Every '
+          'answer shows the page it came from.',
+    );
+  }
+}
+
+class _Composer extends StatelessWidget {
+  const _Composer({
+    required this.controller,
+    required this.busy,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final bool busy;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                enabled: !busy,
+                maxLength: AskAssistant.maxQuestionLength,
+                maxLines: 4,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                onSubmitted: busy ? null : (_) => onSend(),
+                decoration: const InputDecoration(
+                  hintText: 'Ask a question',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  // The limit only matters as it is approached, and a permanent
+                  // "0/500" under the field is noise the rest of the time.
+                  counterText: '',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: busy ? null : onSend,
+              icon: const Icon(Icons.arrow_upward),
+              tooltip: 'Ask',
+            ),
+          ],
+        ),
       ),
     );
   }

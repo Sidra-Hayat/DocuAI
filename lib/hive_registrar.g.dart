@@ -3,11 +3,15 @@
 // Check in to version control
 
 import 'package:hive_ce/hive_ce.dart';
+import 'package:docuai/src/features/assistant/data/models/answer_citation_model.dart';
+import 'package:docuai/src/features/assistant/data/models/chat_message_model.dart';
 import 'package:docuai/src/features/documents/data/models/document_model.dart';
 import 'package:docuai/src/features/documents/data/models/document_page_model.dart';
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
+    registerAdapter(AnswerCitationModelAdapter());
+    registerAdapter(ChatMessageModelAdapter());
     registerAdapter(DocumentModelAdapter());
     registerAdapter(DocumentPageModelAdapter());
   }
@@ -15,6 +19,8 @@ extension HiveRegistrar on HiveInterface {
 
 extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
+    registerAdapter(AnswerCitationModelAdapter());
+    registerAdapter(ChatMessageModelAdapter());
     registerAdapter(DocumentModelAdapter());
     registerAdapter(DocumentPageModelAdapter());
   }

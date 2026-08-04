@@ -4,6 +4,8 @@ import 'package:docuai/hive_registrar.g.dart';
 import 'package:docuai/src/app.dart';
 import 'package:docuai/src/core/storage/storage_paths.dart';
 import 'package:docuai/src/core/storage/storage_providers.dart';
+import 'package:docuai/src/features/assistant/data/datasources/chat_history_local_data_source.dart';
+import 'package:docuai/src/features/assistant/data/models/chat_message_model.dart';
 import 'package:docuai/src/features/documents/data/datasources/documents_box.dart';
 import 'package:docuai/src/features/documents/data/models/document_model.dart';
 import 'package:docuai/src/features/search/data/datasources/search_index_local_data_source.dart';
@@ -26,6 +28,7 @@ void main() {
   late Box<dynamic> settingsBox;
   late Box<DocumentModel> documentsBox;
   late Box<dynamic> searchIndexBox;
+  late Box<ChatMessageModel> chatHistoryBox;
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('docuai_widget_test');
@@ -34,6 +37,7 @@ void main() {
     settingsBox = await Hive.openBox<dynamic>('settings_widget_test');
     documentsBox = await Hive.openBox<DocumentModel>('documents_widget_test');
     searchIndexBox = await Hive.openBox<dynamic>('search_index_widget_test');
+    chatHistoryBox = await Hive.openBox<ChatMessageModel>('chat_widget_test');
   });
 
   tearDownAll(() async {
@@ -52,6 +56,7 @@ void main() {
           settingsBoxProvider.overrideWithValue(settingsBox),
           documentsBoxProvider.overrideWithValue(documentsBox),
           searchIndexBoxProvider.overrideWithValue(searchIndexBox),
+          chatHistoryBoxProvider.overrideWithValue(chatHistoryBox),
           // Opening the search screen would otherwise reconcile the index,
           // which writes to Hive — exactly the real file I/O the note above
           // says never completes inside a `testWidgets` zone. The reconciler

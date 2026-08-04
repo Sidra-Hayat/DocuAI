@@ -19,13 +19,12 @@ no network layer at all.
 | 4 | On-device OCR (ML Kit Text Recognition) | ✅ Complete |
 | 5 | PDF generation and sharing | ✅ Complete |
 | 6 | Full-text search over extracted text | ✅ Complete |
-| 7 | Offline assistant (retrieval; optional on-device LLM) | ⬜ Not started |
+| 7 | Offline assistant (retrieval; optional on-device LLM) | ✅ Complete |
 | 8 | Polish, accessibility and Play Store release | ⬜ Not started |
 
-Screens whose feature has not been built render a `PhasePlaceholder` naming the
-phase that replaces them — `grep -r PhasePlaceholder lib` currently returns only
-the assistant. The table above is the authority on what remains;
-placeholders only mark whole screens, not individual actions still to come.
+Every feature screen is now built; the `PhasePlaceholder` widget that stood in
+for them has been deleted along with its last use. Phase 8 is release work —
+signing, shrinking, icons, accessibility — not new screens.
 
 ---
 
@@ -249,6 +248,64 @@ newlines become spaces one-for-one — and the ellipses are added last with the
 highlight offset adjusted for them. A `trim()` or a whitespace collapse would
 silently shift the range, producing a highlight over the wrong characters or a
 `RangeError` inside a `build`.
+
+### The offline assistant
+
+Retrieval-first, with **no language model**. `flutter_gemma` is not a
+dependency. `AnswerSource.onDeviceModel` exists on the entity as the seam for
+the optional enhancement; nothing sets it yet.
+
+Answers are **quoted, never composed**. The reply is the highest-scoring passage
+from the user's own documents, whitespace-normalised and nothing else. That is
+what makes an assistant defensible with no model behind it: there is no step at
+which anything could be invented, because every character shown was read off a
+page the user scanned.
+
+Retrieval is coarse-to-fine, reusing the Phase 6 index rather than building a
+second one:
+
+1. **Documents** — BM25 narrows the library to six candidates in one call.
+2. **Passages** — page text is split into sentences, and each is scored against
+   the question.
+
+`SearchHit.snippets` cannot serve stage 2: they are display artefacts with a
+fixed 60-character radius, capped at three per document.
+
+Passage ranking is a different function from BM25 on purpose. BM25 ranks
+documents across a corpus, where the hard problem is rarity. By stage 2 every
+candidate already comes from a relevant document, so what matters is which span
+most completely contains the question — `coverage × frequency × proximity ×
+lengthNorm × intent × documentPrior`, all bounded, all multiplied, so no single
+signal can run away with the ranking.
+
+**Stopwords appear here and nowhere else.** BM25 needs none — `idf` discounts
+common words statistically. A *coverage ratio* does, because it treats "the" as
+worth exactly as much as "deadline": without the list, "when is the deadline"
+scores a passage containing only "is" at one third coverage, and a confident
+answer gets assembled out of a preposition.
+
+The **intent boost** reflects the corpus. Bills and agreements are
+overwhelmingly asked *when* and *how much*, so a question about a date lifts
+passages containing one, and likewise for amounts. It reorders candidates and
+never invents one. The signal patterns deliberately reject bare integers — a
+page number would otherwise register as an amount on every page.
+
+Three outcomes, and the third matters:
+
+| Condition | Answer |
+|---|---|
+| Passages above the coverage floor | Top passage quoted, with citations |
+| Nothing above the floor | "I could not find an answer to that" |
+| **No document has recognised text** | Says *that*, specifically |
+
+"Not found" would send a user whose documents were never OCR'd looking for a
+phrasing problem they do not have.
+
+**History is deliberately not used as retrieval context.** Each question is
+answered independently. Resolving "what about the other one?" needs coreference,
+which a lexical retriever cannot do — feeding it prior turns would silently
+corrupt the query terms and produce confidently wrong retrieval. This is the
+clearest place the optional on-device model would earn its place.
 
 > The exported PDF is images only, not searchable. A searchable text layer
 > needs per-block bounding boxes to position invisible text, and

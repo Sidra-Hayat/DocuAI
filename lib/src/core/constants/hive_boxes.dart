@@ -24,8 +24,14 @@ abstract final class HiveBoxes {
 abstract final class HiveTypeIds {
   static const int document = 0;
   static const int documentPage = 1;
+
+  /// Reserved and unused. Tags are plain normalised strings on `Document`, so
+  /// no adapter ever claimed this id — and renumbering to close the gap would
+  /// reinterpret every record already written.
   static const int tag = 2;
+
   static const int chatMessage = 3;
+  static const int answerCitation = 4;
 }
 
 /// Keys used inside the [HiveBoxes.settings] box.
