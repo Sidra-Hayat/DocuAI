@@ -3,16 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/widgets/app_empty_state.dart';
-import '../../../../core/widgets/phase_placeholder.dart';
+import '../../../ocr/presentation/providers/ocr_controller.dart';
 import '../../domain/entities/document.dart';
+import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_actions.dart';
+import '../widgets/document_text_section.dart';
 import '../widgets/document_thumbnail.dart';
 
-/// Single document view: pages, metadata and the library actions.
+/// Single document view: pages, recognised text and the library actions.
 ///
-/// Phase 4 adds the recognised-text section and Phase 5 the export and share
-/// actions; the placeholder at the bottom marks where both land.
+/// Phase 5 adds PDF export and sharing.
 class DocumentDetailScreen extends ConsumerWidget {
   const DocumentDetailScreen({required this.documentId, super.key});
 
@@ -42,13 +43,41 @@ class DocumentDetailScreen extends ConsumerWidget {
   }
 }
 
-class _DocumentDetail extends ConsumerWidget {
+class _DocumentDetail extends ConsumerStatefulWidget {
   const _DocumentDetail({required this.document});
 
   final Document document;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DocumentDetail> createState() => _DocumentDetailState();
+}
+
+class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
+  /// Starts recognition automatically the first time a document with unread
+  /// pages is opened — which is what makes a freshly scanned document become
+  /// searchable without the user being asked to press anything.
+  ///
+  /// This cannot loop. The run leaves every page either completed or failed,
+  /// so the document's aggregate status is no longer [OcrStatus.pending] and
+  /// the condition below is false on every subsequent open. Pages that failed
+  /// are retried only on an explicit tap, because a page that cannot be read
+  /// will not read any better the second time it is opened.
+  @override
+  void initState() {
+    super.initState();
+
+    final document = widget.document;
+    if (document.hasPages && document.ocrStatus == OcrStatus.pending) {
+      Future.microtask(() {
+        if (!mounted) return;
+        ref.read(ocrControllerProvider.notifier).run(document.id);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final document = widget.document;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -106,16 +135,9 @@ class _DocumentDetail extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           const Divider(),
-          const PhasePlaceholder(
-            icon: Icons.text_snippet_outlined,
-            title: 'No recognised text yet',
-            description:
-                'Text recognition and PDF export appear here once they are '
-                'built.',
-            phase: 'Phase 4',
-          ),
+          DocumentTextSection(document: document),
         ],
       ),
     );

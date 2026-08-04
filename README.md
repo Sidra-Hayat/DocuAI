@@ -16,14 +16,16 @@ no network layer at all.
 | 1 | Domain entities, repository contracts, use cases | ✅ Complete |
 | 2 | Hive persistence and the document library | ✅ Complete |
 | 3 | ML Kit document scanning | ✅ Complete |
-| 4 | On-device OCR (ML Kit Text Recognition) | ⬜ Not started |
+| 4 | On-device OCR (ML Kit Text Recognition) | ✅ Complete |
 | 5 | PDF generation and sharing | ⬜ Not started |
 | 6 | Full-text search over extracted text | ⬜ Not started |
 | 7 | Offline assistant (retrieval; optional on-device LLM) | ⬜ Not started |
 | 8 | Polish, accessibility and Play Store release | ⬜ Not started |
 
-Unbuilt screens render a `PhasePlaceholder` naming the phase that replaces them.
-`grep -r PhasePlaceholder lib` lists all remaining work.
+Screens whose feature has not been built render a `PhasePlaceholder` naming the
+phase that replaces them — `grep -r PhasePlaceholder lib` currently returns
+search and the assistant. The table above is the authority on what remains;
+placeholders only mark whole screens, not individual actions still to come.
 
 ---
 
@@ -173,6 +175,29 @@ Three details come from the plugin's Android source rather than its docs, and
 `ScanScreen` starts on an explicit tap rather than automatically. An
 auto-launching screen relaunches the scanner every time the user navigates back
 onto it, so backing out of a freshly saved document would reopen the camera.
+
+### Text recognition
+
+Unlike the scanner, the recognition model is **bundled into the APK** rather
+than fetched from Play Services, so it works on every device — including the
+ones where scanning is unavailable and pages came from the gallery.
+
+Recognition starts automatically the first time a document with unread pages is
+opened, which is what makes a freshly scanned document searchable without being
+asked to press anything. This cannot loop: a run leaves every page either
+`completed` or `failed`, so the document's aggregate status is no longer
+`pending` and the trigger is false on every later open. Pages that failed are
+retried only on an explicit tap — a page that cannot be read will not read any
+better for being reopened.
+
+One unreadable page does not fail the document. Each page records its own
+outcome, the run continues, and the text that was recovered is kept and
+indexed. That is why `Document.ocrStatus` is derived from the pages rather than
+stored alongside them.
+
+The native recogniser is created once and reused across a batch. Constructing a
+detector allocates a native model, and a twenty-page document would otherwise
+allocate twenty.
 
 ### Quality gates
 
