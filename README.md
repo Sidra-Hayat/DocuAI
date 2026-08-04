@@ -13,7 +13,7 @@ no network layer at all.
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Foundation: tooling, architecture, theme, routing, storage | ✅ Complete |
-| 1 | Domain entities, repository contracts, use cases | ⬜ Not started |
+| 1 | Domain entities, repository contracts, use cases | ✅ Complete |
 | 2 | Hive persistence and the document library | ⬜ Not started |
 | 3 | ML Kit document scanning | ⬜ Not started |
 | 4 | On-device OCR (ML Kit Text Recognition) | ⬜ Not started |
@@ -76,6 +76,28 @@ Two deliberate consequences:
   sealed `Failure`, so the UI handles errors with an exhaustive `switch` the
   compiler verifies.
 
+### Results, not exceptions
+
+Every repository method and use case returns `AsyncResult<T>` —
+`Future<Result<T>>`, where `Result` is a sealed `Success` / `Failed` pair. No
+repository throws across the domain boundary, so a caller cannot forget an
+error path:
+
+```dart
+switch (await recognizeDocumentText(id)) {
+  case Success(:final value): showText(value.extractedText);
+  case Failed(:final failure): showMessage(failure.message);
+}
+```
+
+`Result` is hand-written rather than taken from `dartz` or `fpdart`: sealed
+classes and pattern matching are language features, and a 100-line file with no
+functional-programming vocabulary is easier to defend than a dependency.
+
+Which outcomes count as failures is a deliberate part of each contract — a
+search that matches nothing, a share sheet the user dismisses and a blank page
+that yields no text are all *successes*, because nothing went wrong.
+
 ### Storage model
 
 Hive holds **metadata only** — ids, titles, timestamps, tags, extracted text and
@@ -106,6 +128,16 @@ Requires the Flutter stable channel and an Android device or emulator.
 flutter analyze   # must be clean
 flutter test      # widget + unit tests, no emulator required
 ```
+
+Entities are generated with Freezed. After changing one, or on a fresh clone if
+the generated files look stale:
+
+```bash
+dart run build_runner build
+```
+
+Domain use cases are tested against hand-written fakes in `test/helpers/` — the
+domain layer has no dependencies, and its tests do not add one.
 
 ---
 

@@ -61,6 +61,13 @@ final class PermissionFailure extends Failure {
   final bool permanentlyDenied;
 }
 
+/// Input rejected by a use case before any repository was called — an empty
+/// title, a blank question. Distinct from the failures above because nothing
+/// went wrong technically: the user simply needs to change what they typed.
+final class ValidationFailure extends Failure {
+  const ValidationFailure(super.message, {super.cause, super.stackTrace});
+}
+
 /// The offline assistant could not produce an answer.
 final class AssistantFailure extends Failure {
   const AssistantFailure(super.message, {super.cause, super.stackTrace});

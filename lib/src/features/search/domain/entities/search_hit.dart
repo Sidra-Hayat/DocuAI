@@ -1,0 +1,60 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+import '../../../documents/domain/entities/document.dart';
+
+part 'search_hit.freezed.dart';
+
+/// One document matched by a query, with the evidence for why it matched.
+///
+/// Carries the whole [Document] rather than just its id so the results list
+/// renders thumbnails and titles without a second read per row — the library is
+/// already in memory, and N extra Hive lookups while typing is exactly the cost
+/// the debounce in `AppConstants.searchDebounce` exists to avoid.
+@freezed
+abstract class SearchHit with _$SearchHit {
+  const SearchHit._();
+
+  const factory SearchHit({
+    required Document document,
+
+    /// BM25 relevance. Comparable only within one result set — an absolute
+    /// score means nothing on its own, so never show it to the user.
+    required double score,
+
+    /// Matching passages, most relevant first. Empty when the query matched the
+    /// title but no page text.
+    @Default(<SearchSnippet>[]) List<SearchSnippet> snippets,
+  }) = _SearchHit;
+
+  SearchSnippet? get bestSnippet => snippets.isEmpty ? null : snippets.first;
+
+  bool get matchedTitleOnly => snippets.isEmpty;
+}
+
+/// A short window of page text around a match, ready to render with the
+/// matching term emphasised.
+@freezed
+abstract class SearchSnippet with _$SearchSnippet {
+  const SearchSnippet._();
+
+  const factory SearchSnippet({
+    /// Page the passage came from, zero-based.
+    required int pageIndex,
+
+    /// The excerpt itself, already trimmed to a displayable length.
+    required String text,
+
+    /// Offset of the match **within [text]**, not within the full page — the
+    /// snippet is what gets rendered, so the highlight must be relative to it.
+    required int highlightStart,
+    required int highlightLength,
+  }) = _SearchSnippet;
+
+  int get highlightEnd => highlightStart + highlightLength;
+
+  /// Guards against an index built by an older version disagreeing with the
+  /// current text; a malformed range is rendered unhighlighted rather than
+  /// throwing a `RangeError` inside a `build`.
+  bool get hasValidHighlight =>
+      highlightStart >= 0 && highlightLength > 0 && highlightEnd <= text.length;
+}
