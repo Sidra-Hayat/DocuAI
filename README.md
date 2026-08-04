@@ -18,13 +18,13 @@ no network layer at all.
 | 3 | ML Kit document scanning | ✅ Complete |
 | 4 | On-device OCR (ML Kit Text Recognition) | ✅ Complete |
 | 5 | PDF generation and sharing | ✅ Complete |
-| 6 | Full-text search over extracted text | ⬜ Not started |
+| 6 | Full-text search over extracted text | ✅ Complete |
 | 7 | Offline assistant (retrieval; optional on-device LLM) | ⬜ Not started |
 | 8 | Polish, accessibility and Play Store release | ⬜ Not started |
 
 Screens whose feature has not been built render a `PhasePlaceholder` naming the
-phase that replaces them — `grep -r PhasePlaceholder lib` currently returns
-search and the assistant. The table above is the authority on what remains;
+phase that replaces them — `grep -r PhasePlaceholder lib` currently returns only
+the assistant. The table above is the authority on what remains;
 placeholders only mark whole screens, not individual actions still to come.
 
 ---
@@ -220,6 +220,35 @@ Exporting and sharing are one action. Whether a PDF already exists is an
 implementation detail, so `ShareDocument` reuses one when it can and composes
 one when it cannot; a failed share retries with a fresh render, since a
 recorded PDF that Android has since cleared is the likeliest cause.
+
+### Search
+
+Ranking is Okapi BM25. Counting term occurrences gets two things wrong that
+BM25 corrects: a word appearing twenty times is not twenty times as relevant
+(`k1` saturates it), and a long document is not more relevant merely for having
+more words (`b` normalises by length). Titles are weighted 3×, so a document
+*called* "Electricity bill" outranks one that mentions electricity in passing.
+
+The index is stored as a **forward** index — one entry per document holding its
+term frequencies — not the inverted token-to-postings map a search engine would
+use. An inverted index wins when the vocabulary cannot be walked per query;
+this is a personal library of tens to low hundreds of documents, so scoring
+every entry is a few thousand hash lookups. In exchange, updating one document
+is a single write and deleting one is a single delete, where an inverted index
+would have to touch every token that document contributed. `SearchRepository`
+hides the choice, so postings remain a drop-in replacement.
+
+Entries are plain maps, not `@HiveType` models: the index is derived data, so a
+format change needs no migration — only a version bump and a rebuild. The
+reconciler runs when the search screen opens and rebuilds if the version is
+stale or the entry count disagrees with the library, which self-heals both
+documents that predate the index and entries left behind by a failed delete.
+
+Snippet offsets are the fiddly part. Every transformation preserves length —
+newlines become spaces one-for-one — and the ellipses are added last with the
+highlight offset adjusted for them. A `trim()` or a whitespace collapse would
+silently shift the range, producing a highlight over the wrong characters or a
+`RangeError` inside a `build`.
 
 > The exported PDF is images only, not searchable. A searchable text layer
 > needs per-block bounding boxes to position invisible text, and

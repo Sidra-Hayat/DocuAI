@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
-import '../../../search/data/repositories/unindexed_search_repository.dart';
+import '../../../search/presentation/providers/search_providers.dart';
 import '../../data/datasources/document_local_data_source.dart';
 import '../../data/datasources/documents_box.dart';
 import '../../data/repositories/document_repository_impl.dart';

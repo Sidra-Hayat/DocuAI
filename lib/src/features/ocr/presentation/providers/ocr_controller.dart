@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
 import '../../../documents/presentation/providers/document_providers.dart';
-import '../../../search/data/repositories/unindexed_search_repository.dart';
+import '../../../search/presentation/providers/search_providers.dart';
 import '../../data/datasources/mlkit_text_recognizer.dart';
 import '../../data/repositories/ocr_repository_impl.dart';
 import '../../domain/repositories/ocr_repository.dart';

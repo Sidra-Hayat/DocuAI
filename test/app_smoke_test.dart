@@ -6,6 +6,8 @@ import 'package:docuai/src/core/storage/storage_paths.dart';
 import 'package:docuai/src/core/storage/storage_providers.dart';
 import 'package:docuai/src/features/documents/data/datasources/documents_box.dart';
 import 'package:docuai/src/features/documents/data/models/document_model.dart';
+import 'package:docuai/src/features/search/data/datasources/search_index_local_data_source.dart';
+import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,7 @@ void main() {
   late Directory tempDir;
   late Box<dynamic> settingsBox;
   late Box<DocumentModel> documentsBox;
+  late Box<dynamic> searchIndexBox;
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('docuai_widget_test');
@@ -30,6 +33,7 @@ void main() {
     Hive.registerAdapters();
     settingsBox = await Hive.openBox<dynamic>('settings_widget_test');
     documentsBox = await Hive.openBox<DocumentModel>('documents_widget_test');
+    searchIndexBox = await Hive.openBox<dynamic>('search_index_widget_test');
   });
 
   tearDownAll(() async {
@@ -47,6 +51,12 @@ void main() {
         overrides: [
           settingsBoxProvider.overrideWithValue(settingsBox),
           documentsBoxProvider.overrideWithValue(documentsBox),
+          searchIndexBoxProvider.overrideWithValue(searchIndexBox),
+          // Opening the search screen would otherwise reconcile the index,
+          // which writes to Hive — exactly the real file I/O the note above
+          // says never completes inside a `testWidgets` zone. The reconciler
+          // has its own tests in `test/features/search/`.
+          searchIndexReadyProvider.overrideWith((ref) async {}),
           storagePathsProvider.overrideWithValue(StoragePaths(tempDir)),
         ],
         child: const DocuAiApp(),

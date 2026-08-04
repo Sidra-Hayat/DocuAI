@@ -3,7 +3,7 @@ import 'package:docuai/src/core/error/result.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/ocr/presentation/providers/ocr_controller.dart';
-import 'package:docuai/src/features/search/data/repositories/unindexed_search_repository.dart';
+import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

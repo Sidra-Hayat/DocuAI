@@ -11,6 +11,7 @@ import 'src/core/storage/hive_initializer.dart';
 import 'src/core/storage/storage_paths.dart';
 import 'src/core/storage/storage_providers.dart';
 import 'src/features/documents/data/datasources/documents_box.dart';
+import 'src/features/search/data/datasources/search_index_local_data_source.dart';
 
 /// Composition root.
 ///
@@ -53,6 +54,7 @@ Future<void> bootstrap() async {
       // depends on them can be read synchronously later.
       final settingsBox = await HiveInitializer.init();
       final documentsBox = await openDocumentsBox();
+      final searchIndexBox = await openSearchIndexBox();
       final storagePaths = await createStoragePaths();
 
       runApp(
@@ -61,6 +63,7 @@ Future<void> bootstrap() async {
           overrides: [
             settingsBoxProvider.overrideWithValue(settingsBox),
             documentsBoxProvider.overrideWithValue(documentsBox),
+            searchIndexBoxProvider.overrideWithValue(searchIndexBox),
             storagePathsProvider.overrideWithValue(storagePaths),
           ],
           child: const DocuAiApp(),
