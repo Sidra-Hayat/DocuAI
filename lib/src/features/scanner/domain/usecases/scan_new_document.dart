@@ -30,7 +30,7 @@ class ScanNewDocument {
 
   static const String defaultTitle = 'Untitled scan';
 
-  AsyncResult<Document> call({
+  FutureResult<Document> call({
     String? title,
     int pageLimit = defaultPageLimit,
   }) async {

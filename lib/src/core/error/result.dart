@@ -108,6 +108,6 @@ final class Failed<T> extends Result<T> {
 }
 
 /// Every asynchronous repository and use case signature uses this alias, so the
-/// intent reads at a glance: `AsyncResult<Document>` rather than
+/// intent reads at a glance: `FutureResult<Document>` rather than
 /// `Future<Result<Document>>`.
-typedef AsyncResult<T> = Future<Result<T>>;
+typedef FutureResult<T> = Future<Result<T>>;

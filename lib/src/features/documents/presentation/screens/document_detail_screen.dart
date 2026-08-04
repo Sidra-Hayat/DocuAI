@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/phase_placeholder.dart';
+import '../../domain/entities/document.dart';
+import '../providers/document_providers.dart';
+import '../widgets/document_actions.dart';
+import '../widgets/document_thumbnail.dart';
 
-/// Single document view: pages, extracted text, export and share actions.
+/// Single document view: pages, metadata and the library actions.
 ///
-/// Phase 2 wires [documentId] to a repository lookup; Phase 4 adds the OCR text
-/// tab and Phase 5 the PDF export action.
+/// Phase 4 adds the recognised-text section and Phase 5 the export and share
+/// actions; the placeholder at the bottom marks where both land.
 class DocumentDetailScreen extends ConsumerWidget {
   const DocumentDetailScreen({required this.documentId, super.key});
 
@@ -14,14 +20,167 @@ class DocumentDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final document = ref.watch(documentProvider(documentId));
+
+    return document.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stackTrace) => Scaffold(
+        appBar: AppBar(),
+        body: const AppEmptyState(
+          icon: Icons.error_outline,
+          title: 'Could not open this document',
+        ),
+      ),
+      // Null means the record is gone — deleted from this screen, or from the
+      // library while it was open. Either way there is nothing left to show.
+      data: (value) => value == null
+          ? const _DeletedDocument()
+          : _DocumentDetail(document: value),
+    );
+  }
+}
+
+class _DocumentDetail extends ConsumerWidget {
+  const _DocumentDetail({required this.document});
+
+  final Document document;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Document')),
-      body: PhasePlaceholder(
-        icon: Icons.description_outlined,
-        title: 'Document $documentId',
-        description:
-            'Pages, extracted text and export options will be shown here.',
-        phase: 'Phase 2',
+      appBar: AppBar(
+        title: Text(document.title, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            onPressed: () => toggleDocumentFavorite(context, ref, document),
+            tooltip: document.isFavorite
+                ? 'Remove favourite'
+                : 'Add to favourites',
+            icon: Icon(
+              document.isFavorite ? Icons.star : Icons.star_border_outlined,
+            ),
+          ),
+          DocumentActionsMenu(
+            document: document,
+            onDeleted: () => Navigator.of(context).maybePop(),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          _PageCarousel(document: document),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(document.title, style: theme.textTheme.titleLarge),
+                const SizedBox(height: 6),
+                Text(
+                  'Added ${DateFormat.yMMMd().format(document.createdAt)} · '
+                  '${document.pageCount} '
+                  '${document.pageCount == 1 ? 'page' : 'pages'}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (document.tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tag in document.tags)
+                        Chip(
+                          label: Text(tag),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(),
+          const PhasePlaceholder(
+            icon: Icons.text_snippet_outlined,
+            title: 'No recognised text yet',
+            description:
+                'Text recognition and PDF export appear here once they are '
+                'built.',
+            phase: 'Phase 4',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Horizontally pageable view of the scanned pages.
+class _PageCarousel extends StatelessWidget {
+  const _PageCarousel({required this.document});
+
+  final Document document;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (!document.hasPages) {
+      return const SizedBox(
+        height: 200,
+        child: AppEmptyState(
+          icon: Icons.image_not_supported_outlined,
+          title: 'This document has no pages',
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 320,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        itemCount: document.pageCount,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final page = document.pages[index];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              DocumentThumbnail(
+                page: page,
+                width: 200,
+                height: 260,
+                borderRadius: 12,
+              ),
+              const SizedBox(height: 8),
+              Text(page.displayLabel, style: theme.textTheme.labelMedium),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DeletedDocument extends StatelessWidget {
+  const _DeletedDocument();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(),
+      body: const AppEmptyState(
+        icon: Icons.delete_outline,
+        title: 'This document is no longer here',
+        message: 'It was deleted from your library.',
       ),
     );
   }

@@ -23,7 +23,7 @@ class ExportDocumentAsPdf {
   final DocumentRepository _documents;
   final Clock _now;
 
-  AsyncResult<Document> call(String documentId) async {
+  FutureResult<Document> call(String documentId) async {
     final loaded = await _documents.getDocument(documentId);
     final Document document;
     switch (loaded) {

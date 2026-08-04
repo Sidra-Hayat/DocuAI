@@ -17,16 +17,21 @@ abstract interface class DocumentRepository {
   /// A stream rather than a one-shot read because several screens show the same
   /// list and a scan started on one of them must be visible on the others
   /// without a manual refresh.
+  ///
+  /// This is the one member that does not return a `Result`. A stream carries
+  /// its own error channel, and Riverpod surfaces that as `AsyncValue.error`
+  /// with no work from the caller — wrapping each event in a `Result` as well
+  /// would mean two error paths for one failure.
   Stream<List<Document>> watchDocuments();
 
   /// One-shot read of the whole library, newest first. Used by the search
   /// indexer and the assistant, which need a snapshot rather than a
   /// subscription.
-  AsyncResult<List<Document>> getDocuments();
+  FutureResult<List<Document>> getDocuments();
 
   /// Returns the document with [id], or a [StorageFailure] if no such record
   /// exists.
-  AsyncResult<Document> getDocument(String id);
+  FutureResult<Document> getDocument(String id);
 
   /// Persists a document created from freshly captured images.
   ///
@@ -35,18 +40,18 @@ abstract interface class DocumentRepository {
   /// files do not belong to the app yet. The implementation copies each into
   /// the document's own folder, stores the relative paths, and deletes nothing
   /// on failure so a retry is possible.
-  AsyncResult<Document> createFromImages({
+  FutureResult<Document> createFromImages({
     required String title,
     required List<String> sourceImagePaths,
   });
 
   /// Writes an already-existing document back, replacing it wholesale.
   /// Callers are expected to have updated `updatedAt` themselves.
-  AsyncResult<Document> saveDocument(Document document);
+  FutureResult<Document> saveDocument(Document document);
 
   /// Deletes the record, its page images, and its generated PDF.
   ///
   /// Succeeds when the id is unknown: deleting something that is already gone
   /// is the outcome the caller wanted.
-  AsyncResult<void> deleteDocument(String id);
+  FutureResult<void> deleteDocument(String id);
 }

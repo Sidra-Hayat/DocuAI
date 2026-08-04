@@ -12,7 +12,7 @@ class ToggleFavorite {
 
   final DocumentRepository _repository;
 
-  AsyncResult<Document> call(String documentId) async {
+  FutureResult<Document> call(String documentId) async {
     final loaded = await _repository.getDocument(documentId);
     final Document document;
     switch (loaded) {

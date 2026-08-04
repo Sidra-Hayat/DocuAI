@@ -14,7 +14,7 @@ abstract interface class ExportRepository {
   /// `Document.pdfPath`. Overwrites any previous export: the PDF is a derived
   /// artefact, so keeping stale copies would only waste space on a device with
   /// no way to garbage-collect them.
-  AsyncResult<String> buildPdf(Document document);
+  FutureResult<String> buildPdf(Document document);
 
   /// Opens the Android share sheet for a file already inside the app's storage.
   ///
@@ -22,5 +22,5 @@ abstract interface class ExportRepository {
   /// who dismisses the sheet without choosing a target is a success — the
   /// system gives no way to distinguish that from a completed share, and
   /// treating it as an error would show a spurious message.
-  AsyncResult<void> shareFile(String relativePath, {String? subject});
+  FutureResult<void> shareFile(String relativePath, {String? subject});
 }

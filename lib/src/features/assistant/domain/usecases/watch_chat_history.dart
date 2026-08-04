@@ -21,5 +21,5 @@ class ClearChatHistory {
 
   final AssistantRepository _repository;
 
-  AsyncResult<void> call() => _repository.clearHistory();
+  FutureResult<void> call() => _repository.clearHistory();
 }

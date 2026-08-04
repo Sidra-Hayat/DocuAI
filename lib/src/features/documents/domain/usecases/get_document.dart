@@ -9,5 +9,5 @@ class GetDocument {
 
   final DocumentRepository _repository;
 
-  AsyncResult<Document> call(String id) => _repository.getDocument(id);
+  FutureResult<Document> call(String id) => _repository.getDocument(id);
 }

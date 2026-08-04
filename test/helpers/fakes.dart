@@ -88,14 +88,14 @@ class FakeDocumentRepository implements DocumentRepository {
   Stream<List<Document>> watchDocuments() => _controller.stream;
 
   @override
-  AsyncResult<List<Document>> getDocuments() async {
+  FutureResult<List<Document>> getDocuments() async {
     final failure = getFailure;
     if (failure != null) return Failed(failure);
     return Success(store.values.toList());
   }
 
   @override
-  AsyncResult<Document> getDocument(String id) async {
+  FutureResult<Document> getDocument(String id) async {
     final failure = getFailure;
     if (failure != null) return Failed(failure);
     final document = store[id];
@@ -106,7 +106,7 @@ class FakeDocumentRepository implements DocumentRepository {
   }
 
   @override
-  AsyncResult<Document> createFromImages({
+  FutureResult<Document> createFromImages({
     required String title,
     required List<String> sourceImagePaths,
   }) async {
@@ -130,7 +130,7 @@ class FakeDocumentRepository implements DocumentRepository {
   }
 
   @override
-  AsyncResult<Document> saveDocument(Document document) async {
+  FutureResult<Document> saveDocument(Document document) async {
     final failure = saveFailure;
     if (failure != null) return Failed(failure);
     savedDocuments.add(document);
@@ -139,7 +139,7 @@ class FakeDocumentRepository implements DocumentRepository {
   }
 
   @override
-  AsyncResult<void> deleteDocument(String id) async {
+  FutureResult<void> deleteDocument(String id) async {
     final failure = saveFailure;
     if (failure != null) return Failed(failure);
     deletedIds.add(id);
@@ -162,7 +162,7 @@ class FakeSearchRepository implements SearchRepository {
   final List<String> receivedQueries = <String>[];
 
   @override
-  AsyncResult<List<SearchHit>> search(String query) async {
+  FutureResult<List<SearchHit>> search(String query) async {
     receivedQueries.add(query);
     final failure = searchFailure;
     if (failure != null) return Failed(failure);
@@ -170,7 +170,7 @@ class FakeSearchRepository implements SearchRepository {
   }
 
   @override
-  AsyncResult<void> indexDocument(Document document) async {
+  FutureResult<void> indexDocument(Document document) async {
     final failure = indexFailure;
     if (failure != null) return Failed(failure);
     indexedIds.add(document.id);
@@ -178,13 +178,13 @@ class FakeSearchRepository implements SearchRepository {
   }
 
   @override
-  AsyncResult<void> removeFromIndex(String documentId) async {
+  FutureResult<void> removeFromIndex(String documentId) async {
     removedIds.add(documentId);
     return const Success<void>(null);
   }
 
   @override
-  AsyncResult<void> rebuildIndex(List<Document> documents) async {
+  FutureResult<void> rebuildIndex(List<Document> documents) async {
     indexedIds
       ..clear()
       ..addAll(documents.map((document) => document.id));
@@ -198,7 +198,7 @@ class FakeScannerRepository implements ScannerRepository {
   int? lastPageLimit;
 
   @override
-  AsyncResult<List<String>> scanPages({int pageLimit = 20}) async {
+  FutureResult<List<String>> scanPages({int pageLimit = 20}) async {
     lastPageLimit = pageLimit;
     return result;
   }
@@ -214,7 +214,7 @@ class FakeOcrRepository implements OcrRepository {
   final List<String> requestedPaths = <String>[];
 
   @override
-  AsyncResult<String> recognizeText(String relativeImagePath) async {
+  FutureResult<String> recognizeText(String relativeImagePath) async {
     requestedPaths.add(relativeImagePath);
     return results[relativeImagePath] ?? defaultResult;
   }
@@ -228,13 +228,13 @@ class FakeExportRepository implements ExportRepository {
   int buildCount = 0;
 
   @override
-  AsyncResult<String> buildPdf(Document document) async {
+  FutureResult<String> buildPdf(Document document) async {
     buildCount++;
     return buildResult;
   }
 
   @override
-  AsyncResult<void> shareFile(String relativePath, {String? subject}) async {
+  FutureResult<void> shareFile(String relativePath, {String? subject}) async {
     final failure = shareFailure;
     if (failure != null) return Failed(failure);
     sharedPaths.add(relativePath);
@@ -253,7 +253,7 @@ class FakeAssistantRepository implements AssistantRepository {
   bool historyCleared = false;
 
   @override
-  AsyncResult<AssistantAnswer> ask(
+  FutureResult<AssistantAnswer> ask(
     String question, {
     String? documentId,
   }) async {
@@ -266,13 +266,13 @@ class FakeAssistantRepository implements AssistantRepository {
   Stream<List<ChatMessage>> watchHistory() => Stream.value(messages);
 
   @override
-  AsyncResult<void> appendMessage(ChatMessage message) async {
+  FutureResult<void> appendMessage(ChatMessage message) async {
     messages.add(message);
     return const Success<void>(null);
   }
 
   @override
-  AsyncResult<void> clearHistory() async {
+  FutureResult<void> clearHistory() async {
     historyCleared = true;
     messages.clear();
     return const Success<void>(null);

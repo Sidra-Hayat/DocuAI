@@ -15,7 +15,7 @@ class SearchDocuments {
 
   static const int minQueryLength = 2;
 
-  AsyncResult<List<SearchHit>> call(String query) async {
+  FutureResult<List<SearchHit>> call(String query) async {
     final trimmed = query.trim();
     if (trimmed.length < minQueryLength) {
       return const Success(<SearchHit>[]);

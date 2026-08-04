@@ -20,7 +20,7 @@ class DeleteDocument {
   final DocumentRepository _documents;
   final SearchRepository _search;
 
-  AsyncResult<void> call(String documentId) async {
+  FutureResult<void> call(String documentId) async {
     await _search.removeFromIndex(documentId);
     return _documents.deleteDocument(documentId);
   }

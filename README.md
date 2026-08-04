@@ -14,7 +14,7 @@ no network layer at all.
 |---|---|---|
 | 0 | Foundation: tooling, architecture, theme, routing, storage | ✅ Complete |
 | 1 | Domain entities, repository contracts, use cases | ✅ Complete |
-| 2 | Hive persistence and the document library | ⬜ Not started |
+| 2 | Hive persistence and the document library | ✅ Complete |
 | 3 | ML Kit document scanning | ⬜ Not started |
 | 4 | On-device OCR (ML Kit Text Recognition) | ⬜ Not started |
 | 5 | PDF generation and sharing | ⬜ Not started |
@@ -78,7 +78,7 @@ Two deliberate consequences:
 
 ### Results, not exceptions
 
-Every repository method and use case returns `AsyncResult<T>` —
+Every repository method and use case returns `FutureResult<T>` —
 `Future<Result<T>>`, where `Result` is a sealed `Success` / `Failed` pair. No
 repository throws across the domain boundary, so a caller cannot forget an
 error path:
@@ -98,6 +98,15 @@ Which outcomes count as failures is a deliberate part of each contract — a
 search that matches nothing, a share sheet the user dismisses and a blank page
 that yields no text are all *successes*, because nothing went wrong.
 
+The alias is `FutureResult` rather than the more obvious `AsyncResult` because
+Riverpod 3 exports a type of that name; sharing it would force a `hide` clause
+on every file that touched both.
+
+The one exception is `watchDocuments()`, which returns a plain
+`Stream<List<Document>>`. A stream already has an error channel, and Riverpod
+surfaces it as `AsyncValue.error` — wrapping each event in a `Result` as well
+would give one failure two paths to travel.
+
 ### Storage model
 
 Hive holds **metadata only** — ids, titles, timestamps, tags, extracted text and
@@ -106,6 +115,24 @@ page paths. Images and PDFs live on disk under the app documents directory.
 Paths are persisted **relative** and resolved through `StoragePaths` at read
 time, because Android does not guarantee the absolute sandbox path survives a
 reinstall or update.
+
+`DocumentLocalDataSource` is the only class where Hive and the file system meet.
+It copies scanned pages in rather than moving them, deletes a half-built folder
+if any copy fails, and on delete removes the Hive record *before* the files — a
+record pointing at missing images shows a broken thumbnail the user cannot get
+rid of, whereas files with no record are invisible and reclaimable later.
+
+Type ids are declared once in `HiveTypeIds` and are append-only. `2` is reserved
+and currently unused: tags are plain normalised strings on `Document`, and
+renumbering after release would reinterpret every stored record.
+
+### Seeing the library before scanning exists
+
+Scanning arrives in Phase 3, so debug builds carry a **Developer → Add sample
+documents** action in Settings that generates a few documents with rendered
+page images. It sits behind `kDebugMode`, a compile-time constant, so the tree
+shaker removes it and the page renderer from release builds. Phase 8 deletes
+the file.
 
 ---
 

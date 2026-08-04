@@ -40,7 +40,7 @@ class RecognizeDocumentText {
   ///
   /// Set [force] to re-run every page, including ones already completed — the
   /// path behind a manual "re-run recognition" action.
-  AsyncResult<Document> call(
+  FutureResult<Document> call(
     String documentId, {
     void Function(int done, int total)? onProgress,
     bool force = false,

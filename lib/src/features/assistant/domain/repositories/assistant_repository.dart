@@ -18,14 +18,14 @@ abstract interface class AssistantRepository {
   /// Finding no relevant passage is a success carrying an ungrounded answer,
   /// not a failure: "I could not find that in your documents" is a legitimate
   /// reply, and rendering it as an error would be misleading.
-  AsyncResult<AssistantAnswer> ask(String question, {String? documentId});
+  FutureResult<AssistantAnswer> ask(String question, {String? documentId});
 
   /// The persisted transcript, oldest first, re-emitted as turns are added.
   Stream<List<ChatMessage>> watchHistory();
 
   /// Appends a turn to the transcript.
-  AsyncResult<void> appendMessage(ChatMessage message);
+  FutureResult<void> appendMessage(ChatMessage message);
 
   /// Empties the transcript. Does not touch documents or the search index.
-  AsyncResult<void> clearHistory();
+  FutureResult<void> clearHistory();
 }

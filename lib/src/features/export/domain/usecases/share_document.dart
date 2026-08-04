@@ -21,7 +21,7 @@ class ShareDocument {
   final ExportRepository _export;
   final ExportDocumentAsPdf _exportAsPdf;
 
-  AsyncResult<void> call(Document document) async {
+  FutureResult<void> call(Document document) async {
     var pdfPath = document.pdfPath;
 
     if (pdfPath == null) {

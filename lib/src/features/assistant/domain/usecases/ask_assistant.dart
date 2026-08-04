@@ -26,7 +26,7 @@ class AskAssistant {
 
   static const int maxQuestionLength = 500;
 
-  AsyncResult<AssistantAnswer> call(
+  FutureResult<AssistantAnswer> call(
     String question, {
     String? documentId,
   }) async {

@@ -13,22 +13,22 @@ abstract interface class SearchRepository {
   ///
   /// An unmatched query is an empty list, not a failure — finding nothing is a
   /// normal outcome that the UI renders as an empty state.
-  AsyncResult<List<SearchHit>> search(String query);
+  FutureResult<List<SearchHit>> search(String query);
 
   /// Adds or replaces a document's entries in the index.
   ///
   /// Called after OCR completes and after any edit that changes page text.
   /// Idempotent: re-indexing an already-indexed document replaces its entries
   /// rather than duplicating them.
-  AsyncResult<void> indexDocument(Document document);
+  FutureResult<void> indexDocument(Document document);
 
   /// Drops every entry pointing at [documentId]. Succeeds when the id was never
   /// indexed.
-  AsyncResult<void> removeFromIndex(String documentId);
+  FutureResult<void> removeFromIndex(String documentId);
 
   /// Rebuilds the index from scratch over [documents].
   ///
   /// The repair path for an index that has drifted — after a failed de-index,
   /// or after a schema change that makes existing entries unreadable.
-  AsyncResult<void> rebuildIndex(List<Document> documents);
+  FutureResult<void> rebuildIndex(List<Document> documents);
 }

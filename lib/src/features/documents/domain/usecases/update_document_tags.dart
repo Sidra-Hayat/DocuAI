@@ -20,7 +20,7 @@ class UpdateDocumentTags {
   static const int maxTagsPerDocument = 12;
   static const int maxTagLength = 32;
 
-  AsyncResult<Document> call({
+  FutureResult<Document> call({
     required String documentId,
     required List<String> tags,
   }) async {

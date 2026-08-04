@@ -15,5 +15,5 @@ abstract interface class OcrRepository {
   ///
   /// An empty string is a valid success: a photograph of a blank page contains
   /// no text, and that is a result, not an error.
-  AsyncResult<String> recognizeText(String relativeImagePath);
+  FutureResult<String> recognizeText(String relativeImagePath);
 }

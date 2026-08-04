@@ -19,7 +19,7 @@ class RenameDocument {
   /// Longest title the library list can render without truncating badly.
   static const int maxTitleLength = 120;
 
-  AsyncResult<Document> call({
+  FutureResult<Document> call({
     required String documentId,
     required String title,
   }) async {

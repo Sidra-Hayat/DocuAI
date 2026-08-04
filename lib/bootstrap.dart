@@ -10,6 +10,7 @@ import 'src/core/observers/app_provider_observer.dart';
 import 'src/core/storage/hive_initializer.dart';
 import 'src/core/storage/storage_paths.dart';
 import 'src/core/storage/storage_providers.dart';
+import 'src/features/documents/data/datasources/documents_box.dart';
 
 /// Composition root.
 ///
@@ -51,6 +52,7 @@ Future<void> bootstrap() async {
       // Asynchronous resources are resolved here so that every provider that
       // depends on them can be read synchronously later.
       final settingsBox = await HiveInitializer.init();
+      final documentsBox = await openDocumentsBox();
       final storagePaths = await createStoragePaths();
 
       runApp(
@@ -58,6 +60,7 @@ Future<void> bootstrap() async {
           observers: const [AppProviderObserver()],
           overrides: [
             settingsBoxProvider.overrideWithValue(settingsBox),
+            documentsBoxProvider.overrideWithValue(documentsBox),
             storagePathsProvider.overrideWithValue(storagePaths),
           ],
           child: const DocuAiApp(),

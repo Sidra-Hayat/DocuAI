@@ -16,7 +16,7 @@ abstract interface class ScannerRepository {
   /// A user who backs out without capturing anything gets an empty list rather
   /// than a failure — cancelling is not an error. A missing Play Services
   /// module, however, is a [ScanFailure]: the feature genuinely cannot run.
-  AsyncResult<List<String>> scanPages({int pageLimit});
+  FutureResult<List<String>> scanPages({int pageLimit});
 
   /// Whether the scanner can actually run on this device.
   ///
