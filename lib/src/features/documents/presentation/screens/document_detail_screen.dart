@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../export/presentation/widgets/share_pdf_button.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
@@ -132,6 +133,8 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 16),
+                SharePdfButton(document: document),
               ],
             ),
           ),

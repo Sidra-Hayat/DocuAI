@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../export/presentation/providers/export_controller.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../providers/document_providers.dart';
 
-/// The rename / favourite / delete menu, shared by the library list and the
-/// detail screen so both offer exactly the same actions.
-enum DocumentAction { rename, toggleFavorite, delete }
+/// The rename / share / favourite / delete menu, shared by the library list and
+/// the detail screen so both offer exactly the same actions.
+enum DocumentAction { rename, sharePdf, toggleFavorite, delete }
 
 class DocumentActionsMenu extends ConsumerWidget {
   const DocumentActionsMenu({
@@ -34,6 +35,15 @@ class DocumentActionsMenu extends ConsumerWidget {
           child: ListTile(
             leading: Icon(Icons.drive_file_rename_outline),
             title: Text('Rename'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem(
+          value: DocumentAction.sharePdf,
+          enabled: document.hasPages,
+          child: const ListTile(
+            leading: Icon(Icons.picture_as_pdf_outlined),
+            title: Text('Share as PDF'),
             contentPadding: EdgeInsets.zero,
           ),
         ),
@@ -70,6 +80,8 @@ class DocumentActionsMenu extends ConsumerWidget {
     switch (action) {
       case DocumentAction.rename:
         await showRenameDocumentDialog(context, ref, document);
+      case DocumentAction.sharePdf:
+        await shareDocumentAsPdf(context, ref, document);
       case DocumentAction.toggleFavorite:
         await toggleDocumentFavorite(context, ref, document);
       case DocumentAction.delete:
@@ -129,6 +141,23 @@ Future<void> showRenameDocumentDialog(
     onFailure: (failure) =>
         messenger.showSnackBar(SnackBar(content: Text(failure.message))),
   );
+}
+
+/// Shares the document as a PDF from a menu, where there is no button to carry
+/// progress — so the outcome is reported afterwards instead.
+Future<void> shareDocumentAsPdf(
+  BuildContext context,
+  WidgetRef ref,
+  Document document,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  await ref.read(exportControllerProvider.notifier).shareAsPdf(document);
+
+  final state = ref.read(exportControllerProvider);
+  if (state is ExportFailedState && state.documentId == document.id) {
+    messenger.showSnackBar(SnackBar(content: Text(state.message)));
+  }
 }
 
 Future<void> toggleDocumentFavorite(

@@ -17,7 +17,7 @@ no network layer at all.
 | 2 | Hive persistence and the document library | ✅ Complete |
 | 3 | ML Kit document scanning | ✅ Complete |
 | 4 | On-device OCR (ML Kit Text Recognition) | ✅ Complete |
-| 5 | PDF generation and sharing | ⬜ Not started |
+| 5 | PDF generation and sharing | ✅ Complete |
 | 6 | Full-text search over extracted text | ⬜ Not started |
 | 7 | Offline assistant (retrieval; optional on-device LLM) | ⬜ Not started |
 | 8 | Polish, accessibility and Play Store release | ⬜ Not started |
@@ -198,6 +198,33 @@ stored alongside them.
 The native recogniser is created once and reused across a batch. Constructing a
 detector allocates a native model, and a twenty-page document would otherwise
 allocate twenty.
+
+### PDF export
+
+Composition runs on a **background isolate**. Rendering decodes and re-encodes
+every page image, which for a twenty-page document is seconds of CPU — on the
+UI isolate that is a frozen app. The `pdf` package is pure Dart, so moving the
+work costs nothing but the hop, and `PdfJob` carries only strings so it can
+cross the isolate boundary.
+
+A page whose image cannot be read aborts the export. A PDF quietly missing
+page 3 is worse than one that failed loudly, because the user would only find
+out after sending it to someone. Missing files are detected before rendering
+starts, so the failure costs milliseconds rather than a full render.
+
+The file is named after the document, sanitised — the title is what the share
+sheet and the receiving app display, and `document.pdf` tells a recipient
+nothing.
+
+Exporting and sharing are one action. Whether a PDF already exists is an
+implementation detail, so `ShareDocument` reuses one when it can and composes
+one when it cannot; a failed share retries with a fresh render, since a
+recorded PDF that Android has since cleared is the likeliest cause.
+
+> The exported PDF is images only, not searchable. A searchable text layer
+> needs per-block bounding boxes to position invisible text, and
+> `OcrRepository` currently returns plain text — ML Kit provides the geometry,
+> DocuAI discards it. Worth revisiting if the OCR schema ever grows.
 
 ### Quality gates
 
