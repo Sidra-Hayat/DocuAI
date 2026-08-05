@@ -1,0 +1,22 @@
+# Copy to `android/key.properties` and fill in. That file is git-ignored and
+# must stay that way — it holds the passwords to your upload key.
+#
+# Create the keystore first:
+#
+#   keytool -genkey -v \
+#     -keystore ~/docuai-upload.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 \
+#     -alias upload
+#
+# Then back up the .jks file somewhere you will still have it in five years.
+# Google Play ties your application ID to this key permanently: lose it and you
+# cannot ship an update to the same listing, only a new app with a new ID and
+# no existing installs. Play App Signing reduces the blast radius — enrol when
+# you first upload — but the upload key itself is still yours to keep.
+#
+# storeFile may be absolute, or relative to the `android/app` directory.
+
+storePassword=your-keystore-password
+keyPassword=your-key-password
+keyAlias=upload
+storeFile=/absolute/path/to/docuai-upload.jks

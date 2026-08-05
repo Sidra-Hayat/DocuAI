@@ -62,15 +62,36 @@ android {
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
+                // A release build signed with the debug key cannot be uploaded
+                // to Play. The build is still allowed so the release path can be
+                // exercised locally, but it must never do that quietly — see
+                // the warning emitted below.
                 signingConfigs.getByName("debug")
             }
-            // Code shrinking is enabled in Phase 8 together with the ML Kit
-            // keep-rules; turning it on before those exist strips model classes
-            // that are only reached by reflection.
-            isMinifyEnabled = false
-            isShrinkResources = false
+
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
+}
+
+// Fails loudly at configuration time rather than at submission time. The debug
+// keystore is a working signature, so without this the only symptom is Play
+// rejecting the upload days later.
+if (!hasReleaseKeystore) {
+    logger.warn(
+        "\n" +
+            "┌───────────────────────────────────────────────────────────────┐\n" +
+            "│ WARNING: android/key.properties is missing.                   │\n" +
+            "│ Release builds are being signed with the DEBUG keystore and   │\n" +
+            "│ CANNOT be uploaded to Google Play.                            │\n" +
+            "│ See android/key.properties.example.                           │\n" +
+            "└───────────────────────────────────────────────────────────────┘\n",
+    )
 }
 
 flutter {

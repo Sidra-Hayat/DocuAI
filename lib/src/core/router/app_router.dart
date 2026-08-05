@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,7 +31,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: AppRoutes.documents,
-    debugLogDiagnostics: true,
+    // Route logging is a development aid. In release it writes every
+    // navigation — including document ids — to logcat, where any app holding
+    // READ_LOGS on a rooted device can read it.
+    debugLogDiagnostics: kDebugMode,
     errorBuilder: (context, state) => RouteErrorScreen(error: state.error),
     routes: [
       StatefulShellRoute.indexedStack(

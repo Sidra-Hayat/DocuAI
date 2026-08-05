@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground (Android 8+).
+
+  Drawn on the 108dp adaptive canvas. All content sits between 18 and 90 —
+  the 72dp safe area — because launchers mask this layer to whatever shape the
+  device uses and may parallax it by a few dp on top of that.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Sheet, top-right corner turned back. -->
+    <path
+        android:fillColor="#FAFAFC"
+        android:pathData="M33,30 L52.5,30 L63,40.5 L63,69 L33,69 Z" />
+
+    <!-- The fold, shaded so the corner reads as turned rather than clipped. -->
+    <path
+        android:fillColor="#C7D6F7"
+        android:pathData="M52.5,30 L63,40.5 L52.5,40.5 Z" />
+
+    <!-- Ruled lines standing in for text. -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M39,40.5 L58.5,40.5 L58.5,43.5 L39,43.5 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M39,48.75 L58.5,48.75 L58.5,51.75 L39,51.75 Z" />
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M39,57 L51,57 L51,60 L39,60 Z" />
+
+    <!-- Four-point spark. -->
+    <path
+        android:fillColor="#FAFAFC"
+        android:pathData="M69,54 L74.1,63.9 L84,69 L74.1,74.1 L69,84 L63.9,74.1 L54,69 L63.9,63.9 Z" />
+</vector>

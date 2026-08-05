@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below (android:fullBackupContent).
+
+  Backup is disabled outright in the manifest, so nothing here should ever be
+  consulted. It exists as a second line of defence: if `allowBackup` is ever
+  flipped back on by a merged library manifest or an incautious edit, this
+  still excludes everything DocuAI stores.
+
+  What would otherwise leave the device: the Hive database holds document
+  metadata AND the full recognised text of every scan, and the files directory
+  holds the page images and generated PDFs. Auto Backup would copy all of it to
+  the user's Google Drive — which is exactly what this app promises never
+  happens.
+-->
+<full-backup-content>
+    <exclude domain="database" />
+    <exclude domain="file" />
+    <exclude domain="sharedpref" />
+    <exclude domain="external" />
+    <exclude domain="root" />
+</full-backup-content>

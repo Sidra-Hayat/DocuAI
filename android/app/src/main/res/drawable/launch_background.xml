@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!--
+  Window background shown while the process starts, before Flutter draws.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+  `?android:colorBackground` resolves against LaunchTheme, whose parent is
+  Theme.Light in values/ and Theme.Black in values-night/ — so this follows the
+  system dark-mode setting without needing a second drawable. It previously
+  hardcoded white, which was harmless only because minSdk is 24 and the
+  drawable-v21 variant shadowed it on every supported device; the two are now
+  identical so they cannot drift.
+
+  On Android 12 and above this is largely moot: the platform SplashScreen API
+  ignores windowBackground and composes the launcher icon over a themed
+  background itself.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="?android:colorBackground" />
 </layer-list>

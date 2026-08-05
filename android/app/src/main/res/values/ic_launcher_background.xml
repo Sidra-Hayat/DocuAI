@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches AppTheme.seedColor, so the launcher icon and the app's own
+         colour scheme come from the same value. -->
+    <color name="ic_launcher_background">#2563EB</color>
+</resources>

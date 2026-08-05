@@ -1,9 +1,28 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Backup is off, deliberately and explicitly.
+
+      `allowBackup` defaults to true. Left alone, Android Auto Backup copies the
+      Hive database — document metadata and the full recognised text of every
+      scan — plus the page images and generated PDFs to the user's Google Drive.
+      DocuAI's entire premise is that documents never leave the device, so the
+      default is not merely untidy here: it is the one setting that would make
+      the privacy claim false.
+
+      `tools:replace` is present because a merged library manifest could
+      otherwise reintroduce the default; this makes ours authoritative.
+    -->
     <application
         android:label="DocuAI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:enableOnBackInvokedCallback="true">
+        android:enableOnBackInvokedCallback="true"
+        tools:replace="android:allowBackup"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -55,12 +55,18 @@ class SettingsScreen extends ConsumerWidget {
 
           const Divider(),
           _SectionHeader(label: 'Privacy', theme: theme),
+          // Deliberately no longer claims "no analytics". Google's ML Kit
+          // libraries bundle a usage-telemetry component, so the absolute
+          // version of that claim is not true of the shipped app — and a
+          // privacy promise the app itself contradicts is worse than a
+          // narrower one that holds. The full detail is in PRIVACY.md.
           const ListTile(
             leading: Icon(Icons.phonelink_lock_outlined),
             title: Text('Everything stays on this device'),
             subtitle: Text(
               'Scanning, text recognition and the assistant all run offline. '
-              'DocuAI has no account, no server and no analytics.',
+              'DocuAI has no account and no server, and your documents are '
+              'never uploaded — not even to cloud backup.',
             ),
             isThreeLine: true,
           ),
