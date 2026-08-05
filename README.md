@@ -20,7 +20,13 @@ and no network layer in DocuAI's own code.
 | 5 | PDF generation and sharing | ✅ Complete |
 | 6 | Full-text search over extracted text | ✅ Complete |
 | 7 | Offline assistant (retrieval; optional on-device LLM) | ✅ Complete |
-| 8 | Polish, accessibility and Play Store release | ⬜ Not started |
+| 8 | Play Store release configuration | 🟨 Code complete — see checklist |
+
+Phase 8's code-side work is done: signing config, R8 with ML Kit keep rules,
+backup disabled, launcher icon, privacy policy. What remains needs a keystore
+password or a physical device, so it cannot be finished from the repository —
+the [release checklist](#release-checklist-phase-8) lists exactly what.
+Accessibility was scoped out of the required set and is tracked there too.
 
 Every feature screen is now built; the `PhasePlaceholder` widget that stood in
 for them has been deleted along with its last use. Phase 8 is release work —
