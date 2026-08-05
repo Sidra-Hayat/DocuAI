@@ -204,6 +204,48 @@ The native recogniser is created once and reused across a batch. Constructing a
 detector allocates a native model, and a twenty-page document would otherwise
 allocate twenty.
 
+#### Rebuilding the page from the hierarchy
+
+DocuAI does **not** use `RecognizedText.text`. That property is Android's
+`Text.getText()`, which concatenates *block* texts with newlines — fine for a
+page of prose where a block is a paragraph, useless for the documents this app
+exists for. ML Kit segments a bill by visual grouping, so a heading word, a
+field label and its value each become their own block, and the flat string comes
+back as:
+
+```
+Electricity
+Bill
+Amount
+5000
+```
+
+`RecognizedTextComposer` walks `TextBlock → TextLine → TextElement` and
+reassembles the page from the bounding boxes ML Kit already provides: lines are
+rebuilt from their elements in reading order, fragments whose vertical extents
+overlap are merged into one visual row and ordered left to right, and a vertical
+gap wider than 1.4× the median row height becomes a blank line.
+
+```
+Electricity Bill
+Amount: 5000
+```
+
+Two deliberate constraints:
+
+- **Nothing is invented.** Fragments on a row are joined with a single space and
+  nothing else — no colons or dashes inserted to make a label look like a label.
+  The assistant quotes recognised text *verbatim*, so a fabricated separator
+  would end up inside an answer presented as a quotation from the user's own
+  document.
+- **Left-to-right is assumed**, which holds for `TextRecognitionScript.latin` —
+  the only script configured.
+
+This was not only a readability problem. `PassageExtractor` discards candidates
+under 12 characters as fragments, so with the flat output a bill's `Electricity`
+(11), `Amount` (6) and `5000` (4) were *all* dropped — the assistant could see
+almost nothing on exactly the documents it was built for.
+
 ### PDF export
 
 Composition runs on a **background isolate**. Rendering decodes and re-encodes

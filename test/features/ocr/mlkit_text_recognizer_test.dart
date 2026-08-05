@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import '../../helpers/mlkit_text_fixtures.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -49,18 +51,42 @@ void main() {
     if (tempDir.existsSync()) await tempDir.delete(recursive: true);
   });
 
+  /// A reply carrying one line of text, laid out the way a device reports it.
+  Map<String, dynamic> singleLineReply(String text) =>
+      recognitionReply(<Map<String, dynamic>>[
+        block(<Map<String, dynamic>>[
+          line(text, left: 40, top: 100, right: 400, bottom: 130),
+        ]),
+      ]);
+
   group('MlKitTextRecognizer', () {
     test('returns the recognised text', () async {
-      mockChannel(
-        (call) async => <dynamic, dynamic>{
-          'text': 'Total due: 42.00 EUR',
-          'blocks': <dynamic>[],
-        },
-      );
+      mockChannel((call) async => singleLineReply('Total due: 42.00 EUR'));
 
       expect(
         await recognizer.recognize(await writePage('page_000.jpg')),
         'Total due: 42.00 EUR',
+      );
+    });
+
+    test('composes the page from the block hierarchy, not the flat string',
+        () async {
+      // Two fragments on one row, each its own block — the shape that produced
+      // one word per line before the composer existed.
+      mockChannel(
+        (call) async => recognitionReply(<Map<String, dynamic>>[
+          block(<Map<String, dynamic>>[
+            line('Electricity', left: 40, top: 100, right: 180, bottom: 130),
+          ]),
+          block(<Map<String, dynamic>>[
+            line('Bill', left: 190, top: 101, right: 250, bottom: 131),
+          ]),
+        ]),
+      );
+
+      expect(
+        await recognizer.recognize(await writePage('page_000.jpg')),
+        'Electricity Bill',
       );
     });
 
@@ -82,6 +108,7 @@ void main() {
     });
 
     test('empty text is a valid result, not an error', () async {
+      // What a photograph of a blank page actually returns: no text, no blocks.
       mockChannel(
         (call) async => <dynamic, dynamic>{'text': '', 'blocks': <dynamic>[]},
       );
@@ -162,19 +189,14 @@ void main() {
 
   group('OcrRepositoryImpl', () {
     test('wraps recognised text in a Success', () async {
-      mockChannel(
-        (call) async => <dynamic, dynamic>{
-          'text': 'Invoice',
-          'blocks': <dynamic>[],
-        },
-      );
+      mockChannel((call) async => singleLineReply('Invoice 4471'));
       final repository = OcrRepositoryImpl(recognizer);
 
       final result = await repository.recognizeText(
         await writePage('page_000.jpg'),
       );
 
-      expect(result.valueOrNull, 'Invoice');
+      expect(result.valueOrNull, 'Invoice 4471');
     });
 
     test('reports a missing image as an OcrFailure, not a storage error', () async {

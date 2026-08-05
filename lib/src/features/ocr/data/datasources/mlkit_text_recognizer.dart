@@ -5,6 +5,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/storage/storage_paths.dart';
+import 'recognized_text_composer.dart';
 
 /// Wrapper over ML Kit's text recogniser.
 ///
@@ -48,7 +49,12 @@ class MlKitTextRecognizer {
       final recognised = await _instance.processImage(
         InputImage.fromFilePath(absolutePath),
       );
-      return recognised.text;
+      // Not `recognised.text`. That is Android's Text.getText(), which joins
+      // *block* texts with newlines — and ML Kit makes a separate block of
+      // every visually distinct fragment, so a bill comes back one word per
+      // line. The composer walks block → line → element and rebuilds the page
+      // from the bounding boxes ML Kit already provided.
+      return RecognizedTextComposer.compose(recognised);
     } on PlatformException catch (error) {
       throw MlKitException(
         'This page could not be read.',
