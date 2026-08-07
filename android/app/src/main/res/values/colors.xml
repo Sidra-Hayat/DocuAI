@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The dark field of the launcher artwork, sampled from
+      assets/icons/background.png rather than picked independently — so the
+      splash and the icon are the same colour rather than nearly the same,
+      which is the difference a user notices without being able to name it.
+    -->
+    <color name="brand_ink">#1C1E23</color>
+</resources>

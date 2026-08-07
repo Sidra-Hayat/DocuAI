@@ -5,6 +5,10 @@
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
+        <!-- Android 12+ composes the splash itself and ignores windowBackground.
+             Without this it would use the platform default rather than the
+             brand ink. Ignored harmlessly on older releases. -->
+        <item name="android:windowSplashScreenBackground">@color/brand_ink</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your

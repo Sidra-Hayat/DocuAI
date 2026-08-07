@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+<!--
+  Identical to drawable/launch_background.xml on purpose.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+  Flutter's template splits these because theme-attribute references in
+  drawables are unsupported below API 21. Now that both resolve to a literal
+  colour there is nothing to diverge, and keeping them in step means a future
+  edit to one cannot silently miss the other.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/brand_ink" />
 </layer-list>
