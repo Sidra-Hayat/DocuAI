@@ -8,6 +8,7 @@ import '../../data/repositories/export_repository_impl.dart';
 import '../../domain/repositories/export_repository.dart';
 import '../../domain/usecases/export_document_as_pdf.dart';
 import '../../domain/usecases/share_document.dart';
+import '../../domain/usecases/share_extracted_text.dart';
 
 // ---- Dependencies ----------------------------------------------------------
 
@@ -20,6 +21,10 @@ final exportDocumentAsPdfProvider = Provider<ExportDocumentAsPdf>(
     export: ref.watch(exportRepositoryProvider),
     documents: ref.watch(documentRepositoryProvider),
   ),
+);
+
+final shareExtractedTextProvider = Provider<ShareExtractedText>(
+  (ref) => ShareExtractedText(ref.watch(exportRepositoryProvider)),
 );
 
 final shareDocumentProvider = Provider<ShareDocument>(

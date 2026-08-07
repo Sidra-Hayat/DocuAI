@@ -27,4 +27,12 @@ abstract final class AppRoutes {
 
   /// Builds the absolute path for a document detail page.
   static String documentDetailPath(String id) => '$documents/detail/$id';
+
+  /// Recognised text, nested under the document it belongs to — so Back from
+  /// the reader returns to that document rather than to the library.
+  static const String extractedText = 'text';
+  static const String extractedTextName = 'extractedText';
+
+  static String extractedTextPath(String id) =>
+      '${documentDetailPath(id)}/text';
 }

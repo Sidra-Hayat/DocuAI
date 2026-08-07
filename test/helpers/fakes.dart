@@ -245,6 +245,7 @@ class FakeExportRepository implements ExportRepository {
   Result<String> buildResult = const Success('documents/doc-1/doc-1.pdf');
   Failure? shareFailure;
   final List<String> sharedPaths = <String>[];
+  final List<String> sharedText = <String>[];
   String? lastSubject;
   int buildCount = 0;
 
@@ -259,6 +260,15 @@ class FakeExportRepository implements ExportRepository {
     final failure = shareFailure;
     if (failure != null) return Failed(failure);
     sharedPaths.add(relativePath);
+    lastSubject = subject;
+    return const Success<void>(null);
+  }
+
+  @override
+  FutureResult<void> shareText(String text, {String? subject}) async {
+    final failure = shareFailure;
+    if (failure != null) return Failed(failure);
+    sharedText.add(text);
     lastSubject = subject;
     return const Success<void>(null);
   }

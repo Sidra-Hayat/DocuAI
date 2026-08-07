@@ -23,4 +23,12 @@ abstract interface class ExportRepository {
   /// system gives no way to distinguish that from a completed share, and
   /// treating it as an error would show a spurious message.
   FutureResult<void> shareFile(String relativePath, {String? subject});
+
+  /// Opens the share sheet with plain text rather than a file.
+  ///
+  /// Separate from [shareFile] because the two are different intents to
+  /// Android, and because recognised text is worth sharing without first
+  /// rendering a PDF — pasting a receipt total into a message should not
+  /// require producing a document.
+  FutureResult<void> shareText(String text, {String? subject});
 }

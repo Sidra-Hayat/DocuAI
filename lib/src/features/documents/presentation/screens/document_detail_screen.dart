@@ -9,12 +9,12 @@ import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_actions.dart';
-import '../widgets/document_text_section.dart';
 import '../widgets/document_thumbnail.dart';
+import '../widgets/extracted_text_entry.dart';
 
-/// Single document view: pages, recognised text and the library actions.
+/// Single document view: pages, metadata, export and the library actions.
 ///
-/// Phase 5 adds PDF export and sharing.
+/// The recognised text lives on its own route — see [ExtractedTextEntry].
 class DocumentDetailScreen extends ConsumerWidget {
   const DocumentDetailScreen({required this.documentId, super.key});
 
@@ -140,7 +140,7 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
           ),
           const SizedBox(height: 16),
           const Divider(),
-          DocumentTextSection(document: document),
+          ExtractedTextEntry(document: document),
         ],
       ),
     );

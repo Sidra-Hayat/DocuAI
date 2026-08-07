@@ -38,4 +38,9 @@ abstract final class HiveTypeIds {
 abstract final class SettingsKeys {
   static const String themeMode = 'theme_mode';
   static const String onboardingCompleted = 'onboarding_completed';
+
+  /// Font scale for the extracted-text reader. A reading preference rather
+  /// than an accessibility setting — it persists per install so a user who
+  /// reads at a larger size does not reset it on every document.
+  static const String readerTextScale = 'reader_text_scale';
 }

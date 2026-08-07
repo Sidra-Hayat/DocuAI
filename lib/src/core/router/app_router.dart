@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/documents/presentation/screens/document_detail_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
+import '../../features/documents/presentation/screens/extracted_text_screen.dart';
 import '../../features/scanner/presentation/screens/scan_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -55,6 +56,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => DocumentDetailScreen(
                       documentId: state.pathParameters['id']!,
                     ),
+                    routes: [
+                      GoRoute(
+                        path: AppRoutes.extractedText,
+                        name: AppRoutes.extractedTextName,
+                        builder: (context, state) => ExtractedTextScreen(
+                          documentId: state.pathParameters['id']!,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

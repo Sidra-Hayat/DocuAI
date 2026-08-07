@@ -109,6 +109,29 @@ class ExportRepositoryImpl implements ExportRepository {
     }
   }
 
+  @override
+  FutureResult<void> shareText(String text, {String? subject}) async {
+    try {
+      final result = await _share(ShareParams(text: text, subject: subject));
+
+      return switch (result.status) {
+        ShareResultStatus.unavailable => const Failed(
+          ExportFailure('No app on this device can receive text.'),
+        ),
+        ShareResultStatus.success ||
+        ShareResultStatus.dismissed => const Success<void>(null),
+      };
+    } catch (error, stackTrace) {
+      return Failed(
+        ExportFailure(
+          'The text could not be shared.',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
   /// Names the file after the document, because the title is what the share
   /// sheet and the receiving app display — `document.pdf` tells the recipient
   /// nothing.
