@@ -81,11 +81,29 @@ class FakeDocumentRepository implements DocumentRepository {
 
   void seed(Document document) {
     store[document.id] = document;
-    _controller.add(store.values.toList());
+    _emit();
   }
 
+  /// Mirrors the real repository: a seed emission on subscribe, then one per
+  /// mutation.
+  ///
+  /// The fake used to emit only from [seed], so every write went unobserved and
+  /// no widget test could ever have caught a screen failing to react to a
+  /// delete. A double that stays silent where the real thing speaks does not
+  /// test the wiring, it hides it.
   @override
-  Stream<List<Document>> watchDocuments() => _controller.stream;
+  Stream<List<Document>> watchDocuments() async* {
+    yield _sorted();
+    yield* _controller.stream;
+  }
+
+  /// Newest first, the order `DocumentLocalDataSource.readAll` guarantees.
+  List<Document> _sorted() => store.values.toList()
+    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+  void _emit() {
+    if (!_controller.isClosed) _controller.add(_sorted());
+  }
 
   @override
   FutureResult<List<Document>> getDocuments() async {
@@ -126,6 +144,7 @@ class FakeDocumentRepository implements DocumentRepository {
       ],
     );
     store[document.id] = document;
+    _emit();
     return Success(document);
   }
 
@@ -135,6 +154,7 @@ class FakeDocumentRepository implements DocumentRepository {
     if (failure != null) return Failed(failure);
     savedDocuments.add(document);
     store[document.id] = document;
+    _emit();
     return Success(document);
   }
 
@@ -144,6 +164,7 @@ class FakeDocumentRepository implements DocumentRepository {
     if (failure != null) return Failed(failure);
     deletedIds.add(id);
     store.remove(id);
+    _emit();
     return const Success<void>(null);
   }
 

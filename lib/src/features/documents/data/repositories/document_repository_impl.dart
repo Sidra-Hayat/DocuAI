@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
@@ -19,13 +21,58 @@ class DocumentRepositoryImpl implements DocumentRepository {
   final DocumentLocalDataSource _local;
 
   @override
-  Stream<List<Document>> watchDocuments() async* {
-    yield _toEntities(_local.readAll());
+  Stream<List<Document>> watchDocuments() {
+    final controller = StreamController<List<Document>>();
+    StreamSubscription<void>? changes;
 
-    // `BoxEvent` says which key changed, but the library renders the whole
-    // list, and re-reading a metadata box is cheap. Mapping every event to a
-    // full re-read keeps this correct for puts, deletes and clears alike.
-    yield* _local.watch().map((_) => _toEntities(_local.readAll()));
+    void emit() {
+      try {
+        // The event says which key changed, but the library renders the whole
+        // list and re-reading a metadata box is cheap. A full re-read keeps
+        // this correct for puts, deletes and clears alike.
+        controller.add(_toEntities(_local.readAll()));
+      } on CacheException catch (error, stackTrace) {
+        controller.addError(StorageFailure(error.message, cause: error), stackTrace);
+      }
+    }
+
+    controller.onListen = () {
+      // Subscribe *before* the first read.
+      //
+      // This was an `async*` generator that yielded a snapshot and then
+      // `yield*`-ed the change feed, which subscribes only after the first
+      // yield has been delivered. Hive's feed is a broadcast stream, so it
+      // buffers nothing: a write landing in that window is dropped outright,
+      // and the screen is left holding a snapshot that is already wrong with
+      // nothing remaining to correct it.
+      changes = _local.watch().listen(
+        (_) => emit(),
+        onError: controller.addError,
+        // The feed only ends when the box closes. If that happens while the
+        // app is still running, every screen reading this would otherwise
+        // freeze on its last value — silently, and until the app is
+        // restarted. Surfacing it means a stuck library announces itself
+        // instead of looking like a store that simply stopped changing.
+        onDone: () {
+          controller.addError(
+            const StorageFailure(
+              'The document store stopped reporting changes.',
+            ),
+            StackTrace.current,
+          );
+          controller.close();
+        },
+      );
+
+      emit();
+    };
+
+    controller.onCancel = () async {
+      await changes?.cancel();
+      changes = null;
+    };
+
+    return controller.stream;
   }
 
   @override

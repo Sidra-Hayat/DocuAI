@@ -54,7 +54,11 @@ class DocumentLocalDataSource {
   }
 
   /// Fires whenever the box changes, so the repository can re-emit the list.
-  Stream<BoxEvent> watch() => _box.watch();
+  ///
+  /// Typed as `void` because the payload is genuinely irrelevant: the
+  /// repository re-reads the whole library on every change, so which key moved
+  /// tells it nothing it does not already look up.
+  Stream<void> watch() => _box.watch();
 
   /// Copies freshly captured images into the app's own storage and writes the
   /// metadata record.

@@ -46,7 +46,11 @@ void main() {
     );
   });
 
-  tearDown(() async => box.deleteFromDisk());
+  // One test closes the box deliberately; deleting an already-closed box
+  // throws, and the temp directory is removed wholesale in tearDownAll anyway.
+  tearDown(() async {
+    if (box.isOpen) await box.deleteFromDisk();
+  });
 
   tearDownAll(() async {
     await Hive.close();
@@ -278,6 +282,37 @@ void main() {
 
       expect(emissions.first, isEmpty);
       expect(emissions.last.single.id, document.id);
+    });
+
+    test('a change landing before the first read is not lost', () async {
+      // No await between subscribing and writing: with a snapshot-then-
+      // subscribe stream this event falls into the gap and is dropped, leaving
+      // the listener holding a list that is already wrong.
+      final emissions = <List<Document>>[];
+      final subscription = repository.watchDocuments().listen(emissions.add);
+      final document = await create();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await subscription.cancel();
+
+      expect(emissions.last.single.id, document.id);
+    });
+
+    test('reports a change feed that ends rather than freezing', () async {
+      final errors = <Object>[];
+      final subscription = repository
+          .watchDocuments()
+          .listen((_) {}, onError: errors.add);
+      await Future<void>.delayed(Duration.zero);
+
+      // Closing the box ends Hive's notifier. A stream that simply completes
+      // here is indistinguishable from one with nothing to report, which is
+      // how a screen ends up stale until the app is restarted.
+      await box.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await subscription.cancel();
+
+      expect(errors, isNotEmpty);
+      expect(errors.first, isA<StorageFailure>());
     });
 
     test('re-emits after a delete', () async {
