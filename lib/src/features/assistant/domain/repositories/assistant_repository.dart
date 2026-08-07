@@ -28,4 +28,14 @@ abstract interface class AssistantRepository {
 
   /// Empties the transcript. Does not touch documents or the search index.
   FutureResult<void> clearHistory();
+
+  /// Questions worth asking of *this* library, for the empty state.
+  ///
+  /// Drawn from the user's own documents rather than written in advance: a
+  /// generic "What is my policy number?" is useless to someone whose library
+  /// is three utility bills, and the first thing an empty assistant has to do
+  /// is show that it knows what it can answer.
+  ///
+  /// Returns an empty list when there is nothing to suggest.
+  FutureResult<List<String>> suggestedQuestions();
 }

@@ -62,9 +62,16 @@ void main() {
       }
     });
 
-    test('anything else is general', () {
+    test('recognises a question about a person', () {
       expect(
         QuestionAnalyzer.analyze('Who signed the agreement?').intent,
+        QuestionIntent.person,
+      );
+    });
+
+    test('anything else is general', () {
+      expect(
+        QuestionAnalyzer.analyze('What are the terms?').intent,
         QuestionIntent.general,
       );
     });

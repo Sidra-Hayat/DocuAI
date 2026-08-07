@@ -21,13 +21,15 @@ class AnswerCitationModelAdapter extends TypeAdapter<AnswerCitationModel> {
       documentTitle: fields[1] as String,
       pageIndex: (fields[2] as num).toInt(),
       snippet: fields[3] as String,
+      matchedTerms: (fields[4] as List?)?.cast<String>(),
+      relevance: (fields[5] as num?)?.toDouble(),
     );
   }
 
   @override
   void write(BinaryWriter writer, AnswerCitationModel obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.documentId)
       ..writeByte(1)
@@ -35,7 +37,11 @@ class AnswerCitationModelAdapter extends TypeAdapter<AnswerCitationModel> {
       ..writeByte(2)
       ..write(obj.pageIndex)
       ..writeByte(3)
-      ..write(obj.snippet);
+      ..write(obj.snippet)
+      ..writeByte(4)
+      ..write(obj.matchedTerms)
+      ..writeByte(5)
+      ..write(obj.relevance);
   }
 
   @override

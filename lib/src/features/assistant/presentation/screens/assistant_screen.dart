@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../domain/entities/assistant_answer.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../providers/assistant_providers.dart';
 import '../widgets/chat_bubble.dart';
+import '../widgets/question_chips.dart';
+import '../widgets/thinking_indicator.dart';
 
 /// Offline question answering over the user's own documents.
 ///
@@ -43,6 +46,23 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     // Only a question rejected before it was recorded needs telling; anything
     // else is already in the transcript as a failed turn.
+    if (rejection != null) {
+      messenger.showSnackBar(SnackBar(content: Text(rejection)));
+    }
+  }
+
+  /// Asks a question the user picked rather than typed.
+  ///
+  /// Routed through the same path as the composer so a suggestion and a typed
+  /// question cannot drift apart in validation or error handling.
+  Future<void> _askNow(String question) async {
+    _composer.clear();
+
+    final messenger = ScaffoldMessenger.of(context);
+    final rejection = await ref
+        .read(assistantControllerProvider.notifier)
+        .ask(question);
+
     if (rejection != null) {
       messenger.showSnackBar(SnackBar(content: Text(rejection)));
     }
@@ -89,7 +109,9 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   @override
   Widget build(BuildContext context) {
     final history = ref.watch(chatHistoryProvider);
-    final busy = ref.watch(assistantControllerProvider);
+    final recent = ref.watch(recentQuestionsProvider);
+    final assistant = ref.watch(assistantControllerProvider);
+    final busy = assistant.busy;
 
     ref.listen(chatHistoryProvider, (previous, next) => _scrollToLatest());
 
@@ -97,6 +119,19 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       appBar: AppBar(
         title: const Text('Assistant'),
         actions: [
+          if (recent.isNotEmpty && !busy)
+            PopupMenuButton<String>(
+              tooltip: 'Recent questions',
+              icon: const Icon(Icons.history),
+              onSelected: _askNow,
+              itemBuilder: (context) => <PopupMenuEntry<String>>[
+                for (final question in recent)
+                  PopupMenuItem<String>(
+                    value: question,
+                    child: Text(question, maxLines: 2),
+                  ),
+              ],
+            ),
           if ((history.value?.isNotEmpty ?? false) && !busy)
             IconButton(
               tooltip: 'Clear conversation',
@@ -115,11 +150,12 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 title: 'The conversation could not be loaded',
               ),
               data: (messages) => messages.isEmpty
-                  ? const _Introduction()
+                  ? _Introduction(onAsk: _askNow)
                   : _Transcript(
                       messages: messages,
                       controller: _scroll,
                       busy: busy,
+                      lastAnswer: assistant.lastAnswer,
                     ),
             ),
           ),
@@ -135,11 +171,13 @@ class _Transcript extends StatelessWidget {
     required this.messages,
     required this.controller,
     required this.busy,
+    required this.lastAnswer,
   });
 
   final List<ChatMessage> messages;
   final ScrollController controller;
   final bool busy;
+  final AssistantAnswer? lastAnswer;
 
   @override
   Widget build(BuildContext context) {
@@ -147,42 +185,21 @@ class _Transcript extends StatelessWidget {
       controller: controller,
       padding: const EdgeInsets.symmetric(vertical: 12),
       itemCount: messages.length + (busy ? 1 : 0),
-      itemBuilder: (context, index) => index < messages.length
-          ? ChatBubble(message: messages[index])
-          : const _Thinking(),
-    );
-  }
-}
+      itemBuilder: (context, index) {
+        if (index >= messages.length) return const ThinkingIndicator();
 
-class _Thinking extends StatelessWidget {
-  const _Thinking();
+        final message = messages[index];
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+        // Confidence belongs to the run that produced it, and only the newest
+        // answer has a run this session knows about.
+        final isNewestAnswer =
+            index == messages.length - 1 && !message.isFromUser && !busy;
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Reading your documents…',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
+        return ChatBubble(
+          message: message,
+          answer: isNewestAnswer ? lastAnswer : null,
+        );
+      },
     );
   }
 }
@@ -192,18 +209,33 @@ class _Thinking extends StatelessWidget {
 /// States the two things that are not obvious and that determine whether the
 /// assistant appears to work at all: it can only read documents whose text has
 /// been recognised, and it quotes rather than composes.
-class _Introduction extends StatelessWidget {
-  const _Introduction();
+class _Introduction extends ConsumerWidget {
+  const _Introduction({required this.onAsk});
+
+  final ValueChanged<String> onAsk;
 
   @override
-  Widget build(BuildContext context) {
-    return const AppEmptyState(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Suggestions are a convenience: a library that cannot produce any still
+    // gets the explanation, never an error.
+    final suggestions =
+        ref.watch(suggestedQuestionsProvider).value ?? const <String>[];
+
+    return AppEmptyState(
       icon: Icons.auto_awesome_outlined,
       title: 'Ask about your documents',
       message:
           'Questions are answered by quoting the documents whose text has been '
           'recognised — nothing is sent anywhere, and nothing is made up. Every '
           'answer shows the page it came from.',
+      action: suggestions.isEmpty
+          ? null
+          : QuestionChips(
+              questions: suggestions,
+              label: 'TRY ASKING',
+              icon: Icons.north_east,
+              onSelected: onAsk,
+            ),
     );
   }
 }

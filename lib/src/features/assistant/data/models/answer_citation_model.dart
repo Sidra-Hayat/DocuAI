@@ -18,6 +18,8 @@ class AnswerCitationModel {
     required this.documentTitle,
     required this.pageIndex,
     required this.snippet,
+    required this.matchedTerms,
+    required this.relevance,
   });
 
   factory AnswerCitationModel.fromEntity(AnswerCitation citation) =>
@@ -26,6 +28,8 @@ class AnswerCitationModel {
         documentTitle: citation.documentTitle,
         pageIndex: citation.pageIndex,
         snippet: citation.snippet,
+        matchedTerms: citation.matchedTerms,
+        relevance: citation.relevance,
       );
 
   @HiveField(0)
@@ -40,10 +44,21 @@ class AnswerCitationModel {
   @HiveField(3)
   final String snippet;
 
+  /// Nullable because transcripts written before these fields existed have no
+  /// value at this index — Hive hands back null, and an older answer simply
+  /// shows no matched terms rather than failing to load.
+  @HiveField(4)
+  final List<String>? matchedTerms;
+
+  @HiveField(5)
+  final double? relevance;
+
   AnswerCitation toEntity() => AnswerCitation(
     documentId: documentId,
     documentTitle: documentTitle,
     pageIndex: pageIndex,
     snippet: snippet,
+    matchedTerms: matchedTerms ?? const <String>[],
+    relevance: relevance ?? 0,
   );
 }

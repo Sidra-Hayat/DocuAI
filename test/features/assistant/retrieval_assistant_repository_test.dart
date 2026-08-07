@@ -187,13 +187,31 @@ void main() {
       );
     });
 
-    test('an empty search result is an honest empty answer', () async {
+    test('an empty library says so, rather than "not found"', () async {
       search.results = <SearchHit>[];
 
       final answer = (await repository.ask('anything at all')).valueOrNull!;
 
       expect(answer.isGrounded, isFalse);
+      expect(answer.kind, AnswerKind.emptyLibrary);
+      expect(answer.text, RetrievalAssistantRepository.emptyLibraryMessage);
+    });
+
+    test('a stocked library that matched nothing reports no match', () async {
+      documents.seed(
+        documentWith(
+          id: 'other',
+          title: 'Unrelated',
+          pageTexts: <String>['Entirely unrelated content about gardening.'],
+        ),
+      );
+      search.results = <SearchHit>[];
+
+      final answer = (await repository.ask('helicopter model')).valueOrNull!;
+
+      expect(answer.kind, AnswerKind.noMatch);
       expect(answer.text, RetrievalAssistantRepository.notFoundMessage);
+      expect(answer.documentsSearched, 1);
     });
   });
 

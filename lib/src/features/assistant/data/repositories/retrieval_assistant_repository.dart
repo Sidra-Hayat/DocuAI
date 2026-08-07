@@ -63,6 +63,14 @@ class RetrievalAssistantRepository implements AssistantRepository {
       'None of your documents have had their text recognised yet, so there is '
       'nothing for me to read. Open a document to recognise its text.';
 
+  static const String emptyLibraryMessage =
+      'There are no documents to search yet. Scan one and I can answer '
+      'questions about it.';
+
+  static const String unclearMessage =
+      'I need something more specific to look for. Try naming a word that '
+      'appears on the page — an amount, a date, or a company name.';
+
   @override
   FutureResult<AssistantAnswer> ask(
     String question, {
@@ -71,7 +79,12 @@ class RetrievalAssistantRepository implements AssistantRepository {
     try {
       final analyzed = QuestionAnalyzer.analyze(question);
       if (analyzed.isEmpty) {
-        return const Success(AssistantAnswer(text: notFoundMessage));
+        return const Success(
+          AssistantAnswer(
+            text: unclearMessage,
+            kind: AnswerKind.unclearQuestion,
+          ),
+        );
       }
 
       final candidates = await _candidates(analyzed, documentId);
@@ -79,7 +92,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
         case Failed(:final failure):
           return Failed(failure);
         case Success(:final value):
-          return Success(_answerFrom(analyzed, value));
+          return Success(await _answerFrom(analyzed, value));
       }
     } catch (error, stackTrace) {
       return Failed(
@@ -125,19 +138,26 @@ class RetrievalAssistantRepository implements AssistantRepository {
   }
 
   /// Stage two: find the answer inside those documents.
-  AssistantAnswer _answerFrom(
+  Future<AssistantAnswer> _answerFrom(
     AnalyzedQuestion question,
     ({List<Document> documents, Map<String, double> priors}) candidates,
-  ) {
+  ) async {
     if (candidates.documents.isEmpty) {
-      return const AssistantAnswer(text: notFoundMessage);
+      // Nothing matched — but "no documents match" and "no documents exist"
+      // send the user to completely different places, so it is worth one more
+      // read to tell them apart.
+      return _emptyHanded();
     }
 
     // Distinguishes "nothing matched" from "there is nothing to match
     // against" — the second is the user's to fix, and saying so is the
     // difference between an actionable answer and a dead end.
     if (!candidates.documents.any((document) => document.hasText)) {
-      return const AssistantAnswer(text: noTextMessage);
+      return AssistantAnswer(
+        text: noTextMessage,
+        kind: AnswerKind.noRecognisedText,
+        documentsSearched: candidates.documents.length,
+      );
     }
 
     final passages = <Passage>[
@@ -153,10 +173,42 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
     final selected = _select(ranked);
     if (selected.isEmpty) {
-      return const AssistantAnswer(text: notFoundMessage);
+      return AssistantAnswer(
+        text: notFoundMessage,
+        kind: AnswerKind.noMatch,
+        documentsSearched: candidates.documents.length,
+      );
     }
 
-    return _compose(selected);
+    return _compose(selected, candidates.documents.length);
+  }
+
+  /// Which flavour of "nothing" this was.
+  Future<AssistantAnswer> _emptyHanded() async {
+    final library = await _documents.getDocuments();
+
+    if (library case Success(:final value)) {
+      if (value.isEmpty) {
+        return const AssistantAnswer(
+          text: emptyLibraryMessage,
+          kind: AnswerKind.emptyLibrary,
+        );
+      }
+      if (!value.any((document) => document.hasText)) {
+        return AssistantAnswer(
+          text: noTextMessage,
+          kind: AnswerKind.noRecognisedText,
+          documentsSearched: value.length,
+        );
+      }
+      return AssistantAnswer(
+        text: notFoundMessage,
+        kind: AnswerKind.noMatch,
+        documentsSearched: value.length,
+      );
+    }
+
+    return const AssistantAnswer(text: notFoundMessage, kind: AnswerKind.noMatch);
   }
 
   /// Applies deduplication, per-document diversity and the context budget.
@@ -197,9 +249,18 @@ class RetrievalAssistantRepository implements AssistantRepository {
   /// The reply is the best passage verbatim. Every selected passage — the
   /// quoted one included — becomes a citation, so the user can see the answer
   /// in its original context rather than taking the quotation on trust.
-  static AssistantAnswer _compose(List<RankedPassage> selected) {
+  static AssistantAnswer _compose(
+    List<RankedPassage> selected,
+    int documentsSearched,
+  ) {
+    final best = selected.first;
+    final top = best.score;
+
     return AssistantAnswer(
-      text: selected.first.passage.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      text: best.passage.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      kind: AnswerKind.grounded,
+      confidence: _confidenceOf(best),
+      documentsSearched: documentsSearched,
       citations: <AnswerCitation>[
         for (final candidate in selected)
           AnswerCitation(
@@ -207,9 +268,74 @@ class RetrievalAssistantRepository implements AssistantRepository {
             documentTitle: candidate.passage.documentTitle,
             pageIndex: candidate.passage.pageIndex,
             snippet: PassageExtractor.citationSnippet(candidate.passage),
+            matchedTerms: candidate.matchedTerms,
+            // Relative to the best passage in this answer. An absolute figure
+            // would invite comparison between answers, which these scores do
+            // not support.
+            relevance: top <= 0 ? 0 : (candidate.score / top).clamp(0, 1),
           ),
       ],
     );
+  }
+
+  /// How completely the quoted passage answered the question.
+  ///
+  /// Deliberately built only from things the engine actually knows: how much
+  /// of the question the passage covered, and whether it carries the shape the
+  /// question asked for. It says nothing about whether the document is right —
+  /// which is why the UI labels these "match" rather than "confidence".
+  static AnswerConfidence _confidenceOf(RankedPassage best) {
+    if (best.coverage >= 0.999 && best.satisfiesIntent) {
+      return AnswerConfidence.strong;
+    }
+    if (best.coverage >= 0.999 || best.satisfiesIntent) {
+      return AnswerConfidence.partial;
+    }
+    return AnswerConfidence.weak;
+  }
+
+  @override
+  FutureResult<List<String>> suggestedQuestions() async {
+    try {
+      final loaded = await _documents.getDocuments();
+      if (loaded case Failed(:final failure)) return Failed(failure);
+
+      final documents = (loaded as Success<List<Document>>).value
+          .where((document) => document.hasText)
+          .take(4)
+          .toList(growable: false);
+
+      if (documents.isEmpty) return const Success(<String>[]);
+
+      final suggestions = <String>[];
+      for (final document in documents) {
+        final text = document.extractedText;
+        final title = document.title;
+
+        // Ask about what the page demonstrably contains. A suggestion that
+        // returns nothing is worse than no suggestion — it teaches the user
+        // the assistant does not work.
+        if (PassageSignals.hasAmount(text)) {
+          suggestions.add('How much is the $title?');
+        } else if (PassageSignals.hasDate(text)) {
+          suggestions.add('When is the $title due?');
+        } else if (PassageSignals.hasContact(text)) {
+          suggestions.add('What is the contact for the $title?');
+        } else {
+          suggestions.add('What does the $title say?');
+        }
+      }
+
+      return Success(List<String>.unmodifiable(suggestions.take(4)));
+    } catch (error, stackTrace) {
+      return Failed(
+        AssistantFailure(
+          'Suggestions are unavailable.',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
   }
 
   // ---- Transcript ----------------------------------------------------------

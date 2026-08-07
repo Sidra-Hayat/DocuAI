@@ -16,6 +16,37 @@ enum AnswerSource {
   onDeviceModel,
 }
 
+/// Why the assistant replied the way it did.
+///
+/// An enum rather than the UI matching on message strings. Every unhelpful
+/// outcome has a different cause and a different thing the user can do about
+/// it, and telling them apart in the domain is what lets the screen say
+/// something useful instead of one generic apology.
+enum AnswerKind {
+  /// Quoted from the user's documents.
+  grounded,
+
+  /// Documents were searched and none contained the answer.
+  noMatch,
+
+  /// Documents exist, but none has had its text recognised yet.
+  noRecognisedText,
+
+  /// There is nothing in the library to search.
+  emptyLibrary,
+
+  /// The question carried no term worth searching for.
+  unclearQuestion,
+}
+
+/// How well the quoted passage actually answered the question.
+///
+/// A *retrieval* confidence, not a claim about truth. It reports how completely
+/// the passage covered the question's terms — never whether the document is
+/// correct. The UI labels these "Strong/Partial/Weak match" for that reason:
+/// "confident" would be a promise the engine is in no position to make.
+enum AnswerConfidence { strong, partial, weak }
+
 /// A passage the answer was drawn from, so the user can check it.
 ///
 /// Every retrieval answer carries at least one of these. An answer with no
@@ -34,6 +65,14 @@ abstract class AnswerCitation with _$AnswerCitation {
     required String documentTitle,
     required int pageIndex,
     required String snippet,
+
+    /// Question terms this passage actually contained, so the citation can
+    /// show *why* it was cited rather than only where it came from.
+    @Default(<String>[]) List<String> matchedTerms,
+
+    /// Score relative to the best passage in the same answer, 0–1. Comparable
+    /// within one answer only, exactly like the BM25 scores beneath it.
+    @Default(0.0) double relevance,
   }) = _AnswerCitation;
 
   String get pageLabel => 'Page ${pageIndex + 1}';
@@ -48,11 +87,19 @@ abstract class AssistantAnswer with _$AssistantAnswer {
     required String text,
     @Default(<AnswerCitation>[]) List<AnswerCitation> citations,
     @Default(AnswerSource.retrieval) AnswerSource source,
+    @Default(AnswerKind.grounded) AnswerKind kind,
+
+    /// Null unless [kind] is [AnswerKind.grounded] — there is nothing to be
+    /// confident about when nothing was found.
+    AnswerConfidence? confidence,
+
+    /// How many documents were read to produce this. Shown so an answer drawn
+    /// from one document out of forty does not look like the whole library
+    /// agreed with it.
+    @Default(0) int documentsSearched,
   }) = _AssistantAnswer;
 
   /// Whether the answer is backed by something the user can go and read.
-  /// The UI uses this to decide whether to show the "not found in your
-  /// documents" treatment.
   bool get isGrounded => citations.isNotEmpty;
 
   /// Distinct documents the answer drew on, in citation order.
@@ -63,4 +110,20 @@ abstract class AssistantAnswer with _$AssistantAnswer {
         .where(seen.add)
         .toList(growable: false);
   }
+
+  /// Citations grouped by document, preserving both document and page order.
+  ///
+  /// An answer that draws two pages from the same contract should read as one
+  /// source with two references, not as two unrelated sources.
+  Map<String, List<AnswerCitation>> get citationsByDocument {
+    final grouped = <String, List<AnswerCitation>>{};
+    for (final citation in citations) {
+      grouped
+          .putIfAbsent(citation.documentId, () => <AnswerCitation>[])
+          .add(citation);
+    }
+    return grouped;
+  }
+
+  bool get spansMultipleDocuments => citedDocumentIds.length > 1;
 }

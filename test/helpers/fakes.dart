@@ -308,4 +308,9 @@ class FakeAssistantRepository implements AssistantRepository {
     messages.clear();
     return const Success<void>(null);
   }
+
+  List<String> suggestions = <String>[];
+
+  @override
+  FutureResult<List<String>> suggestedQuestions() async => Success(suggestions);
 }
