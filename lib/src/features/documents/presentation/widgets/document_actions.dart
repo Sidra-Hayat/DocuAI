@@ -102,37 +102,12 @@ Future<void> showRenameDocumentDialog(
 ) async {
   final rename = ref.read(renameDocumentProvider);
   final messenger = ScaffoldMessenger.of(context);
-  final controller = TextEditingController(text: document.title);
 
   final title = await showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Rename document'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        maxLength: RenameDocument.maxTitleLength,
-        textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
-          labelText: 'Title',
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (value) => Navigator.of(context).pop(value),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(controller.text),
-          child: const Text('Rename'),
-        ),
-      ],
-    ),
+    builder: (context) => _RenameDialog(initialTitle: document.title),
   );
 
-  controller.dispose();
   if (title == null) return;
 
   final result = await rename(documentId: document.id, title: title);
@@ -141,6 +116,76 @@ Future<void> showRenameDocumentDialog(
     onFailure: (failure) =>
         messenger.showSnackBar(SnackBar(content: Text(failure.message))),
   );
+}
+
+/// The rename dialog's body.
+///
+/// A `StatefulWidget` purely so that the [TextEditingController] is owned by
+/// something inside the dialog's own subtree.
+///
+/// The controller used to be created next to `showDialog` and disposed as soon
+/// as its future completed. That future completes when `Navigator.pop` is
+/// called — `Route.didPop` completes the popped completer immediately — not
+/// when the dismiss animation ends. For the length of that animation the
+/// dialog is still mounted and still rebuilding, so the `TextField` reattached
+/// listeners to a controller that had already been disposed. The visible
+/// failure was three frames downstream: a controller-used-after-dispose
+/// assertion aborted an element update mid-flight, which left an
+/// `InheritedElement` holding a dependent that never deactivated, and the
+/// framework then failed `_dependents.isEmpty` while tearing the route down.
+///
+/// Tying the controller to `State.dispose` removes the timing question
+/// entirely: it is released when the route actually unmounts, whenever that is.
+///
+/// The dialog stays deliberately ignorant of what makes a title valid — it
+/// returns raw text, and `RenameDocument` decides. Trimming or rejecting here
+/// would put a business rule in a widget and let the two definitions drift.
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.initialTitle});
+
+  final String initialTitle;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialTitle,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(_controller.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename document'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: RenameDocument.maxTitleLength,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Title',
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Rename')),
+      ],
+    );
+  }
 }
 
 /// Shares the document as a PDF from a menu, where there is no button to carry
