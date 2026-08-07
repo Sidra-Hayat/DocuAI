@@ -13,9 +13,22 @@ abstract final class AppConstants {
   /// and generated PDFs.
   static const String documentsDirName = 'documents';
 
-  /// Filename pattern for a scanned page inside a document folder.
+  /// Filename for a page captured when the document is first created.
+  ///
+  /// Only used at creation, where the indices are known to be 0..n and unique.
   static String pageFileName(int index) =>
       'page_${index.toString().padLeft(3, '0')}.jpg';
+
+  /// Filename for a page added or replaced after creation.
+  ///
+  /// Derived from the page's own id rather than its position, because position
+  /// changes. Once pages can be reordered or deleted, a name like `page_003`
+  /// either has to be renamed on disk — slow, and destructive if it fails
+  /// halfway — or it silently stops describing where the page actually sits.
+  /// Order lives in `DocumentPage.index` alone; the filename only has to be
+  /// unique.
+  static String pageFileNameFor(String pageId) =>
+      'page_${pageId.replaceAll('-', '').substring(0, 12)}.jpg';
 
   /// Debounce applied to search-as-you-type so we do not re-query the index on
   /// every keystroke.

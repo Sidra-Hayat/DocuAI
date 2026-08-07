@@ -7,6 +7,8 @@ import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/documents/presentation/screens/document_detail_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/documents/presentation/screens/extracted_text_screen.dart';
+import '../../features/documents/presentation/screens/manage_pages_screen.dart';
+import '../../features/documents/presentation/screens/page_viewer_screen.dart';
 import '../../features/scanner/presentation/screens/scan_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -61,6 +63,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         path: AppRoutes.extractedText,
                         name: AppRoutes.extractedTextName,
                         builder: (context, state) => ExtractedTextScreen(
+                          documentId: state.pathParameters['id']!,
+                        ),
+                      ),
+                      GoRoute(
+                        path: AppRoutes.pageViewer,
+                        name: AppRoutes.pageViewerName,
+                        builder: (context, state) => PageViewerScreen(
+                          documentId: state.pathParameters['id']!,
+                          // A malformed page number opens the first page
+                          // rather than failing the route.
+                          initialPage:
+                              int.tryParse(
+                                state.pathParameters['page'] ?? '',
+                              ) ??
+                              0,
+                        ),
+                      ),
+                      GoRoute(
+                        path: AppRoutes.managePages,
+                        name: AppRoutes.managePagesName,
+                        builder: (context, state) => ManagePagesScreen(
                           documentId: state.pathParameters['id']!,
                         ),
                       ),

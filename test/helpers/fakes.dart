@@ -168,6 +168,109 @@ class FakeDocumentRepository implements DocumentRepository {
     return const Success<void>(null);
   }
 
+  /// Page edits recorded as `'<operation>:<documentId>'`, so a test can assert
+  /// what the UI asked for without inspecting the resulting document.
+  final List<String> pageOperations = <String>[];
+
+  @override
+  FutureResult<Document> addPages({
+    required String documentId,
+    required List<String> sourceImagePaths,
+  }) async {
+    pageOperations.add('add:$documentId');
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+
+    final pages = <DocumentPage>[
+      ...document.pages,
+      for (var i = 0; i < sourceImagePaths.length; i++)
+        buildPage(
+          id: 'added-${document.pages.length + i}',
+          index: document.pages.length + i,
+          imagePath: 'documents/$documentId/added_$i.jpg',
+        ),
+    ];
+    return _store(document.copyWith(pages: pages, pdfPath: null));
+  }
+
+  @override
+  FutureResult<Document> deletePage({
+    required String documentId,
+    required String pageId,
+  }) async {
+    pageOperations.add('delete:$documentId');
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+
+    final remaining = document.pages
+        .where((page) => page.id != pageId)
+        .toList();
+    return _store(document.copyWith(pages: _renumber(remaining)));
+  }
+
+  @override
+  FutureResult<Document> reorderPages({
+    required String documentId,
+    required List<String> orderedPageIds,
+  }) async {
+    pageOperations.add('reorder:$documentId');
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+
+    final byId = <String, DocumentPage>{
+      for (final page in document.pages) page.id: page,
+    };
+    return _store(
+      document.copyWith(
+        pages: _renumber(<DocumentPage>[
+          for (final id in orderedPageIds) byId[id]!,
+        ]),
+      ),
+    );
+  }
+
+  @override
+  FutureResult<Document> replacePage({
+    required String documentId,
+    required String pageId,
+    required String sourceImagePath,
+  }) async {
+    pageOperations.add('replace:$documentId');
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+
+    return _store(
+      document.copyWith(
+        pages: <DocumentPage>[
+          for (final page in document.pages)
+            if (page.id == pageId)
+              page.copyWith(text: '', ocrStatus: OcrStatus.pending)
+            else
+              page,
+        ],
+      ),
+    );
+  }
+
+  static List<DocumentPage> _renumber(List<DocumentPage> pages) => <DocumentPage>[
+    for (var i = 0; i < pages.length; i++) pages[i].copyWith(index: i),
+  ];
+
+  Result<Document> _store(Document document) {
+    savedDocuments.add(document);
+    store[document.id] = document;
+    _emit();
+    return Success(document);
+  }
+
   void dispose() => _controller.close();
 }
 

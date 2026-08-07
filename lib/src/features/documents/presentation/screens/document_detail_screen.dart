@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../export/presentation/widgets/share_pdf_button.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -156,6 +158,23 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
           ),
           const SizedBox(height: 16),
           const Divider(),
+          ListTile(
+            leading: Icon(
+              Icons.auto_awesome_motion_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Manage pages'),
+            subtitle: Text(
+              'Reorder, rescan, add or remove — '
+              '${document.pageCount} ${document.pageCount == 1 ? 'page' : 'pages'}',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.pushNamed(
+              AppRoutes.managePagesName,
+              pathParameters: {'id': document.id},
+            ),
+          ),
+          const Divider(),
           ExtractedTextEntry(document: document),
         ],
       ),
@@ -192,18 +211,27 @@ class _PageCarousel extends StatelessWidget {
         separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final page = document.pages[index];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              DocumentThumbnail(
-                page: page,
-                width: 200,
-                height: 260,
-                borderRadius: 12,
-              ),
-              const SizedBox(height: 8),
-              Text(page.displayLabel, style: theme.textTheme.labelMedium),
-            ],
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            // Tapping a page opens it full screen at that page — the first
+            // thing anyone does with a thumbnail of dense text.
+            onTap: () => context.pushNamed(
+              AppRoutes.pageViewerName,
+              pathParameters: {'id': document.id, 'page': '$index'},
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                DocumentThumbnail(
+                  page: page,
+                  width: 200,
+                  height: 260,
+                  borderRadius: 12,
+                ),
+                const SizedBox(height: 8),
+                Text(page.displayLabel, style: theme.textTheme.labelMedium),
+              ],
+            ),
           );
         },
       ),

@@ -35,4 +35,19 @@ abstract final class AppRoutes {
 
   static String extractedTextPath(String id) =>
       '${documentDetailPath(id)}/text';
+
+  /// Full-screen page viewer. The page number is part of the path so the route
+  /// restores to the page the user was looking at rather than to the first.
+  static const String pageViewer = 'pages/:page';
+  static const String pageViewerName = 'pageViewer';
+
+  static String pageViewerPath(String id, int page) =>
+      '${documentDetailPath(id)}/pages/$page';
+
+  /// Reorder, delete, rescan and add pages.
+  static const String managePages = 'manage';
+  static const String managePagesName = 'managePages';
+
+  static String managePagesPath(String id) =>
+      '${documentDetailPath(id)}/manage';
 }

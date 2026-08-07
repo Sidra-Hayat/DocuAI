@@ -121,6 +121,176 @@ class DocumentLocalDataSource {
     }
   }
 
+  /// Appends pages, copying each source image into the document's folder.
+  Future<DocumentModel> addPages(
+    String documentId,
+    List<String> sourceImagePaths,
+  ) async {
+    final model = read(documentId);
+    final directory = await _paths.documentDir(documentId);
+    final added = <DocumentPageModel>[];
+
+    try {
+      for (final source in sourceImagePaths) {
+        final pageId = _uuid.v4();
+        final target = p.join(
+          directory.path,
+          AppConstants.pageFileNameFor(pageId),
+        );
+        await File(source).copy(target);
+
+        added.add(
+          DocumentPageModel(
+            id: pageId,
+            imagePath: _paths.relativePath(target),
+            index: model.pages.length + added.length,
+            text: '',
+            ocrStatus: OcrStatus.pending.name,
+          ),
+        );
+      }
+    } catch (error) {
+      // Roll back the copies this call made. Leaving them would consume space
+      // that nothing in the app can find, let alone reclaim.
+      for (final page in added) {
+        await _deleteImage(page.imagePath);
+      }
+      throw CacheException('Could not add the pages.', cause: error);
+    }
+
+    return write(_withPages(model, <DocumentPageModel>[...model.pages, ...added]));
+  }
+
+  Future<DocumentModel> deletePage(String documentId, String pageId) async {
+    final model = read(documentId);
+
+    final page = model.pages.where((page) => page.id == pageId).firstOrNull;
+    if (page == null) throw NotFoundException(pageId);
+
+    if (model.pages.length <= 1) {
+      throw const CacheException(
+        'A document must keep at least one page. Delete the document instead.',
+      );
+    }
+
+    // The record loses the page before the file does, for the same reason a
+    // document delete does: a page pointing at a missing image renders as a
+    // broken thumbnail, while an unreferenced file is invisible.
+    final remaining = model.pages
+        .where((candidate) => candidate.id != pageId)
+        .toList();
+    final saved = await write(_withPages(model, remaining));
+
+    await _deleteImage(page.imagePath);
+    return saved;
+  }
+
+  Future<DocumentModel> reorderPages(
+    String documentId,
+    List<String> orderedPageIds,
+  ) async {
+    final model = read(documentId);
+    final byId = <String, DocumentPageModel>{
+      for (final page in model.pages) page.id: page,
+    };
+
+    if (orderedPageIds.length != byId.length ||
+        !orderedPageIds.toSet().containsAll(byId.keys)) {
+      throw const CacheException(
+        'The new page order does not match the pages in this document.',
+      );
+    }
+
+    return write(
+      _withPages(
+        model,
+        <DocumentPageModel>[for (final id in orderedPageIds) byId[id]!],
+      ),
+    );
+  }
+
+  Future<DocumentModel> replacePage(
+    String documentId,
+    String pageId,
+    String sourceImagePath,
+  ) async {
+    final model = read(documentId);
+
+    final existing = model.pages.where((page) => page.id == pageId).firstOrNull;
+    if (existing == null) throw NotFoundException(pageId);
+
+    // Written under a new name rather than over the old one: a copy that fails
+    // partway would otherwise destroy the page it was meant to replace.
+    final directory = await _paths.documentDir(documentId);
+    final target = p.join(
+      directory.path,
+      AppConstants.pageFileNameFor(_uuid.v4()),
+    );
+
+    try {
+      await File(sourceImagePath).copy(target);
+    } catch (error) {
+      throw CacheException('Could not replace the page.', cause: error);
+    }
+
+    final replaced = DocumentPageModel(
+      id: existing.id,
+      imagePath: _paths.relativePath(target),
+      index: existing.index,
+      // The old text described the old image, so it goes with it.
+      text: '',
+      ocrStatus: OcrStatus.pending.name,
+    );
+
+    final saved = await write(
+      _withPages(model, <DocumentPageModel>[
+        for (final page in model.pages)
+          if (page.id == pageId) replaced else page,
+      ]),
+    );
+
+    await _deleteImage(existing.imagePath);
+    return saved;
+  }
+
+  /// Rebuilds a document around a new page list, renumbering as it goes.
+  ///
+  /// Index is assigned from list position rather than preserved, so every path
+  /// through page editing produces a contiguous 0..n-1 sequence and no caller
+  /// has to remember to renumber.
+  DocumentModel _withPages(DocumentModel model, List<DocumentPageModel> pages) =>
+      DocumentModel(
+        id: model.id,
+        title: model.title,
+        createdAt: model.createdAt,
+        updatedAt: _now(),
+        pages: <DocumentPageModel>[
+          for (var i = 0; i < pages.length; i++)
+            DocumentPageModel(
+              id: pages[i].id,
+              imagePath: pages[i].imagePath,
+              index: i,
+              text: pages[i].text,
+              ocrStatus: pages[i].ocrStatus,
+            ),
+        ],
+        tags: model.tags,
+        // Any page change makes the exported PDF stale, so the reference goes
+        // and the next share composes a fresh one.
+        pdfPath: null,
+        isFavorite: model.isFavorite,
+      );
+
+  Future<void> _deleteImage(String relativePath) async {
+    try {
+      final file = File(_paths.absolutePath(relativePath));
+      if (file.existsSync()) await file.delete();
+    } catch (_) {
+      // The record is already correct; an image left behind is reclaimable
+      // and must not fail an edit the user has seen succeed.
+    }
+  }
+
   /// Removes the record first, then the files.
   ///
   /// That order matters: a record pointing at deleted files renders a broken

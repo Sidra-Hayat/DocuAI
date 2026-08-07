@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
+import '../../../scanner/presentation/providers/scan_controller.dart';
 import '../../../search/presentation/providers/search_providers.dart';
 import '../../data/datasources/document_local_data_source.dart';
 import '../../data/datasources/documents_box.dart';
@@ -8,6 +9,7 @@ import '../../data/repositories/document_repository_impl.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/repositories/document_repository.dart';
 import '../../domain/usecases/delete_document.dart';
+import '../../domain/usecases/edit_document_pages.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../../domain/usecases/toggle_favorite.dart';
 import '../../domain/usecases/update_document_tags.dart';
@@ -68,6 +70,35 @@ final toggleFavoriteProvider = Provider<ToggleFavorite>(
 
 final updateDocumentTagsProvider = Provider<UpdateDocumentTags>(
   (ref) => UpdateDocumentTags(ref.watch(documentRepositoryProvider)),
+);
+
+// ---- Page editing ----------------------------------------------------------
+
+final addPagesProvider = Provider<AddPagesToDocument>(
+  (ref) => AddPagesToDocument(
+    scanner: ref.watch(scannerRepositoryProvider),
+    documents: ref.watch(documentRepositoryProvider),
+    search: ref.watch(searchRepositoryProvider),
+  ),
+);
+
+final deleteDocumentPageProvider = Provider<DeleteDocumentPage>(
+  (ref) => DeleteDocumentPage(
+    documents: ref.watch(documentRepositoryProvider),
+    search: ref.watch(searchRepositoryProvider),
+  ),
+);
+
+final reorderPagesProvider = Provider<ReorderDocumentPages>(
+  (ref) => ReorderDocumentPages(ref.watch(documentRepositoryProvider)),
+);
+
+final replacePageProvider = Provider<ReplaceDocumentPage>(
+  (ref) => ReplaceDocumentPage(
+    scanner: ref.watch(scannerRepositoryProvider),
+    documents: ref.watch(documentRepositoryProvider),
+    search: ref.watch(searchRepositoryProvider),
+  ),
 );
 
 final deleteDocumentProvider = Provider<DeleteDocument>(

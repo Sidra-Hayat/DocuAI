@@ -102,6 +102,47 @@ class DocumentRepositoryImpl implements DocumentRepository {
   });
 
   @override
+  FutureResult<Document> addPages({
+    required String documentId,
+    required List<String> sourceImagePaths,
+  }) => _guard(() async {
+    final model = await _local.addPages(documentId, sourceImagePaths);
+    return model.toEntity();
+  });
+
+  @override
+  FutureResult<Document> deletePage({
+    required String documentId,
+    required String pageId,
+  }) => _guard(() async {
+    final model = await _local.deletePage(documentId, pageId);
+    return model.toEntity();
+  });
+
+  @override
+  FutureResult<Document> reorderPages({
+    required String documentId,
+    required List<String> orderedPageIds,
+  }) => _guard(() async {
+    final model = await _local.reorderPages(documentId, orderedPageIds);
+    return model.toEntity();
+  });
+
+  @override
+  FutureResult<Document> replacePage({
+    required String documentId,
+    required String pageId,
+    required String sourceImagePath,
+  }) => _guard(() async {
+    final model = await _local.replacePage(
+      documentId,
+      pageId,
+      sourceImagePath,
+    );
+    return model.toEntity();
+  });
+
+  @override
   FutureResult<void> deleteDocument(String id) => _guard(() async {
     try {
       await _local.delete(id);

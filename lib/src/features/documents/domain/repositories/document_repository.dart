@@ -54,4 +54,51 @@ abstract interface class DocumentRepository {
   /// Succeeds when the id is unknown: deleting something that is already gone
   /// is the outcome the caller wanted.
   FutureResult<void> deleteDocument(String id);
+
+  // ---- Page editing --------------------------------------------------------
+  //
+  // All four return the updated document, so a caller never has to re-read to
+  // find out what it now looks like.
+  //
+  // Page order lives in `DocumentPage.index` and nowhere else. Filenames of
+  // pages added after creation are derived from the page id, so reordering is
+  // a metadata write and touches no files at all.
+
+  /// Appends freshly captured pages.
+  ///
+  /// [sourceImagePaths] are absolute paths to files the scanner owns; they are
+  /// copied in, never moved. New pages start at [OcrStatus.pending], because
+  /// nothing has read them yet.
+  FutureResult<Document> addPages({
+    required String documentId,
+    required List<String> sourceImagePaths,
+  });
+
+  /// Removes one page and its image, renumbering the pages that follow.
+  ///
+  /// Refuses to remove the last page: a document with no pages is not a
+  /// document, and deleting it is a separate, confirmed action.
+  FutureResult<Document> deletePage({
+    required String documentId,
+    required String pageId,
+  });
+
+  /// Reorders the pages to match [orderedPageIds].
+  ///
+  /// The list must name every page exactly once; anything else is a caller
+  /// error rather than a partial reorder to guess at.
+  FutureResult<Document> reorderPages({
+    required String documentId,
+    required List<String> orderedPageIds,
+  });
+
+  /// Swaps one page's image for a freshly captured one.
+  ///
+  /// The page keeps its id and position; its recognised text is cleared and it
+  /// returns to [OcrStatus.pending], because the text described the old image.
+  FutureResult<Document> replacePage({
+    required String documentId,
+    required String pageId,
+    required String sourceImagePath,
+  });
 }
