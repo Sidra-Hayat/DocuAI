@@ -24,6 +24,25 @@ class DocumentDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final document = ref.watch(documentProvider(documentId));
 
+    // The document can vanish underneath this screen — deleted from here, or
+    // from the library while it was open — and when it does, leaving is what
+    // the user expects rather than a tombstone they have to dismiss.
+    //
+    // The screen observes the store instead of the delete action calling back.
+    // A callback has to run on a context belonging to the subtree the delete
+    // destroys: by the time it fires, `documentProvider` has already emitted
+    // null, this body has been replaced, and `Navigator.of` on that dead
+    // context silently does nothing. Reacting to the state has no such
+    // ordering problem.
+    ref.listen(documentProvider(documentId), (previous, next) {
+      if (!next.hasValue || next.value != null) return;
+
+      final navigator = Navigator.of(context);
+      // Nothing to pop when this was opened directly; the body below then
+      // explains what happened instead.
+      if (navigator.canPop()) navigator.pop();
+    });
+
     return document.when(
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -94,10 +113,7 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
               document.isFavorite ? Icons.star : Icons.star_border_outlined,
             ),
           ),
-          DocumentActionsMenu(
-            document: document,
-            onDeleted: () => Navigator.of(context).maybePop(),
-          ),
+          DocumentActionsMenu(document: document),
         ],
       ),
       body: ListView(

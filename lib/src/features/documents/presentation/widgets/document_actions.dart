@@ -11,18 +11,9 @@ import '../providers/document_providers.dart';
 enum DocumentAction { rename, sharePdf, toggleFavorite, delete }
 
 class DocumentActionsMenu extends ConsumerWidget {
-  const DocumentActionsMenu({
-    required this.document,
-    this.onDeleted,
-    super.key,
-  });
+  const DocumentActionsMenu({required this.document, super.key});
 
   final Document document;
-
-  /// Called after a successful delete. The detail screen uses it to pop itself;
-  /// the library list has nothing to do, because the row disappears with the
-  /// stream update.
-  final VoidCallback? onDeleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,7 +76,7 @@ class DocumentActionsMenu extends ConsumerWidget {
       case DocumentAction.toggleFavorite:
         await toggleDocumentFavorite(context, ref, document);
       case DocumentAction.delete:
-        await confirmDeleteDocument(context, ref, document, onDeleted: onDeleted);
+        await confirmDeleteDocument(context, ref, document);
     }
   }
 }
@@ -227,9 +218,8 @@ Future<void> toggleDocumentFavorite(
 Future<void> confirmDeleteDocument(
   BuildContext context,
   WidgetRef ref,
-  Document document, {
-  VoidCallback? onDeleted,
-}) async {
+  Document document,
+) async {
   final delete = ref.read(deleteDocumentProvider);
   final messenger = ScaffoldMessenger.of(context);
 
@@ -258,8 +248,11 @@ Future<void> confirmDeleteDocument(
   if (confirmed != true) return;
 
   final result = await delete(document.id);
+  // Nothing to do on success: whichever screens are showing this document
+  // react to it leaving the store. Telling them directly would mean calling
+  // back into a widget the delete may already have unmounted.
   result.fold(
-    onSuccess: (_) => onDeleted?.call(),
+    onSuccess: (_) {},
     onFailure: (failure) =>
         messenger.showSnackBar(SnackBar(content: Text(failure.message))),
   );
