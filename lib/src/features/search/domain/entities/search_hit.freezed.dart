@@ -14,11 +14,13 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SearchHit {
 
- Document get document;/// BM25 relevance. Comparable only within one result set — an absolute
-/// score means nothing on its own, so never show it to the user.
- double get score;/// Matching passages, most relevant first. Empty when the query matched the
-/// title but no page text.
- List<SearchSnippet> get snippets;
+ Document get document;/// Relevance *within this hit's [kind]* — BM25 for content, a coverage
+/// fraction for titles and tags. Comparable only against hits of the same
+/// kind in the same result set, which is why sorting goes by kind first.
+ double get score; SearchMatchKind get kind;/// Matching passages, most relevant first. Empty when the query matched the
+/// title or a tag but no page text.
+ List<SearchSnippet> get snippets;/// Tags the query matched, for the result row to show why.
+ List<String> get matchedTags;
 /// Create a copy of SearchHit
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,16 +31,16 @@ $SearchHitCopyWith<SearchHit> get copyWith => _$SearchHitCopyWithImpl<SearchHit>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchHit&&(identical(other.document, document) || other.document == document)&&(identical(other.score, score) || other.score == score)&&const DeepCollectionEquality().equals(other.snippets, snippets));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SearchHit&&(identical(other.document, document) || other.document == document)&&(identical(other.score, score) || other.score == score)&&(identical(other.kind, kind) || other.kind == kind)&&const DeepCollectionEquality().equals(other.snippets, snippets)&&const DeepCollectionEquality().equals(other.matchedTags, matchedTags));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,document,score,const DeepCollectionEquality().hash(snippets));
+int get hashCode => Object.hash(runtimeType,document,score,kind,const DeepCollectionEquality().hash(snippets),const DeepCollectionEquality().hash(matchedTags));
 
 @override
 String toString() {
-  return 'SearchHit(document: $document, score: $score, snippets: $snippets)';
+  return 'SearchHit(document: $document, score: $score, kind: $kind, snippets: $snippets, matchedTags: $matchedTags)';
 }
 
 
@@ -49,7 +51,7 @@ abstract mixin class $SearchHitCopyWith<$Res>  {
   factory $SearchHitCopyWith(SearchHit value, $Res Function(SearchHit) _then) = _$SearchHitCopyWithImpl;
 @useResult
 $Res call({
- Document document, double score, List<SearchSnippet> snippets
+ Document document, double score, SearchMatchKind kind, List<SearchSnippet> snippets, List<String> matchedTags
 });
 
 
@@ -66,12 +68,14 @@ class _$SearchHitCopyWithImpl<$Res>
 
 /// Create a copy of SearchHit
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? document = null,Object? score = null,Object? snippets = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? document = null,Object? score = null,Object? kind = null,Object? snippets = null,Object? matchedTags = null,}) {
   return _then(_self.copyWith(
 document: null == document ? _self.document : document // ignore: cast_nullable_to_non_nullable
 as Document,score: null == score ? _self.score : score // ignore: cast_nullable_to_non_nullable
-as double,snippets: null == snippets ? _self.snippets : snippets // ignore: cast_nullable_to_non_nullable
-as List<SearchSnippet>,
+as double,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
+as SearchMatchKind,snippets: null == snippets ? _self.snippets : snippets // ignore: cast_nullable_to_non_nullable
+as List<SearchSnippet>,matchedTags: null == matchedTags ? _self.matchedTags : matchedTags // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 /// Create a copy of SearchHit
@@ -165,10 +169,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( Document document,  double score,  List<SearchSnippet> snippets)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( Document document,  double score,  SearchMatchKind kind,  List<SearchSnippet> snippets,  List<String> matchedTags)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SearchHit() when $default != null:
-return $default(_that.document,_that.score,_that.snippets);case _:
+return $default(_that.document,_that.score,_that.kind,_that.snippets,_that.matchedTags);case _:
   return orElse();
 
 }
@@ -186,10 +190,10 @@ return $default(_that.document,_that.score,_that.snippets);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( Document document,  double score,  List<SearchSnippet> snippets)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( Document document,  double score,  SearchMatchKind kind,  List<SearchSnippet> snippets,  List<String> matchedTags)  $default,) {final _that = this;
 switch (_that) {
 case _SearchHit():
-return $default(_that.document,_that.score,_that.snippets);case _:
+return $default(_that.document,_that.score,_that.kind,_that.snippets,_that.matchedTags);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -206,10 +210,10 @@ return $default(_that.document,_that.score,_that.snippets);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( Document document,  double score,  List<SearchSnippet> snippets)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( Document document,  double score,  SearchMatchKind kind,  List<SearchSnippet> snippets,  List<String> matchedTags)?  $default,) {final _that = this;
 switch (_that) {
 case _SearchHit() when $default != null:
-return $default(_that.document,_that.score,_that.snippets);case _:
+return $default(_that.document,_that.score,_that.kind,_that.snippets,_that.matchedTags);case _:
   return null;
 
 }
@@ -221,22 +225,33 @@ return $default(_that.document,_that.score,_that.snippets);case _:
 
 
 class _SearchHit extends SearchHit {
-  const _SearchHit({required this.document, required this.score, final  List<SearchSnippet> snippets = const <SearchSnippet>[]}): _snippets = snippets,super._();
+  const _SearchHit({required this.document, required this.score, this.kind = SearchMatchKind.content, final  List<SearchSnippet> snippets = const <SearchSnippet>[], final  List<String> matchedTags = const <String>[]}): _snippets = snippets,_matchedTags = matchedTags,super._();
   
 
 @override final  Document document;
-/// BM25 relevance. Comparable only within one result set — an absolute
-/// score means nothing on its own, so never show it to the user.
+/// Relevance *within this hit's [kind]* — BM25 for content, a coverage
+/// fraction for titles and tags. Comparable only against hits of the same
+/// kind in the same result set, which is why sorting goes by kind first.
 @override final  double score;
+@override@JsonKey() final  SearchMatchKind kind;
 /// Matching passages, most relevant first. Empty when the query matched the
-/// title but no page text.
+/// title or a tag but no page text.
  final  List<SearchSnippet> _snippets;
 /// Matching passages, most relevant first. Empty when the query matched the
-/// title but no page text.
+/// title or a tag but no page text.
 @override@JsonKey() List<SearchSnippet> get snippets {
   if (_snippets is EqualUnmodifiableListView) return _snippets;
   // ignore: implicit_dynamic_type
   return EqualUnmodifiableListView(_snippets);
+}
+
+/// Tags the query matched, for the result row to show why.
+ final  List<String> _matchedTags;
+/// Tags the query matched, for the result row to show why.
+@override@JsonKey() List<String> get matchedTags {
+  if (_matchedTags is EqualUnmodifiableListView) return _matchedTags;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_matchedTags);
 }
 
 
@@ -250,16 +265,16 @@ _$SearchHitCopyWith<_SearchHit> get copyWith => __$SearchHitCopyWithImpl<_Search
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchHit&&(identical(other.document, document) || other.document == document)&&(identical(other.score, score) || other.score == score)&&const DeepCollectionEquality().equals(other._snippets, _snippets));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SearchHit&&(identical(other.document, document) || other.document == document)&&(identical(other.score, score) || other.score == score)&&(identical(other.kind, kind) || other.kind == kind)&&const DeepCollectionEquality().equals(other._snippets, _snippets)&&const DeepCollectionEquality().equals(other._matchedTags, _matchedTags));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,document,score,const DeepCollectionEquality().hash(_snippets));
+int get hashCode => Object.hash(runtimeType,document,score,kind,const DeepCollectionEquality().hash(_snippets),const DeepCollectionEquality().hash(_matchedTags));
 
 @override
 String toString() {
-  return 'SearchHit(document: $document, score: $score, snippets: $snippets)';
+  return 'SearchHit(document: $document, score: $score, kind: $kind, snippets: $snippets, matchedTags: $matchedTags)';
 }
 
 
@@ -270,7 +285,7 @@ abstract mixin class _$SearchHitCopyWith<$Res> implements $SearchHitCopyWith<$Re
   factory _$SearchHitCopyWith(_SearchHit value, $Res Function(_SearchHit) _then) = __$SearchHitCopyWithImpl;
 @override @useResult
 $Res call({
- Document document, double score, List<SearchSnippet> snippets
+ Document document, double score, SearchMatchKind kind, List<SearchSnippet> snippets, List<String> matchedTags
 });
 
 
@@ -287,12 +302,14 @@ class __$SearchHitCopyWithImpl<$Res>
 
 /// Create a copy of SearchHit
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? document = null,Object? score = null,Object? snippets = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? document = null,Object? score = null,Object? kind = null,Object? snippets = null,Object? matchedTags = null,}) {
   return _then(_SearchHit(
 document: null == document ? _self.document : document // ignore: cast_nullable_to_non_nullable
 as Document,score: null == score ? _self.score : score // ignore: cast_nullable_to_non_nullable
-as double,snippets: null == snippets ? _self._snippets : snippets // ignore: cast_nullable_to_non_nullable
-as List<SearchSnippet>,
+as double,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
+as SearchMatchKind,snippets: null == snippets ? _self._snippets : snippets // ignore: cast_nullable_to_non_nullable
+as List<SearchSnippet>,matchedTags: null == matchedTags ? _self._matchedTags : matchedTags // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 

@@ -225,9 +225,11 @@ class _Introduction extends ConsumerWidget {
       icon: Icons.auto_awesome_outlined,
       title: 'Ask about your documents',
       message:
-          'Questions are answered by quoting the documents whose text has been '
-          'recognised — nothing is sent anywhere, and nothing is made up. Every '
-          'answer shows the page it came from.',
+          'Answers are quoted from the pages themselves — nothing is sent '
+          'anywhere, and nothing is made up. Every answer shows where it came '
+          'from.\n\n'
+          'Looking for a document rather than an answer? The Search tab finds '
+          'them by name, tag or text.',
       action: suggestions.isEmpty
           ? null
           : QuestionChips(
@@ -279,7 +281,7 @@ class _Composer extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onSubmitted: busy ? null : (_) => onSend(),
                 decoration: const InputDecoration(
-                  hintText: 'Ask a question',
+                  hintText: 'Ask questions about your documents',
                   border: OutlineInputBorder(),
                   isDense: true,
                   // The limit only matters as it is approached, and a permanent

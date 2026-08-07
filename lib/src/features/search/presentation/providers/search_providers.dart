@@ -32,9 +32,8 @@ final searchDocumentsProvider = Provider<SearchDocuments>(
 ///
 /// Two things put it out of step, and neither is a bug:
 ///
-///  * documents created before this phase existed, or before text recognition
-///    ran, were never indexed — a document with no recognised text still has a
-///    searchable title;
+///  * documents created before this phase existed were never indexed, and a
+///    document with no recognised text still has a searchable title and tags;
 ///  * a delete whose de-index failed leaves an entry pointing at nothing.
 ///
 /// Comparing counts is cheap, and rebuilding a personal library takes
@@ -46,9 +45,14 @@ final searchIndexReadyProvider = FutureProvider<void>((ref) async {
 
   final loaded = await ref.watch(documentRepositoryProvider).getDocuments();
   if (loaded case Success(:final value)) {
-    if (!index.isCurrentVersion || index.documentCount != value.length) {
-      await repository.rebuildIndex(value);
-    }
+    // A fingerprint rather than a count. Deleting one document and adding
+    // another leaves the count unchanged while the contents are not, and a
+    // count-based check would leave that index stale forever.
+    final stale =
+        !index.isCurrentVersion ||
+        index.storedFingerprint != Bm25SearchRepository.fingerprintOf(value);
+
+    if (stale) await repository.rebuildIndex(value);
   }
 });
 

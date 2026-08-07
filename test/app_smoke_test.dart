@@ -85,7 +85,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Search'));
     await tester.pumpAndSettle();
-    expect(find.text('Search your documents'), findsOneWidget);
+    expect(find.text('Find documents'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Assistant'));
     await tester.pumpAndSettle();

@@ -57,7 +57,7 @@ void main() {
   testWidgets('invites a search before anything is typed', (tester) async {
     await pumpSearch(tester);
 
-    expect(find.text('Search your documents'), findsOneWidget);
+    expect(find.text('Find documents'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byType(SearchResultTile), findsNothing);
   });
@@ -105,10 +105,10 @@ void main() {
 
     expect(find.text('No matches for "helicopter"'), findsOneWidget);
     expect(
-      find.textContaining('text has been recognised'),
+      find.textContaining('Names and tags are always searchable'),
       findsOneWidget,
-      reason: 'an unread document is invisible to search and nothing else '
-          'on this screen would explain why',
+      reason: 'the screen has to say which parts of a document are searchable '
+          'before its text has been read',
     );
   });
 

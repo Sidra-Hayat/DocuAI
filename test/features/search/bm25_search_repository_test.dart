@@ -367,12 +367,19 @@ void main() {
   });
 
   group('SearchHit', () {
-    test('scores are comparable within one result set', () async {
+    test('scores are comparable within one match kind', () async {
+      // Both are content matches, so their scores rank against each other.
+      // Across kinds they do not: ordering is by kind first, which is what
+      // makes "priority" mean something.
       await indexAll(<Document>[
-        documentWith(id: 'a', title: 'Rent', pageTexts: <String>['rent rent']),
         documentWith(
-          id: 'b',
-          title: 'Other',
+          id: 'dense',
+          title: 'Notes one',
+          pageTexts: <String>['rent rent'],
+        ),
+        documentWith(
+          id: 'sparse',
+          title: 'Notes two',
           pageTexts: <String>['rent mentioned once among many other words'],
         ),
       ]);
@@ -380,6 +387,7 @@ void main() {
       final hits = (await repository.search('rent')).valueOrNull!;
 
       expect(hits, hasLength(2));
+      expect(hits.every((h) => h.kind == SearchMatchKind.content), isTrue);
       expect(hits.first.score, greaterThan(hits.last.score));
       expect(hits.map((SearchHit hit) => hit.score).every((s) => s > 0), isTrue);
     });

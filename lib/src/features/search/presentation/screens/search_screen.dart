@@ -49,7 +49,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               onChanged: ref.read(searchQueryControllerProvider.notifier).onQueryChanged,
               onSubmitted: ref.read(searchQueryControllerProvider.notifier).run,
               decoration: InputDecoration(
-                hintText: 'Search the text in your documents',
+                hintText: 'Search documents, text, or tags',
                 prefixIcon: const Icon(Icons.search),
                 border: const OutlineInputBorder(),
                 suffixIcon: state.query.isEmpty
@@ -82,10 +82,12 @@ class _Results extends StatelessWidget {
     if (!state.hasQuery) {
       return const AppEmptyState(
         icon: Icons.manage_search_outlined,
-        title: 'Search your documents',
+        title: 'Find documents',
         message:
-            'Find any document by the text inside it — searched on this '
-            'device, with no internet connection.',
+            'Search by document name, by a tag, or by any words inside the '
+            'pages. Results show which of those matched.\n\n'
+            'Looking for an answer rather than a document? The Assistant tab '
+            'reads your pages and replies with the passage that answers you.',
       );
     }
 
@@ -134,8 +136,9 @@ class _NoMatches extends StatelessWidget {
       // recognised is invisible to search and nothing on this screen would
       // explain why.
       message:
-          'Only documents whose text has been recognised can be searched. Open '
-          'a document to read its pages if it has not been read yet.',
+          'Names and tags are always searchable. Page text is searchable once '
+          'it has been recognised — open a document to read its pages if that '
+          'has not happened yet.',
     );
   }
 }

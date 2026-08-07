@@ -41,9 +41,14 @@ class SearchResultTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  if (hit.matchedTitleOnly)
+                  _MatchBadge(hit: hit),
+                  const SizedBox(height: 6),
+                  if (hit.snippets.isEmpty)
                     Text(
-                      'Matched the title',
+                      hit.matchedTags.isEmpty
+                          ? 'Matched the title'
+                          : 'Matched the tag '
+                                '${hit.matchedTags.map((t) => '#$t').join(', ')}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -59,6 +64,41 @@ class SearchResultTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Says where the match came from.
+///
+/// Results are ordered by match kind, so without a badge the order looks
+/// arbitrary — a document whose title matched sitting above one with the query
+/// all over its pages reads as a bug until you can see why.
+class _MatchBadge extends StatelessWidget {
+  const _MatchBadge({required this.hit});
+
+  final SearchHit hit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final colour = switch (hit.kind) {
+      SearchMatchKind.exactTitle ||
+      SearchMatchKind.partialTitle => theme.colorScheme.primary,
+      SearchMatchKind.content => theme.colorScheme.onSurfaceVariant,
+      SearchMatchKind.tag => theme.colorScheme.tertiary,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        border: Border.all(color: colour.withValues(alpha: .45)),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        hit.kind.label,
+        style: theme.textTheme.labelSmall?.copyWith(color: colour),
       ),
     );
   }

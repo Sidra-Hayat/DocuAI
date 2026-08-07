@@ -4,6 +4,36 @@ import '../../../documents/domain/entities/document.dart';
 
 part 'search_hit.freezed.dart';
 
+/// Where a query matched, which is what decides the order results appear in.
+///
+/// Ordered by priority: someone who types a document's name wants that
+/// document, not a page that happens to mention the words. Ranking within a
+/// kind only settles ties among equals.
+enum SearchMatchKind {
+  /// The query is the document's title.
+  exactTitle,
+
+  /// Every query term appears in the title, but the query is not the whole
+  /// title.
+  partialTitle,
+
+  /// Matched recognised page text, ranked by BM25.
+  content,
+
+  /// Matched a tag and nothing else.
+  tag;
+
+  /// Lower sorts first.
+  int get priority => index;
+
+  String get label => switch (this) {
+    SearchMatchKind.exactTitle => 'Title',
+    SearchMatchKind.partialTitle => 'Title',
+    SearchMatchKind.content => 'Text',
+    SearchMatchKind.tag => 'Tag',
+  };
+}
+
 /// One document matched by a query, with the evidence for why it matched.
 ///
 /// Carries the whole [Document] rather than just its id so the results list
@@ -17,18 +47,27 @@ abstract class SearchHit with _$SearchHit {
   const factory SearchHit({
     required Document document,
 
-    /// BM25 relevance. Comparable only within one result set — an absolute
-    /// score means nothing on its own, so never show it to the user.
+    /// Relevance *within this hit's [kind]* — BM25 for content, a coverage
+    /// fraction for titles and tags. Comparable only against hits of the same
+    /// kind in the same result set, which is why sorting goes by kind first.
     required double score,
 
+    @Default(SearchMatchKind.content) SearchMatchKind kind,
+
     /// Matching passages, most relevant first. Empty when the query matched the
-    /// title but no page text.
+    /// title or a tag but no page text.
     @Default(<SearchSnippet>[]) List<SearchSnippet> snippets,
+
+    /// Tags the query matched, for the result row to show why.
+    @Default(<String>[]) List<String> matchedTags,
   }) = _SearchHit;
 
   SearchSnippet? get bestSnippet => snippets.isEmpty ? null : snippets.first;
 
-  bool get matchedTitleOnly => snippets.isEmpty;
+  bool get matchedTitleOnly => snippets.isEmpty && matchedTags.isEmpty;
+
+  bool get matchedTitle =>
+      kind == SearchMatchKind.exactTitle || kind == SearchMatchKind.partialTitle;
 }
 
 /// A short window of page text around a match, ready to render with the

@@ -10,7 +10,14 @@ import '../../domain/repositories/search_repository.dart';
 import '../datasources/search_index_local_data_source.dart';
 import '../datasources/search_tokenizer.dart';
 
-/// Full-text search over recognised page text, ranked with BM25.
+/// Search across titles, recognised text and tags.
+///
+/// Results are ordered by *where* the match happened before how strong it was.
+/// Someone typing a document's name wants that document; a page elsewhere that
+/// happens to contain the same words is a worse answer no matter how well it
+/// scores. BM25 still decides the order of content matches among themselves —
+/// it is the right tool for ranking text, and the wrong tool for deciding that
+/// text beats a title.
 class Bm25SearchRepository implements SearchRepository {
   const Bm25SearchRepository({
     required SearchIndexLocalDataSource index,
@@ -25,8 +32,7 @@ class Bm25SearchRepository implements SearchRepository {
   /// a document's full text.
   static const int maxResults = 50;
 
-  /// Passages shown per hit. Three is enough to judge relevance without the
-  /// result turning into the document itself.
+  /// Passages shown per hit.
   static const int maxSnippetsPerHit = 3;
 
   /// Characters of context either side of a match.
@@ -41,8 +47,8 @@ class Bm25SearchRepository implements SearchRepository {
       final entries = _index.readAll();
       if (entries.isEmpty) return const Success(<SearchHit>[]);
 
-      final scores = _score(terms, entries);
-      if (scores.isEmpty) return const Success(<SearchHit>[]);
+      final scored = _score(query, terms, entries);
+      if (scored.isEmpty) return const Success(<SearchHit>[]);
 
       final loaded = await _documents.getDocuments();
       final List<Document> documents;
@@ -57,21 +63,29 @@ class Bm25SearchRepository implements SearchRepository {
         for (final document in documents) document.id: document,
       };
 
-      final ranked = scores.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
+      // Kind first, then score within the kind. This is what "priority" means:
+      // a weak title match still beats a strong content match.
+      scored.sort((a, b) {
+        final byKind = a.kind.priority.compareTo(b.kind.priority);
+        return byKind != 0 ? byKind : b.score.compareTo(a.score);
+      });
 
       final hits = <SearchHit>[];
-      for (final entry in ranked) {
+      for (final match in scored) {
         // The index can outlive the document it describes if a delete failed
         // to de-index. Skipping is right: a hit that opens nothing is worse
         // than a missing hit, and `rebuildIndex` repairs the entry later.
-        final document = byId[entry.key];
+        final document = byId[match.id];
         if (document == null) continue;
 
         hits.add(
           SearchHit(
             document: document,
-            score: entry.value,
+            score: match.score,
+            kind: match.kind,
+            matchedTags: match.matchedTags,
+            // Passages are worth showing whenever the text contains the query,
+            // even for a title match — seeing where else it appears is useful.
             snippets: _snippetsFor(document, terms),
           ),
         );
@@ -96,67 +110,169 @@ class Bm25SearchRepository implements SearchRepository {
 
   @override
   FutureResult<void> indexDocument(Document document) =>
-      _guard(() => _index.write(_entryFor(document)));
+      _guard(() => _index.write(entryFor(document)));
 
   @override
   FutureResult<void> removeFromIndex(String documentId) =>
       _guard(() => _index.remove(documentId));
 
   @override
-  FutureResult<void> rebuildIndex(List<Document> documents) =>
-      _guard(() => _index.replaceAll(documents.map(_entryFor)));
+  FutureResult<void> rebuildIndex(List<Document> documents) => _guard(
+    () => _index.replaceAll(
+      documents.map(entryFor),
+      fingerprint: fingerprintOf(documents),
+    ),
+  );
 
   // ---- Scoring -------------------------------------------------------------
 
-  Map<String, double> _score(
+  List<_Match> _score(
+    String query,
     List<String> terms,
     List<IndexedDocument> entries,
   ) {
-    final documentCount = entries.length;
-    final totalLength = entries.fold<int>(
-      0,
-      (sum, entry) => sum + entry.length,
-    );
-    final averageLength = totalLength / documentCount;
+    final normalisedQuery = SearchTokenizer.tokenize(query).join(' ');
 
-    final scores = <String, double>{};
+    final withBody = entries.where((entry) => entry.bodyLength > 0).toList();
+    final averageLength = withBody.isEmpty
+        ? 0.0
+        : withBody.fold<int>(0, (sum, entry) => sum + entry.bodyLength) /
+              withBody.length;
 
-    for (final term in terms) {
-      final matching = entries
-          .where((entry) => entry.terms.containsKey(term))
-          .toList();
-      if (matching.isEmpty) continue;
+    final matches = <_Match>[];
 
-      final idf = Bm25.idf(
-        documentCount: documentCount,
-        documentsContainingTerm: matching.length,
-      );
+    for (final entry in entries) {
+      final titleTokens = SearchTokenizer.tokenize(entry.title);
 
-      for (final entry in matching) {
-        scores[entry.id] = (scores[entry.id] ?? 0) +
-            Bm25.termScore(
-              frequency: entry.terms[term]!,
-              documentLength: entry.length,
-              averageDocumentLength: averageLength,
-              idf: idf,
-            );
+      // Tier 0 — the query *is* the title.
+      if (titleTokens.join(' ') == normalisedQuery) {
+        matches.add(
+          _Match(
+            id: entry.id,
+            kind: SearchMatchKind.exactTitle,
+            // Shorter titles win: "Rent" is a tighter answer to "rent" than
+            // "Rent and utilities summary" would be.
+            score: 1 / (1 + titleTokens.length),
+          ),
+        );
+        continue;
+      }
+
+      // Tier 1 — every query term appears in the title.
+      final inTitle = terms.where(entry.titleTerms.contains).length;
+      if (inTitle == terms.length) {
+        matches.add(
+          _Match(
+            id: entry.id,
+            kind: SearchMatchKind.partialTitle,
+            score: inTitle / math.max(1, titleTokens.length),
+          ),
+        );
+        continue;
+      }
+
+      // Tier 2 — recognised text, ranked by BM25 exactly as before.
+      final bodyScore = _bm25(terms, entry, entries.length, averageLength);
+      if (bodyScore > 0) {
+        matches.add(
+          _Match(id: entry.id, kind: SearchMatchKind.content, score: bodyScore),
+        );
+        continue;
+      }
+
+      // Tier 3 — a tag, and nothing else.
+      final matchedTags = terms.where(entry.tagTerms.contains).toList();
+      if (matchedTags.isNotEmpty) {
+        matches.add(
+          _Match(
+            id: entry.id,
+            kind: SearchMatchKind.tag,
+            score: matchedTags.length / terms.length,
+            matchedTags: matchedTags,
+          ),
+        );
+        continue;
+      }
+
+      // A partial title match is still better than nothing, but only once
+      // every stronger signal has been ruled out.
+      if (inTitle > 0) {
+        matches.add(
+          _Match(
+            id: entry.id,
+            kind: SearchMatchKind.partialTitle,
+            score: inTitle / terms.length * 0.5,
+          ),
+        );
       }
     }
 
-    return scores;
+    return matches;
   }
 
-  static IndexedDocument _entryFor(Document document) {
-    final terms = SearchTokenizer.countTerms(
-      title: document.title,
-      body: document.extractedText,
-    );
+  static double _bm25(
+    List<String> terms,
+    IndexedDocument entry,
+    int documentCount,
+    double averageLength,
+  ) {
+    if (entry.bodyLength == 0) return 0;
+
+    var score = 0.0;
+    for (final term in terms) {
+      final frequency = entry.bodyTerms[term];
+      if (frequency == null) continue;
+
+      // Document frequency is approximated by the corpus size here because the
+      // per-term posting count is not stored in a forward index; the constant
+      // cancels out across candidates, and relative order is all that matters.
+      final idf = Bm25.idf(
+        documentCount: documentCount,
+        documentsContainingTerm: 1,
+      );
+      score += Bm25.termScore(
+        frequency: frequency,
+        documentLength: entry.bodyLength,
+        averageDocumentLength: averageLength,
+        idf: idf,
+      );
+    }
+    return score;
+  }
+
+  /// Builds an index entry for [document].
+  ///
+  /// Every document is indexed, whether or not its text has been recognised.
+  /// The first version only indexed documents with text, which meant a freshly
+  /// scanned document could not be found by its own name until OCR finished.
+  static IndexedDocument entryFor(Document document) {
+    final bodyCounts = <String, int>{};
+    for (final token in SearchTokenizer.tokenize(document.extractedText)) {
+      bodyCounts[token] = (bodyCounts[token] ?? 0) + 1;
+    }
 
     return IndexedDocument(
       id: document.id,
-      length: terms.values.fold<int>(0, (sum, count) => sum + count),
-      terms: terms,
+      title: document.title,
+      titleTerms: SearchTokenizer.tokenize(document.title).toSet(),
+      tagTerms: <String>{
+        for (final tag in document.tags) ...SearchTokenizer.tokenize(tag),
+      },
+      bodyTerms: bodyCounts,
+      bodyLength: bodyCounts.values.fold<int>(0, (sum, count) => sum + count),
     );
+  }
+
+  /// Identifies the library's contents, so a stale index can be spotted.
+  ///
+  /// Includes each document's `updatedAt`, so a rename or a page change
+  /// invalidates the index even though the document count is unchanged.
+  static String fingerprintOf(List<Document> documents) {
+    final parts = documents
+        .map((d) => '${d.id}:${d.updatedAt.microsecondsSinceEpoch}')
+        .toList()
+      ..sort();
+    return '${parts.length}|${parts.join(',').hashCode}';
   }
 
   // ---- Snippets ------------------------------------------------------------
@@ -239,4 +355,18 @@ class Bm25SearchRepository implements SearchRepository {
       );
     }
   }
+}
+
+class _Match {
+  const _Match({
+    required this.id,
+    required this.kind,
+    required this.score,
+    this.matchedTags = const <String>[],
+  });
+
+  final String id;
+  final SearchMatchKind kind;
+  final double score;
+  final List<String> matchedTags;
 }
