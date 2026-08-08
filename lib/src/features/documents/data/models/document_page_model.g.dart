@@ -23,13 +23,14 @@ class DocumentPageModelAdapter extends TypeAdapter<DocumentPageModel> {
       text: fields[3] as String,
       ocrStatus: fields[4] as String,
       kind: fields[5] as String?,
+      textEditedAt: fields[6] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, DocumentPageModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class DocumentPageModelAdapter extends TypeAdapter<DocumentPageModel> {
       ..writeByte(4)
       ..write(obj.ocrStatus)
       ..writeByte(5)
-      ..write(obj.kind);
+      ..write(obj.kind)
+      ..writeByte(6)
+      ..write(obj.textEditedAt);
   }
 
   @override

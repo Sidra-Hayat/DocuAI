@@ -58,6 +58,7 @@ DocumentPage buildPage({
   String text = '',
   OcrStatus ocrStatus = OcrStatus.pending,
   PageKind kind = PageKind.scanned,
+  DateTime? textEditedAt,
 }) => DocumentPage(
   id: id,
   imagePath: imagePath,
@@ -65,6 +66,7 @@ DocumentPage buildPage({
   text: text,
   ocrStatus: ocrStatus,
   kind: kind,
+  textEditedAt: textEditedAt,
 );
 
 /// A page with no image: content written rather than captured.

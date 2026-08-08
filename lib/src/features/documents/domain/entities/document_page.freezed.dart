@@ -21,7 +21,12 @@ mixin _$DocumentPage {
 ///
 /// One field for both, which is the whole point of the model. Editing a
 /// scan's recognised text and editing a typed page are the same operation.
- String get text; OcrStatus get ocrStatus; PageKind get kind;
+ String get text; OcrStatus get ocrStatus; PageKind get kind;/// When a person last wrote this page's text, or null if nobody has.
+///
+/// Recorded because recognition and correction disagree about who owns the
+/// field. Recognition may re-read a page at any time; a correction is work
+/// that cannot be reproduced by re-reading, so the two need telling apart.
+ DateTime? get textEditedAt;
 /// Create a copy of DocumentPage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -32,16 +37,16 @@ $DocumentPageCopyWith<DocumentPage> get copyWith => _$DocumentPageCopyWithImpl<D
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DocumentPage&&(identical(other.id, id) || other.id == id)&&(identical(other.imagePath, imagePath) || other.imagePath == imagePath)&&(identical(other.index, index) || other.index == index)&&(identical(other.text, text) || other.text == text)&&(identical(other.ocrStatus, ocrStatus) || other.ocrStatus == ocrStatus)&&(identical(other.kind, kind) || other.kind == kind));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DocumentPage&&(identical(other.id, id) || other.id == id)&&(identical(other.imagePath, imagePath) || other.imagePath == imagePath)&&(identical(other.index, index) || other.index == index)&&(identical(other.text, text) || other.text == text)&&(identical(other.ocrStatus, ocrStatus) || other.ocrStatus == ocrStatus)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.textEditedAt, textEditedAt) || other.textEditedAt == textEditedAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,imagePath,index,text,ocrStatus,kind);
+int get hashCode => Object.hash(runtimeType,id,imagePath,index,text,ocrStatus,kind,textEditedAt);
 
 @override
 String toString() {
-  return 'DocumentPage(id: $id, imagePath: $imagePath, index: $index, text: $text, ocrStatus: $ocrStatus, kind: $kind)';
+  return 'DocumentPage(id: $id, imagePath: $imagePath, index: $index, text: $text, ocrStatus: $ocrStatus, kind: $kind, textEditedAt: $textEditedAt)';
 }
 
 
@@ -52,7 +57,7 @@ abstract mixin class $DocumentPageCopyWith<$Res>  {
   factory $DocumentPageCopyWith(DocumentPage value, $Res Function(DocumentPage) _then) = _$DocumentPageCopyWithImpl;
 @useResult
 $Res call({
- String id, String? imagePath, int index, String text, OcrStatus ocrStatus, PageKind kind
+ String id, String? imagePath, int index, String text, OcrStatus ocrStatus, PageKind kind, DateTime? textEditedAt
 });
 
 
@@ -69,7 +74,7 @@ class _$DocumentPageCopyWithImpl<$Res>
 
 /// Create a copy of DocumentPage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? imagePath = freezed,Object? index = null,Object? text = null,Object? ocrStatus = null,Object? kind = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? imagePath = freezed,Object? index = null,Object? text = null,Object? ocrStatus = null,Object? kind = null,Object? textEditedAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,imagePath: freezed == imagePath ? _self.imagePath : imagePath // ignore: cast_nullable_to_non_nullable
@@ -77,7 +82,8 @@ as String?,index: null == index ? _self.index : index // ignore: cast_nullable_t
 as int,text: null == text ? _self.text : text // ignore: cast_nullable_to_non_nullable
 as String,ocrStatus: null == ocrStatus ? _self.ocrStatus : ocrStatus // ignore: cast_nullable_to_non_nullable
 as OcrStatus,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
-as PageKind,
+as PageKind,textEditedAt: freezed == textEditedAt ? _self.textEditedAt : textEditedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -162,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind,  DateTime? textEditedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DocumentPage() when $default != null:
-return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind);case _:
+return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind,_that.textEditedAt);case _:
   return orElse();
 
 }
@@ -183,10 +189,10 @@ return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind,  DateTime? textEditedAt)  $default,) {final _that = this;
 switch (_that) {
 case _DocumentPage():
-return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind);case _:
+return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind,_that.textEditedAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -203,10 +209,10 @@ return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? imagePath,  int index,  String text,  OcrStatus ocrStatus,  PageKind kind,  DateTime? textEditedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _DocumentPage() when $default != null:
-return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind);case _:
+return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,_that.kind,_that.textEditedAt);case _:
   return null;
 
 }
@@ -218,7 +224,7 @@ return $default(_that.id,_that.imagePath,_that.index,_that.text,_that.ocrStatus,
 
 
 class _DocumentPage extends DocumentPage {
-  const _DocumentPage({required this.id, this.imagePath, required this.index, this.text = '', this.ocrStatus = OcrStatus.pending, this.kind = PageKind.scanned}): super._();
+  const _DocumentPage({required this.id, this.imagePath, required this.index, this.text = '', this.ocrStatus = OcrStatus.pending, this.kind = PageKind.scanned, this.textEditedAt}): super._();
   
 
 @override final  String id;
@@ -234,6 +240,12 @@ class _DocumentPage extends DocumentPage {
 @override@JsonKey() final  String text;
 @override@JsonKey() final  OcrStatus ocrStatus;
 @override@JsonKey() final  PageKind kind;
+/// When a person last wrote this page's text, or null if nobody has.
+///
+/// Recorded because recognition and correction disagree about who owns the
+/// field. Recognition may re-read a page at any time; a correction is work
+/// that cannot be reproduced by re-reading, so the two need telling apart.
+@override final  DateTime? textEditedAt;
 
 /// Create a copy of DocumentPage
 /// with the given fields replaced by the non-null parameter values.
@@ -245,16 +257,16 @@ _$DocumentPageCopyWith<_DocumentPage> get copyWith => __$DocumentPageCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DocumentPage&&(identical(other.id, id) || other.id == id)&&(identical(other.imagePath, imagePath) || other.imagePath == imagePath)&&(identical(other.index, index) || other.index == index)&&(identical(other.text, text) || other.text == text)&&(identical(other.ocrStatus, ocrStatus) || other.ocrStatus == ocrStatus)&&(identical(other.kind, kind) || other.kind == kind));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DocumentPage&&(identical(other.id, id) || other.id == id)&&(identical(other.imagePath, imagePath) || other.imagePath == imagePath)&&(identical(other.index, index) || other.index == index)&&(identical(other.text, text) || other.text == text)&&(identical(other.ocrStatus, ocrStatus) || other.ocrStatus == ocrStatus)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.textEditedAt, textEditedAt) || other.textEditedAt == textEditedAt));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,imagePath,index,text,ocrStatus,kind);
+int get hashCode => Object.hash(runtimeType,id,imagePath,index,text,ocrStatus,kind,textEditedAt);
 
 @override
 String toString() {
-  return 'DocumentPage(id: $id, imagePath: $imagePath, index: $index, text: $text, ocrStatus: $ocrStatus, kind: $kind)';
+  return 'DocumentPage(id: $id, imagePath: $imagePath, index: $index, text: $text, ocrStatus: $ocrStatus, kind: $kind, textEditedAt: $textEditedAt)';
 }
 
 
@@ -265,7 +277,7 @@ abstract mixin class _$DocumentPageCopyWith<$Res> implements $DocumentPageCopyWi
   factory _$DocumentPageCopyWith(_DocumentPage value, $Res Function(_DocumentPage) _then) = __$DocumentPageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String? imagePath, int index, String text, OcrStatus ocrStatus, PageKind kind
+ String id, String? imagePath, int index, String text, OcrStatus ocrStatus, PageKind kind, DateTime? textEditedAt
 });
 
 
@@ -282,7 +294,7 @@ class __$DocumentPageCopyWithImpl<$Res>
 
 /// Create a copy of DocumentPage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? imagePath = freezed,Object? index = null,Object? text = null,Object? ocrStatus = null,Object? kind = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? imagePath = freezed,Object? index = null,Object? text = null,Object? ocrStatus = null,Object? kind = null,Object? textEditedAt = freezed,}) {
   return _then(_DocumentPage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,imagePath: freezed == imagePath ? _self.imagePath : imagePath // ignore: cast_nullable_to_non_nullable
@@ -290,7 +302,8 @@ as String?,index: null == index ? _self.index : index // ignore: cast_nullable_t
 as int,text: null == text ? _self.text : text // ignore: cast_nullable_to_non_nullable
 as String,ocrStatus: null == ocrStatus ? _self.ocrStatus : ocrStatus // ignore: cast_nullable_to_non_nullable
 as OcrStatus,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
-as PageKind,
+as PageKind,textEditedAt: freezed == textEditedAt ? _self.textEditedAt : textEditedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 

@@ -79,6 +79,13 @@ abstract class DocumentPage with _$DocumentPage {
     @Default(OcrStatus.pending) OcrStatus ocrStatus,
 
     @Default(PageKind.scanned) PageKind kind,
+
+    /// When a person last wrote this page's text, or null if nobody has.
+    ///
+    /// Recorded because recognition and correction disagree about who owns the
+    /// field. Recognition may re-read a page at any time; a correction is work
+    /// that cannot be reproduced by re-reading, so the two need telling apart.
+    DateTime? textEditedAt,
   }) = _DocumentPage;
 
   /// True when OCR produced something worth indexing or searching.
@@ -94,6 +101,12 @@ abstract class DocumentPage with _$DocumentPage {
 
   /// True for a page whose content was written rather than captured.
   bool get isText => kind == PageKind.text;
+
+  /// Whether this page's text has been corrected by hand.
+  ///
+  /// The guard on re-running recognition: re-reading a page reproduces what the
+  /// scanner can see, and would silently discard what a person read instead.
+  bool get hasEditedText => textEditedAt != null;
 
   /// Human-friendly label used in the page carousel and OCR progress UI.
   String get displayLabel => 'Page ${index + 1}';

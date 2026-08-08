@@ -39,7 +39,8 @@ class RecognizeDocumentText {
   /// counts only the pages this run will touch.
   ///
   /// Set [force] to re-run every page, including ones already completed — the
-  /// path behind a manual "re-run recognition" action.
+  /// path behind a manual "re-run recognition" action. Pages whose text has
+  /// been corrected by hand are never re-read, forced or not.
   FutureResult<Document> call(
     String documentId, {
     void Function(int done, int total)? onProgress,
@@ -54,12 +55,18 @@ class RecognizeDocumentText {
         document = value;
     }
 
-    // `force` re-runs pages that already succeeded, but it must never reach a
-    // page with no image. There is nothing to recognise there, and the text on
-    // such a page was written by the user — replacing it with the output of a
-    // run that has no file to read would be silent data loss.
+    // `force` re-runs pages that already succeeded. Two kinds of page are held
+    // back from it, for the same reason in both cases: re-reading reproduces
+    // what the scanner can see, and neither of these holds text the scanner
+    // put there.
+    //
+    //  * A page with no image has no file to read, and its text was typed.
+    //  * A page whose text was corrected holds work a re-read would discard —
+    //    silently, and with nothing to restore it from.
     final targets = force
-        ? document.pages.where((page) => page.hasImage).toList(growable: false)
+        ? document.pages
+              .where((page) => page.hasImage && !page.hasEditedText)
+              .toList(growable: false)
         : document.pagesAwaitingOcr;
     if (targets.isEmpty) {
       onProgress?.call(0, 0);

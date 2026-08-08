@@ -175,6 +175,9 @@ class DocumentLocalDataSource {
               // overwrite the correction.
               ocrStatus: OcrStatus.completed.name,
               kind: page.kind,
+              // Stamped so recognition can tell a page it may re-read from one
+              // holding work it cannot reproduce.
+              textEditedAt: _now(),
             )
           else
             page,
@@ -359,9 +362,11 @@ class DocumentLocalDataSource {
               text: pages[i].text,
               ocrStatus: pages[i].ocrStatus,
               // Carried explicitly. This rebuild runs on every add, delete and
-              // reorder, so dropping the field here would quietly turn every
-              // page in an edited document back into a scan.
+              // reorder, so dropping a field here would quietly discard it —
+              // the page would revert to a scan, or lose the record of having
+              // been corrected and become fair game for a re-read.
               kind: pages[i].kind,
+              textEditedAt: pages[i].textEditedAt,
             ),
         ],
         tags: model.tags,

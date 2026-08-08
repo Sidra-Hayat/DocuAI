@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../export/presentation/providers/export_controller.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -228,16 +230,27 @@ class _Body extends ConsumerWidget {
                 final block = blocks[index];
                 final showPage =
                     index == 0 || blocks[index - 1].pageIndex != block.pageIndex;
+                final page = document.pages.firstWhere(
+                  (page) => page.index == block.pageIndex,
+                );
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (showPage) _PageLabel(pageIndex: block.pageIndex),
-                    ReaderParagraph(
-                      text: block.text,
-                      query: trimmed,
-                      scale: scale,
-                    ),
+                    if (showPage)
+                      _PageLabel(
+                        document: document,
+                        page: page,
+                        editable: trimmed.isEmpty,
+                      ),
+                    if (block.text.isEmpty)
+                      _EmptyPageNote(scale: scale)
+                    else
+                      ReaderParagraph(
+                        text: block.text,
+                        query: trimmed,
+                        scale: scale,
+                      ),
                     SizedBox(height: 14 * scale),
                   ],
                 );
@@ -261,7 +274,16 @@ class _Body extends ConsumerWidget {
     final blocks = <_Block>[];
 
     for (final page in document.pages) {
-      if (!page.hasText) continue;
+      if (!page.hasText) {
+        // Shown rather than skipped, so a page recognition found nothing on
+        // still gets a heading — and therefore an Edit button to write it by
+        // hand. Only when nothing is being searched for: an empty page matches
+        // no query and would be noise in a filtered view.
+        if (query.isEmpty) {
+          blocks.add(_Block(text: '', pageIndex: page.index, matches: 0));
+        }
+        continue;
+      }
 
       for (final paragraph in page.text.split(RegExp(r'\n\s*\n'))) {
         final text = paragraph.trim();
@@ -297,6 +319,31 @@ class _Body extends ConsumerWidget {
   }
 }
 
+/// Stands in for a page recognition found nothing on.
+///
+/// A heading with nothing under it reads as a rendering fault. Saying so — and
+/// leaving the Edit button beside it — turns a dead end into the one place
+/// where typing the text by hand is obviously possible.
+class _EmptyPageNote extends StatelessWidget {
+  const _EmptyPageNote({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Text(
+      'No text was found on this page.',
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontSize: (theme.textTheme.bodyMedium?.fontSize ?? 14) * scale,
+        color: theme.colorScheme.onSurfaceVariant,
+        fontStyle: FontStyle.italic,
+      ),
+    );
+  }
+}
+
 class _Block {
   const _Block({
     required this.text,
@@ -309,10 +356,24 @@ class _Block {
   final int matches;
 }
 
+/// The header above each page's text.
+///
+/// Carries the edit action rather than the app bar doing so: a document has one
+/// body of text but several pages of it, and an action at the top could only
+/// ever guess which one was meant.
 class _PageLabel extends StatelessWidget {
-  const _PageLabel({required this.pageIndex});
+  const _PageLabel({
+    required this.document,
+    required this.page,
+    required this.editable,
+  });
 
-  final int pageIndex;
+  final Document document;
+  final DocumentPage page;
+
+  /// False while a search is filtering the text — editing a filtered view
+  /// would open the whole page and lose the thing being looked at.
+  final bool editable;
 
   @override
   Widget build(BuildContext context) {
@@ -323,14 +384,53 @@ class _PageLabel extends StatelessWidget {
       child: Row(
         children: [
           Text(
-            'Page ${pageIndex + 1}',
+            page.displayLabel,
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.primary,
               letterSpacing: .8,
             ),
           ),
+          if (page.hasEditedText) ...[
+            const SizedBox(width: 8),
+            Tooltip(
+              message: 'You corrected this text, so it is not re-read.',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Edited',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(width: 12),
           Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+          if (editable)
+            TextButton.icon(
+              onPressed: () => context.pushNamed(
+                AppRoutes.editPageName,
+                pathParameters: <String, String>{
+                  'id': document.id,
+                  'page': page.id,
+                },
+              ),
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
         ],
       ),
     );
@@ -401,6 +501,52 @@ class _TextSizeButton extends ConsumerWidget {
   }
 }
 
+/// What to offer when there is no text.
+///
+/// Re-reading is the obvious action and often the wrong one — a blurred scan
+/// reads no better the second time. Typing it out is the answer that always
+/// works, so it sits beside the retry rather than being buried.
+class _NoTextActions extends StatelessWidget {
+  const _NoTextActions({
+    required this.document,
+    required this.onReadAgain,
+    this.readAgainLabel = 'Read again',
+  });
+
+  final Document document;
+  final VoidCallback onReadAgain;
+  final String readAgainLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final page = document.pages.firstOrNull;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      alignment: WrapAlignment.center,
+      children: [
+        FilledButton.tonal(
+          onPressed: onReadAgain,
+          child: Text(readAgainLabel),
+        ),
+        if (page != null)
+          TextButton.icon(
+            onPressed: () => context.pushNamed(
+              AppRoutes.editPageName,
+              pathParameters: <String, String>{
+                'id': document.id,
+                'page': page.id,
+              },
+            ),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Type it yourself'),
+          ),
+      ],
+    );
+  }
+}
+
 class _Recognising extends StatelessWidget {
   const _Recognising({required this.state});
 
@@ -452,9 +598,9 @@ class _NothingToRead extends ConsumerWidget {
         message:
             'Recognition finished but found nothing to read. Photos of '
             'drawings or blank pages have no text in them.',
-        action: FilledButton.tonal(
-          onPressed: () => run(force: true),
-          child: const Text('Read again'),
+        action: _NoTextActions(
+          document: document,
+          onReadAgain: () => run(force: true),
         ),
       ),
       OcrStatus.failed => AppEmptyState(
@@ -463,9 +609,10 @@ class _NothingToRead extends ConsumerWidget {
         message:
             'This usually means the images are too blurred, or were taken at '
             'too steep an angle.',
-        action: FilledButton.tonal(
-          onPressed: run,
-          child: const Text('Try again'),
+        action: _NoTextActions(
+          document: document,
+          onReadAgain: run,
+          readAgainLabel: 'Try again',
         ),
       ),
       OcrStatus.pending || OcrStatus.running => AppEmptyState(

@@ -24,6 +24,7 @@ class DocumentPageModel {
     required this.text,
     required this.ocrStatus,
     this.kind,
+    this.textEditedAt,
   });
 
   factory DocumentPageModel.fromEntity(DocumentPage page) => DocumentPageModel(
@@ -33,6 +34,7 @@ class DocumentPageModel {
     text: page.text,
     ocrStatus: page.ocrStatus.name,
     kind: page.kind.name,
+    textEditedAt: page.textEditedAt,
   );
 
   @HiveField(0)
@@ -61,6 +63,12 @@ class DocumentPageModel {
   @HiveField(5)
   final String? kind;
 
+  /// Appended field. Null in every record written before corrections were
+  /// tracked — and null is exactly right for those, since none had been
+  /// corrected.
+  @HiveField(6)
+  final DateTime? textEditedAt;
+
   DocumentPage toEntity() => DocumentPage(
     id: id,
     imagePath: imagePath,
@@ -68,6 +76,7 @@ class DocumentPageModel {
     text: text,
     ocrStatus: _decodeStatus(ocrStatus),
     kind: _decodeKind(kind),
+    textEditedAt: textEditedAt,
   );
 
   /// Defensive: an unknown status means the record was written by a different
