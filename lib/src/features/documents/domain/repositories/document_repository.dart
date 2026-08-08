@@ -45,6 +45,34 @@ abstract interface class DocumentRepository {
     required List<String> sourceImagePaths,
   });
 
+  /// Creates a document to be written rather than captured.
+  ///
+  /// Starts with one empty text page, because a document with no pages is not
+  /// a document — every screen that renders one expects something to open.
+  /// Nothing is written to disk: a text document has no files, only a record.
+  FutureResult<Document> createTextDocument({required String title});
+
+  /// Appends an empty text page.
+  ///
+  /// The counterpart of [addPages] for content that is written. Both leave the
+  /// new page last and renumber nothing before it.
+  FutureResult<Document> addTextPage({required String documentId});
+
+  /// Replaces one page's text.
+  ///
+  /// The same operation whether the page was typed or scanned — which is the
+  /// point of holding both on one field. A page whose text is written this way
+  /// becomes [OcrStatus.completed]: whoever wrote it, that is now the page's
+  /// text, and leaving it outstanding would invite a later recognition run to
+  /// overwrite it.
+  ///
+  /// Clears `pdfPath` and moves `updatedAt`, like every other page edit.
+  FutureResult<Document> updatePageText({
+    required String documentId,
+    required String pageId,
+    required String text,
+  });
+
   /// Writes an already-existing document back, replacing it wholesale.
   /// Callers are expected to have updated `updatedAt` themselves.
   FutureResult<Document> saveDocument(Document document);

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../app_routes.dart';
+import '../../../features/documents/presentation/widgets/new_document_sheet.dart';
 
 /// Persistent chrome around the three primary destinations.
 ///
@@ -26,11 +26,14 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
+      // One button for "add a document", because scanning and writing are two
+      // methods of one intention. A second floating button would have to sit
+      // somewhere permanently, and neither method deserves that over the other.
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.pushNamed(AppRoutes.scanName),
-        icon: const Icon(Icons.document_scanner_outlined),
-        label: const Text('Scan'),
-        tooltip: 'Scan a new document',
+        onPressed: () => showNewDocumentSheet(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New'),
+        tooltip: 'Scan or write a new document',
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,

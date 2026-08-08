@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/document.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_tile.dart';
+import '../widgets/new_document_sheet.dart';
 
 /// Document library — the app's home screen.
 ///
@@ -78,11 +79,24 @@ class _EmptyLibrary extends StatelessWidget {
       icon: Icons.folder_copy_outlined,
       title: 'No documents yet',
       message:
-          'Scanned documents will appear here, stored entirely on this device.',
-      action: FilledButton.icon(
-        onPressed: () => context.pushNamed(AppRoutes.scanName),
-        icon: const Icon(Icons.document_scanner_outlined),
-        label: const Text('Scan a document'),
+          'Scan a page or write a note — either way it stays on this device, '
+          'and both are searchable.',
+      action: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.center,
+        children: [
+          FilledButton.icon(
+            onPressed: () => context.pushNamed(AppRoutes.scanName),
+            icon: const Icon(Icons.document_scanner_outlined),
+            label: const Text('Scan a document'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => createAndOpenTextDocument(context),
+            icon: const Icon(Icons.edit_note_outlined),
+            label: const Text('Write one'),
+          ),
+        ],
       ),
     );
   }

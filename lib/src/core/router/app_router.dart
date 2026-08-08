@@ -9,6 +9,7 @@ import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/documents/presentation/screens/extracted_text_screen.dart';
 import '../../features/documents/presentation/screens/manage_pages_screen.dart';
 import '../../features/documents/presentation/screens/page_viewer_screen.dart';
+import '../../features/documents/presentation/screens/text_editor_screen.dart';
 import '../../features/scanner/presentation/screens/scan_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -85,6 +86,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         name: AppRoutes.managePagesName,
                         builder: (context, state) => ManagePagesScreen(
                           documentId: state.pathParameters['id']!,
+                        ),
+                      ),
+                      GoRoute(
+                        path: AppRoutes.editPage,
+                        name: AppRoutes.editPageName,
+                        builder: (context, state) => TextEditorScreen(
+                          documentId: state.pathParameters['id']!,
+                          pageId: state.pathParameters['page']!,
                         ),
                       ),
                       GoRoute(

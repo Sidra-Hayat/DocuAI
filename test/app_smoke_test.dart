@@ -77,7 +77,7 @@ void main() {
 
     expect(find.text('DocuAI'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.widgetWithText(FloatingActionButton, 'Scan'), findsOneWidget);
+    expect(find.widgetWithText(FloatingActionButton, 'New'), findsOneWidget);
   });
 
   testWidgets('navigates between all three shell branches', (tester) async {
@@ -99,12 +99,31 @@ void main() {
   testWidgets('pushes the scan route above the shell', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Scan'));
+    // Scanning is now one of two ways to start a document, so it is reached
+    // through the sheet rather than straight off the button.
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New'));
+    await tester.pumpAndSettle();
+    // Disambiguated from the empty library's own button, which offers the
+    // same thing on the screen behind the sheet.
+    await tester.tap(find.widgetWithText(ListTile, 'Scan a document'));
     await tester.pumpAndSettle();
 
     expect(find.text('Scan document'), findsOneWidget);
     // A full-screen route must cover the bottom navigation bar.
     expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('offers both ways to start a document', (tester) async {
+    await pumpApp(tester);
+
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ListTile, 'Scan a document'), findsOneWidget);
+    expect(
+      find.widgetWithText(ListTile, 'Write a text document'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('opens settings and defaults the theme to System', (

@@ -38,9 +38,9 @@ void main() {
   test('produces a valid PDF from the page images', () async {
     final bytes = await composePdfBytes(
       PdfJob(
-        imagePaths: <String>[
-          await writeJpeg('page_000.jpg'),
-          await writeJpeg('page_001.jpg'),
+        pages: <PdfPageJob>[
+          PdfImagePage(await writeJpeg('page_000.jpg')),
+          PdfImagePage(await writeJpeg('page_001.jpg')),
         ],
         title: 'Water bill',
       ),
@@ -58,8 +58,9 @@ void main() {
     Future<int> pageCountFor(int pages) async {
       final bytes = await composePdfBytes(
         PdfJob(
-          imagePaths: <String>[
-            for (var i = 0; i < pages; i++) await writeJpeg('p$i.jpg'),
+          pages: <PdfPageJob>[
+            for (var i = 0; i < pages; i++)
+              PdfImagePage(await writeJpeg('p$i.jpg')),
           ],
           title: 'Multi',
         ),
@@ -78,7 +79,7 @@ void main() {
   test('carries the document title into the PDF metadata', () async {
     final bytes = await composePdfBytes(
       PdfJob(
-        imagePaths: <String>[await writeJpeg('page_000.jpg')],
+        pages: <PdfPageJob>[PdfImagePage(await writeJpeg('page_000.jpg'))],
         title: 'Rental agreement',
       ),
     );
@@ -89,8 +90,8 @@ void main() {
   test('a bigger image still fits on the page', () async {
     final bytes = await composePdfBytes(
       PdfJob(
-        imagePaths: <String>[
-          await writeJpeg('big.jpg', width: 2000, height: 3000),
+        pages: <PdfPageJob>[
+          PdfImagePage(await writeJpeg('big.jpg', width: 2000, height: 3000)),
         ],
         title: 'Large scan',
       ),
@@ -103,9 +104,9 @@ void main() {
     await expectLater(
       composePdfBytes(
         PdfJob(
-          imagePaths: <String>[
-            await writeJpeg('page_000.jpg'),
-            p.join(tempDir.path, 'missing.jpg'),
+          pages: <PdfPageJob>[
+            PdfImagePage(await writeJpeg('page_000.jpg')),
+            PdfImagePage(p.join(tempDir.path, 'missing.jpg')),
           ],
           title: 'Broken',
         ),
@@ -117,7 +118,7 @@ void main() {
 
   test('renders the same bytes on a background isolate', () async {
     final job = PdfJob(
-      imagePaths: <String>[await writeJpeg('page_000.jpg')],
+      pages: <PdfPageJob>[PdfImagePage(await writeJpeg('page_000.jpg'))],
       title: 'Isolate',
     );
 
@@ -125,5 +126,101 @@ void main() {
 
     expect(String.fromCharCodes(onIsolate.take(5)), '%PDF-');
     expect(onIsolate, isNotEmpty);
+  });
+
+  group('written pages', () {
+    test('a text-only document produces a real PDF', () async {
+      final bytes = await composePdfBytes(
+        const PdfJob(
+          pages: <PdfPageJob>[
+            PdfTextPage('The deposit is 500.00 EUR.\n\nDue on 12/03/2026.'),
+          ],
+          title: 'Tenancy notes',
+        ),
+      );
+
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+      expect(bytes, isNotEmpty);
+    });
+
+    test('a written page needs no file on disk', () async {
+      // The whole point: a document that was typed has nothing in storage, and
+      // asking the composer to read one would fail every export of a note.
+      await expectLater(
+        composePdfBytes(
+          const PdfJob(
+            pages: <PdfPageJob>[PdfTextPage('Nothing on disk.')],
+            title: 'Note',
+          ),
+        ),
+        completes,
+      );
+    });
+
+    test('long text flows onto more sheets rather than being cut off', () async {
+      Future<int> sheetsFor(String text) async {
+        final bytes = await composePdfBytes(
+          PdfJob(pages: <PdfPageJob>[PdfTextPage(text)], title: 'Long'),
+        );
+        return RegExp(
+          r'/Type\s*/Page[^s]',
+        ).allMatches(String.fromCharCodes(bytes)).length;
+      }
+
+      final short = await sheetsFor('One line.');
+      final long = await sheetsFor(
+        List<String>.generate(
+          400,
+          (i) => 'Clause $i of the agreement, set out in full for the record.',
+        ).join('\n\n'),
+      );
+
+      expect(short, 1);
+      expect(
+        long,
+        greaterThan(1),
+        reason: 'a single sheet would silently drop everything after it',
+      );
+    });
+
+    test('an empty written page draws nothing rather than a blank sheet', () async {
+      final bytes = await composePdfBytes(
+        const PdfJob(
+          pages: <PdfPageJob>[
+            PdfTextPage('   \n\n  '),
+            PdfTextPage('Actual content.'),
+          ],
+          title: 'Mostly empty',
+        ),
+      );
+
+      expect(
+        RegExp(r'/Type\s*/Page[^s]')
+            .allMatches(String.fromCharCodes(bytes))
+            .length,
+        1,
+      );
+    });
+
+    test('scans and written pages are drawn in document order', () async {
+      final bytes = await composePdfBytes(
+        PdfJob(
+          pages: <PdfPageJob>[
+            const PdfTextPage('A heading I typed.'),
+            PdfImagePage(await writeJpeg('scan.jpg')),
+            const PdfTextPage('A note after the scan.'),
+          ],
+          title: 'Mixed',
+        ),
+      );
+
+      expect(
+        RegExp(r'/Type\s*/Page[^s]')
+            .allMatches(String.fromCharCodes(bytes))
+            .length,
+        3,
+      );
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    });
   });
 }

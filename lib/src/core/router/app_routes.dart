@@ -51,6 +51,14 @@ abstract final class AppRoutes {
   static String managePagesPath(String id) =>
       '${documentDetailPath(id)}/manage';
 
+  /// The text editor for one page, nested under its document so Back returns
+  /// to the document rather than to the library.
+  static const String editPage = 'edit/:page';
+  static const String editPageName = 'editPage';
+
+  static String editPagePath(String id, String pageId) =>
+      '${documentDetailPath(id)}/edit/$pageId';
+
   /// A conversation about one document, kept separate from the library-wide
   /// one on the Assistant tab.
   static const String askDocument = 'ask';

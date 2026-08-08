@@ -8,6 +8,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/utils/clock.dart';
+import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../models/document_model.dart';
 import '../models/document_page_model.dart';
@@ -108,10 +109,90 @@ class DocumentLocalDataSource {
       tags: const <String>[],
       pdfPath: null,
       isFavorite: false,
+      source: DocumentSource.scanned.name,
     );
 
     return write(model);
   }
+
+  /// Writes a document that has no files.
+  ///
+  /// No folder is created. One is made on demand the first time something is
+  /// written into it — a page image, or an exported PDF — so a note the user
+  /// never exports leaves nothing on disk but its record.
+  Future<DocumentModel> createTextDocument({required String title}) async {
+    final timestamp = _now();
+    final id = _uuid.v4();
+
+    return write(
+      DocumentModel(
+        id: id,
+        title: title,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        pages: <DocumentPageModel>[_emptyTextPage(index: 0)],
+        tags: const <String>[],
+        pdfPath: null,
+        isFavorite: false,
+        source: DocumentSource.created.name,
+      ),
+    );
+  }
+
+  Future<DocumentModel> addTextPage(String documentId) async {
+    final model = read(documentId);
+
+    return write(
+      _withPages(model, <DocumentPageModel>[
+        ...model.pages,
+        _emptyTextPage(index: model.pages.length),
+      ]),
+    );
+  }
+
+  Future<DocumentModel> updatePageText(
+    String documentId,
+    String pageId,
+    String text,
+  ) async {
+    final model = read(documentId);
+
+    final existing = model.pages.where((page) => page.id == pageId).firstOrNull;
+    if (existing == null) throw NotFoundException(pageId);
+
+    return write(
+      _withPages(model, <DocumentPageModel>[
+        for (final page in model.pages)
+          if (page.id == pageId)
+            DocumentPageModel(
+              id: page.id,
+              imagePath: page.imagePath,
+              index: page.index,
+              text: text,
+              // Whoever wrote it, this is the page's text now. Leaving a
+              // scanned page outstanding after its text was corrected would
+              // put it back in `pagesAwaitingOcr`, where the next run would
+              // overwrite the correction.
+              ocrStatus: OcrStatus.completed.name,
+              kind: page.kind,
+            )
+          else
+            page,
+      ]),
+    );
+  }
+
+  DocumentPageModel _emptyTextPage({required int index}) => DocumentPageModel(
+    id: _uuid.v4(),
+    imagePath: null,
+    index: index,
+    text: '',
+    // Nothing to recognise. A text page left pending would keep its whole
+    // document pending, and the detail screen starts a recognition run on
+    // every document that reports as much.
+    ocrStatus: OcrStatus.completed.name,
+    kind: PageKind.text.name,
+  );
 
   Future<DocumentModel> write(DocumentModel model) async {
     try {
@@ -288,6 +369,10 @@ class DocumentLocalDataSource {
         // and the next share composes a fresh one.
         pdfPath: null,
         isFavorite: model.isFavorite,
+        // Carried for the same reason the page kind is: this rebuild runs on
+        // every page edit, and a document that lost its origin here would
+        // report as scanned the first time anything was added to it.
+        source: model.source,
       );
 
   /// Removes a page's image if it has one.

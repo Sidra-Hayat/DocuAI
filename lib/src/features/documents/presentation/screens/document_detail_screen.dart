@@ -182,6 +182,29 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
               pathParameters: {'id': document.id},
             ),
           ),
+          if (document.pages.any((page) => page.isText)) ...[
+            const Divider(),
+            ListTile(
+              leading: Icon(
+                Icons.edit_note_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              title: const Text('Edit text'),
+              subtitle: const Text(
+                'Changes are saved on this device and searchable straight away',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.pushNamed(
+                AppRoutes.editPageName,
+                pathParameters: {
+                  'id': document.id,
+                  'page': document.pages
+                      .firstWhere((page) => page.isText)
+                      .id,
+                },
+              ),
+            ),
+          ],
           const Divider(),
           ListTile(
             leading: Icon(

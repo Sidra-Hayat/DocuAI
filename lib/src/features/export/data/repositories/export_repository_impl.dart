@@ -34,40 +34,44 @@ class ExportRepositoryImpl implements ExportRepository {
   @override
   FutureResult<String> buildPdf(Document document) async {
     try {
-      final imagePaths = <String>[];
+      // Built in page order, so a document mixing scans and written pages
+      // exports as the thing the user is looking at rather than as its images
+      // followed by its text.
+      final pages = <PdfPageJob>[];
       for (final page in document.pages) {
-        // Pages with no image are skipped rather than failed. Drawing them is
-        // the composer's job and it cannot do it yet, so until then a mixed
-        // document exports the pages that can be drawn.
         final relative = page.imagePath;
-        if (relative == null) continue;
 
-        final absolute = _paths.absolutePath(relative);
-        // Checked up front so a document with a missing page fails in
-        // milliseconds instead of after rendering everything before it.
-        if (!File(absolute).existsSync()) {
-          return Failed(
-            ExportFailure(
-              'The image for ${page.displayLabel} is missing, so this document '
-              'cannot be exported.',
-            ),
-          );
+        if (relative != null) {
+          final absolute = _paths.absolutePath(relative);
+          // Checked up front so a document with a missing page fails in
+          // milliseconds instead of after rendering everything before it.
+          if (!File(absolute).existsSync()) {
+            return Failed(
+              ExportFailure(
+                'The image for ${page.displayLabel} is missing, so this '
+                'document cannot be exported.',
+              ),
+            );
+          }
+          pages.add(PdfImagePage(absolute));
+        } else if (page.hasText) {
+          pages.add(PdfTextPage(page.text));
         }
-        imagePaths.add(absolute);
       }
 
       // A PDF with no pages is not a document. Refusing says what happened;
       // writing an empty file would only be discovered after it was shared.
-      if (imagePaths.isEmpty) {
+      if (pages.isEmpty) {
         return const Failed(
           ExportFailure(
-            'This document has no scanned pages to export as a PDF yet.',
+            'There is nothing in this document to export yet. Write something '
+            'or add a page first.',
           ),
         );
       }
 
       final bytes = await _render(
-        PdfJob(imagePaths: imagePaths, title: document.title),
+        PdfJob(pages: pages, title: document.title),
       );
 
       final directory = await _paths.documentDir(document.id);

@@ -96,6 +96,30 @@ class DocumentRepositoryImpl implements DocumentRepository {
   });
 
   @override
+  FutureResult<Document> createTextDocument({required String title}) =>
+      _guard(() async {
+        final model = await _local.createTextDocument(title: title);
+        return model.toEntity();
+      });
+
+  @override
+  FutureResult<Document> addTextPage({required String documentId}) =>
+      _guard(() async {
+        final model = await _local.addTextPage(documentId);
+        return model.toEntity();
+      });
+
+  @override
+  FutureResult<Document> updatePageText({
+    required String documentId,
+    required String pageId,
+    required String text,
+  }) => _guard(() async {
+    final model = await _local.updatePageText(documentId, pageId, text);
+    return model.toEntity();
+  });
+
+  @override
   FutureResult<Document> saveDocument(Document document) => _guard(() async {
     final model = await _local.write(DocumentModel.fromEntity(document));
     return model.toEntity();

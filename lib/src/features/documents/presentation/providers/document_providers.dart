@@ -8,8 +8,10 @@ import '../../data/datasources/documents_box.dart';
 import '../../data/repositories/document_repository_impl.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/repositories/document_repository.dart';
+import '../../domain/usecases/create_text_document.dart';
 import '../../domain/usecases/delete_document.dart';
 import '../../domain/usecases/edit_document_pages.dart';
+import '../../domain/usecases/edit_page_text.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../../domain/usecases/toggle_favorite.dart';
 import '../../domain/usecases/update_document_tags.dart';
@@ -59,6 +61,27 @@ final documentProvider = Provider.family<AsyncValue<Document?>, String>(
 );
 
 // ---- Actions ---------------------------------------------------------------
+
+/// Creates a document to write in.
+///
+/// No search indexing here: a document created empty has nothing to index, and
+/// [editPageTextProvider] indexes the moment there is.
+final createTextDocumentProvider = Provider<CreateTextDocument>(
+  (ref) => CreateTextDocument(ref.watch(documentRepositoryProvider)),
+);
+
+/// Saves a page's text and re-indexes it, so an edit is findable at once
+/// rather than at the next index rebuild.
+final editPageTextProvider = Provider<EditPageText>(
+  (ref) => EditPageText(
+    documents: ref.watch(documentRepositoryProvider),
+    search: ref.watch(searchRepositoryProvider),
+  ),
+);
+
+final addTextPageProvider = Provider<AddTextPage>(
+  (ref) => AddTextPage(ref.watch(documentRepositoryProvider)),
+);
 
 final renameDocumentProvider = Provider<RenameDocument>(
   (ref) => RenameDocument(ref.watch(documentRepositoryProvider)),

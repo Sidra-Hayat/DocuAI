@@ -171,6 +171,83 @@ class FakeDocumentRepository implements DocumentRepository {
   }
 
   @override
+  FutureResult<Document> createTextDocument({required String title}) async {
+    lastCreatedTitle = title;
+    final failure = saveFailure;
+    if (failure != null) return Failed(failure);
+
+    final document = Document(
+      id: 'created-${store.length + 1}',
+      title: title,
+      createdAt: kNow,
+      updatedAt: kNow,
+      pages: <DocumentPage>[buildTextPage(id: 'text-0', index: 0, text: '')],
+      source: DocumentSource.created,
+    );
+    store[document.id] = document;
+    _emit();
+    return Success(document);
+  }
+
+  @override
+  FutureResult<Document> addTextPage({required String documentId}) async {
+    pageOperations.add('addText:$documentId');
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+
+    return _store(
+      document.copyWith(
+        pages: <DocumentPage>[
+          ...document.pages,
+          buildTextPage(
+            id: 'text-${document.pages.length}',
+            index: document.pages.length,
+            text: '',
+          ),
+        ],
+        pdfPath: null,
+      ),
+    );
+  }
+
+  @override
+  FutureResult<Document> updatePageText({
+    required String documentId,
+    required String pageId,
+    required String text,
+  }) async {
+    pageOperations.add('text:$documentId');
+    final failure = saveFailure;
+    if (failure != null) return Failed(failure);
+
+    final document = store[documentId];
+    if (document == null) {
+      return Failed(StorageFailure('No document with id "$documentId".'));
+    }
+    if (!document.pages.any((page) => page.id == pageId)) {
+      return Failed(StorageFailure('No page with id "$pageId".'));
+    }
+
+    return _store(
+      document.copyWith(
+        pages: <DocumentPage>[
+          for (final page in document.pages)
+            if (page.id == pageId)
+              // Mirrors the real data source: text written by any route leaves
+              // the page completed, so nothing re-runs recognition over it.
+              page.copyWith(text: text, ocrStatus: OcrStatus.completed)
+            else
+              page,
+        ],
+        updatedAt: kNow,
+        pdfPath: null,
+      ),
+    );
+  }
+
+  @override
   FutureResult<Document> saveDocument(Document document) async {
     final failure = saveFailure;
     if (failure != null) return Failed(failure);

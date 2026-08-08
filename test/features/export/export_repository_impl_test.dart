@@ -120,9 +120,10 @@ void main() {
 
       await buildRepository().buildPdf(document);
 
-      expect(rendered.single.imagePaths, hasLength(2));
-      expect(rendered.single.imagePaths.every(p.isAbsolute), isTrue);
-      expect(rendered.single.imagePaths.first, endsWith('p0.jpg'));
+      final drawn = rendered.single.pages.cast<PdfImagePage>();
+      expect(drawn, hasLength(2));
+      expect(drawn.every((page) => p.isAbsolute(page.absolutePath)), isTrue);
+      expect(drawn.first.absolutePath, endsWith('p0.jpg'));
       expect(rendered.single.title, 'Lecture notes');
     });
 
