@@ -87,6 +87,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           documentId: state.pathParameters['id']!,
                         ),
                       ),
+                      GoRoute(
+                        path: AppRoutes.askDocument,
+                        name: AppRoutes.askDocumentName,
+                        builder: (context, state) => AssistantScreen(
+                          documentId: state.pathParameters['id']!,
+                          // Passed rather than looked up so the bar has a
+                          // title on the first frame instead of flashing a
+                          // placeholder while a stream resolves.
+                          documentTitle: state.uri.queryParameters['title'],
+                        ),
+                      ),
                     ],
                   ),
                 ],

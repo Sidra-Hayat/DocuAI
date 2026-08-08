@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
@@ -341,9 +343,49 @@ class RetrievalAssistantRepository implements AssistantRepository {
   // ---- Transcript ----------------------------------------------------------
 
   @override
-  Stream<List<ChatMessage>> watchHistory() async* {
-    yield _readHistory();
-    yield* _history.watch().map((_) => _readHistory());
+  Stream<List<ChatMessage>> watchHistory({String? documentId}) {
+    final controller = StreamController<List<ChatMessage>>();
+    StreamSubscription<void>? changes;
+
+    void emit() {
+      try {
+        controller.add(_readHistory(documentId));
+      } on CacheException catch (error, stackTrace) {
+        controller.addError(
+          StorageFailure(error.message, cause: error),
+          stackTrace,
+        );
+      }
+    }
+
+    controller.onListen = () {
+      // Subscribe before the first read, for the same reason the document
+      // library does: an `async*` generator that yields a snapshot and then
+      // `yield*`s the feed subscribes only after the first yield is
+      // delivered, and Hive's broadcast feed buffers nothing — a turn written
+      // in that window is dropped, leaving a transcript that is already wrong
+      // with no event left to correct it.
+      changes = _history.watch().listen(
+        (_) => emit(),
+        onError: controller.addError,
+        onDone: () {
+          controller.addError(
+            const StorageFailure('The conversation stopped updating.'),
+            StackTrace.current,
+          );
+          controller.close();
+        },
+      );
+
+      emit();
+    };
+
+    controller.onCancel = () async {
+      await changes?.cancel();
+      changes = null;
+    };
+
+    return controller.stream;
   }
 
   @override
@@ -359,9 +401,9 @@ class RetrievalAssistantRepository implements AssistantRepository {
   }
 
   @override
-  FutureResult<void> clearHistory() async {
+  FutureResult<void> clearHistory({String? documentId}) async {
     try {
-      await _history.clear();
+      await _history.clear(documentId: documentId);
       return const Success<void>(null);
     } on CacheException catch (error, stackTrace) {
       return Failed(
@@ -370,8 +412,13 @@ class RetrievalAssistantRepository implements AssistantRepository {
     }
   }
 
-  List<ChatMessage> _readHistory() => _history
+  /// The turns belonging to one conversation.
+  ///
+  /// Filtered here rather than in the data source because "which conversation"
+  /// is a domain idea; the store only knows it is holding messages.
+  List<ChatMessage> _readHistory(String? documentId) => _history
       .readAll()
+      .where((model) => model.documentId == documentId)
       .map((model) => model.toEntity())
       .toList(growable: false);
 }

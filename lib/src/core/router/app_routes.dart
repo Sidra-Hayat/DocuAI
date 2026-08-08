@@ -50,4 +50,11 @@ abstract final class AppRoutes {
 
   static String managePagesPath(String id) =>
       '${documentDetailPath(id)}/manage';
+
+  /// A conversation about one document, kept separate from the library-wide
+  /// one on the Assistant tab.
+  static const String askDocument = 'ask';
+  static const String askDocumentName = 'askDocument';
+
+  static String askDocumentPath(String id) => '${documentDetailPath(id)}/ask';
 }

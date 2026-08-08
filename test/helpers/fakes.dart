@@ -397,7 +397,9 @@ class FakeAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Stream<List<ChatMessage>> watchHistory() => Stream.value(messages);
+  Stream<List<ChatMessage>> watchHistory({String? documentId}) => Stream.value(
+    messages.where((message) => message.documentId == documentId).toList(),
+  );
 
   @override
   FutureResult<void> appendMessage(ChatMessage message) async {
@@ -406,9 +408,9 @@ class FakeAssistantRepository implements AssistantRepository {
   }
 
   @override
-  FutureResult<void> clearHistory() async {
+  FutureResult<void> clearHistory({String? documentId}) async {
     historyCleared = true;
-    messages.clear();
+    messages.removeWhere((message) => message.documentId == documentId);
     return const Success<void>(null);
   }
 

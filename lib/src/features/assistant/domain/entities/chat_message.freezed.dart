@@ -14,7 +14,14 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ChatMessage {
 
- String get id; ChatRole get role; String get text; DateTime get createdAt;/// Populated on assistant turns only, and kept on the message rather than
+ String get id; ChatRole get role; String get text; DateTime get createdAt;/// Which document this turn belongs to, or null for the library-wide
+/// conversation.
+///
+/// Scope lives on the message rather than in a box per document. A box per
+/// document would mean opening one per conversation and remembering to
+/// delete it with the document; a nullable field makes "every
+/// conversation" a filter instead of a fan-out.
+ String? get documentId;/// Populated on assistant turns only, and kept on the message rather than
 /// recomputed, so scrolling back through the transcript shows the sources
 /// that answer was actually built from.
  List<AnswerCitation> get citations;/// Set when the turn failed. The message stays in the transcript carrying
@@ -31,16 +38,16 @@ $ChatMessageCopyWith<ChatMessage> get copyWith => _$ChatMessageCopyWithImpl<Chat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChatMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other.citations, citations)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChatMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.documentId, documentId) || other.documentId == documentId)&&const DeepCollectionEquality().equals(other.citations, citations)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,role,text,createdAt,const DeepCollectionEquality().hash(citations),errorMessage);
+int get hashCode => Object.hash(runtimeType,id,role,text,createdAt,documentId,const DeepCollectionEquality().hash(citations),errorMessage);
 
 @override
 String toString() {
-  return 'ChatMessage(id: $id, role: $role, text: $text, createdAt: $createdAt, citations: $citations, errorMessage: $errorMessage)';
+  return 'ChatMessage(id: $id, role: $role, text: $text, createdAt: $createdAt, documentId: $documentId, citations: $citations, errorMessage: $errorMessage)';
 }
 
 
@@ -51,7 +58,7 @@ abstract mixin class $ChatMessageCopyWith<$Res>  {
   factory $ChatMessageCopyWith(ChatMessage value, $Res Function(ChatMessage) _then) = _$ChatMessageCopyWithImpl;
 @useResult
 $Res call({
- String id, ChatRole role, String text, DateTime createdAt, List<AnswerCitation> citations, String? errorMessage
+ String id, ChatRole role, String text, DateTime createdAt, String? documentId, List<AnswerCitation> citations, String? errorMessage
 });
 
 
@@ -68,13 +75,14 @@ class _$ChatMessageCopyWithImpl<$Res>
 
 /// Create a copy of ChatMessage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? role = null,Object? text = null,Object? createdAt = null,Object? citations = null,Object? errorMessage = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? role = null,Object? text = null,Object? createdAt = null,Object? documentId = freezed,Object? citations = null,Object? errorMessage = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as ChatRole,text: null == text ? _self.text : text // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,citations: null == citations ? _self.citations : citations // ignore: cast_nullable_to_non_nullable
+as DateTime,documentId: freezed == documentId ? _self.documentId : documentId // ignore: cast_nullable_to_non_nullable
+as String?,citations: null == citations ? _self.citations : citations // ignore: cast_nullable_to_non_nullable
 as List<AnswerCitation>,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
@@ -161,10 +169,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  ChatRole role,  String text,  DateTime createdAt,  List<AnswerCitation> citations,  String? errorMessage)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  ChatRole role,  String text,  DateTime createdAt,  String? documentId,  List<AnswerCitation> citations,  String? errorMessage)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ChatMessage() when $default != null:
-return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_that.errorMessage);case _:
+return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.documentId,_that.citations,_that.errorMessage);case _:
   return orElse();
 
 }
@@ -182,10 +190,10 @@ return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  ChatRole role,  String text,  DateTime createdAt,  List<AnswerCitation> citations,  String? errorMessage)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  ChatRole role,  String text,  DateTime createdAt,  String? documentId,  List<AnswerCitation> citations,  String? errorMessage)  $default,) {final _that = this;
 switch (_that) {
 case _ChatMessage():
-return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_that.errorMessage);case _:
+return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.documentId,_that.citations,_that.errorMessage);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +210,10 @@ return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  ChatRole role,  String text,  DateTime createdAt,  List<AnswerCitation> citations,  String? errorMessage)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  ChatRole role,  String text,  DateTime createdAt,  String? documentId,  List<AnswerCitation> citations,  String? errorMessage)?  $default,) {final _that = this;
 switch (_that) {
 case _ChatMessage() when $default != null:
-return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_that.errorMessage);case _:
+return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.documentId,_that.citations,_that.errorMessage);case _:
   return null;
 
 }
@@ -217,13 +225,21 @@ return $default(_that.id,_that.role,_that.text,_that.createdAt,_that.citations,_
 
 
 class _ChatMessage extends ChatMessage {
-  const _ChatMessage({required this.id, required this.role, required this.text, required this.createdAt, final  List<AnswerCitation> citations = const <AnswerCitation>[], this.errorMessage}): _citations = citations,super._();
+  const _ChatMessage({required this.id, required this.role, required this.text, required this.createdAt, this.documentId, final  List<AnswerCitation> citations = const <AnswerCitation>[], this.errorMessage}): _citations = citations,super._();
   
 
 @override final  String id;
 @override final  ChatRole role;
 @override final  String text;
 @override final  DateTime createdAt;
+/// Which document this turn belongs to, or null for the library-wide
+/// conversation.
+///
+/// Scope lives on the message rather than in a box per document. A box per
+/// document would mean opening one per conversation and remembering to
+/// delete it with the document; a nullable field makes "every
+/// conversation" a filter instead of a fan-out.
+@override final  String? documentId;
 /// Populated on assistant turns only, and kept on the message rather than
 /// recomputed, so scrolling back through the transcript shows the sources
 /// that answer was actually built from.
@@ -252,16 +268,16 @@ _$ChatMessageCopyWith<_ChatMessage> get copyWith => __$ChatMessageCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._citations, _citations)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatMessage&&(identical(other.id, id) || other.id == id)&&(identical(other.role, role) || other.role == role)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.documentId, documentId) || other.documentId == documentId)&&const DeepCollectionEquality().equals(other._citations, _citations)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,role,text,createdAt,const DeepCollectionEquality().hash(_citations),errorMessage);
+int get hashCode => Object.hash(runtimeType,id,role,text,createdAt,documentId,const DeepCollectionEquality().hash(_citations),errorMessage);
 
 @override
 String toString() {
-  return 'ChatMessage(id: $id, role: $role, text: $text, createdAt: $createdAt, citations: $citations, errorMessage: $errorMessage)';
+  return 'ChatMessage(id: $id, role: $role, text: $text, createdAt: $createdAt, documentId: $documentId, citations: $citations, errorMessage: $errorMessage)';
 }
 
 
@@ -272,7 +288,7 @@ abstract mixin class _$ChatMessageCopyWith<$Res> implements $ChatMessageCopyWith
   factory _$ChatMessageCopyWith(_ChatMessage value, $Res Function(_ChatMessage) _then) = __$ChatMessageCopyWithImpl;
 @override @useResult
 $Res call({
- String id, ChatRole role, String text, DateTime createdAt, List<AnswerCitation> citations, String? errorMessage
+ String id, ChatRole role, String text, DateTime createdAt, String? documentId, List<AnswerCitation> citations, String? errorMessage
 });
 
 
@@ -289,13 +305,14 @@ class __$ChatMessageCopyWithImpl<$Res>
 
 /// Create a copy of ChatMessage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? role = null,Object? text = null,Object? createdAt = null,Object? citations = null,Object? errorMessage = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? role = null,Object? text = null,Object? createdAt = null,Object? documentId = freezed,Object? citations = null,Object? errorMessage = freezed,}) {
   return _then(_ChatMessage(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,role: null == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as ChatRole,text: null == text ? _self.text : text // ignore: cast_nullable_to_non_nullable
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
-as DateTime,citations: null == citations ? _self._citations : citations // ignore: cast_nullable_to_non_nullable
+as DateTime,documentId: freezed == documentId ? _self.documentId : documentId // ignore: cast_nullable_to_non_nullable
+as String?,citations: null == citations ? _self._citations : citations // ignore: cast_nullable_to_non_nullable
 as List<AnswerCitation>,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
 as String?,
   ));

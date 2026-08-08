@@ -21,13 +21,20 @@ abstract interface class AssistantRepository {
   FutureResult<AssistantAnswer> ask(String question, {String? documentId});
 
   /// The persisted transcript, oldest first, re-emitted as turns are added.
-  Stream<List<ChatMessage>> watchHistory();
+  ///
+  /// Scoped to [documentId] when given, and to the library-wide conversation
+  /// otherwise. Asking about one document should not be interleaved with
+  /// questions about the whole library.
+  Stream<List<ChatMessage>> watchHistory({String? documentId});
 
   /// Appends a turn to the transcript.
   FutureResult<void> appendMessage(ChatMessage message);
 
-  /// Empties the transcript. Does not touch documents or the search index.
-  FutureResult<void> clearHistory();
+  /// Empties one conversation. Does not touch documents or the search index.
+  ///
+  /// Clears only the scope named by [documentId], so clearing a document's
+  /// conversation leaves the library-wide one intact and vice versa.
+  FutureResult<void> clearHistory({String? documentId});
 
   /// Questions worth asking of *this* library, for the empty state.
   ///

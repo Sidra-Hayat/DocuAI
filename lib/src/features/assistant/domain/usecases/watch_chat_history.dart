@@ -8,7 +8,8 @@ class WatchChatHistory {
 
   final AssistantRepository _repository;
 
-  Stream<List<ChatMessage>> call() => _repository.watchHistory();
+  Stream<List<ChatMessage>> call({String? documentId}) =>
+      _repository.watchHistory(documentId: documentId);
 }
 
 /// Clears the transcript.
@@ -21,5 +22,6 @@ class ClearChatHistory {
 
   final AssistantRepository _repository;
 
-  FutureResult<void> call() => _repository.clearHistory();
+  FutureResult<void> call({String? documentId}) =>
+      _repository.clearHistory(documentId: documentId);
 }

@@ -21,6 +21,15 @@ abstract class ChatMessage with _$ChatMessage {
     required String text,
     required DateTime createdAt,
 
+    /// Which document this turn belongs to, or null for the library-wide
+    /// conversation.
+    ///
+    /// Scope lives on the message rather than in a box per document. A box per
+    /// document would mean opening one per conversation and remembering to
+    /// delete it with the document; a nullable field makes "every
+    /// conversation" a filter instead of a fan-out.
+    String? documentId,
+
     /// Populated on assistant turns only, and kept on the message rather than
     /// recomputed, so scrolling back through the transcript shows the sources
     /// that answer was actually built from.

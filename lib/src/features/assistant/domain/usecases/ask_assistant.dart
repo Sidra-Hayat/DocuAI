@@ -46,6 +46,9 @@ class AskAssistant {
         role: ChatRole.user,
         text: trimmed,
         createdAt: _now(),
+        // Both turns carry the scope, so the transcript can be filtered back
+        // into the conversation it belongs to.
+        documentId: documentId,
       ),
     );
 
@@ -59,6 +62,7 @@ class AskAssistant {
           text: value.text,
           createdAt: _now(),
           citations: value.citations,
+          documentId: documentId,
         ),
         Failed(:final failure) => ChatMessage(
           id: _newId(),
@@ -66,6 +70,7 @@ class AskAssistant {
           text: '',
           createdAt: _now(),
           errorMessage: failure.message,
+          documentId: documentId,
         ),
       },
     );

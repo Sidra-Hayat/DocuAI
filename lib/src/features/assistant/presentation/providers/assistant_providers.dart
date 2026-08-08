@@ -39,9 +39,14 @@ final clearChatHistoryProvider = Provider<ClearChatHistory>(
   (ref) => ClearChatHistory(ref.watch(assistantRepositoryProvider)),
 );
 
-/// The transcript, oldest first, re-emitted as turns are added.
-final chatHistoryProvider = StreamProvider<List<ChatMessage>>(
-  (ref) => WatchChatHistory(ref.watch(assistantRepositoryProvider))(),
+/// One conversation's transcript, oldest first, re-emitted as turns are added.
+///
+/// Keyed by document id, with null for the library-wide conversation — the
+/// same key the messages themselves carry.
+final chatHistoryProvider = StreamProvider.family<List<ChatMessage>, String?>(
+  (ref, documentId) => WatchChatHistory(
+    ref.watch(assistantRepositoryProvider),
+  )(documentId: documentId),
 );
 
 final suggestQuestionsProvider = Provider<SuggestQuestions>(
@@ -62,8 +67,12 @@ final suggestedQuestionsProvider = FutureProvider<List<String>>((ref) async {
 ///
 /// A projection of the transcript rather than a second stored list — the
 /// history already records what was asked.
-final recentQuestionsProvider = Provider<List<String>>((ref) {
-  final history = ref.watch(chatHistoryProvider).value ?? const <ChatMessage>[];
+final recentQuestionsProvider = Provider.family<List<String>, String?>((
+  ref,
+  documentId,
+) {
+  final history =
+      ref.watch(chatHistoryProvider(documentId)).value ?? const <ChatMessage>[];
 
   return RecentQuestions.from(
     history.where((message) => message.isFromUser).map((message) => message.text),
@@ -78,20 +87,29 @@ final recentQuestionsProvider = Provider<List<String>>((ref) {
 /// writes both turns. This holds the two things it cannot express: that an
 /// answer is on its way, and how the run that produced the newest answer went.
 class AssistantState {
-  const AssistantState({this.busy = false, this.lastAnswer});
+  const AssistantState({this.busy = false, this.lastAnswer, this.scopeId});
 
   final bool busy;
+
+  /// The conversation the last run belonged to. Carried for the same reason
+  /// `OcrState` and `ExportState` carry a document id: a run started in one
+  /// conversation must not paint its result into another.
+  final String? scopeId;
 
   /// Confidence and the searched-document count describe one run, and are
   /// deliberately not persisted with the transcript — replaying them against a
   /// library that has since changed would be a claim nobody re-checked.
   final AssistantAnswer? lastAnswer;
 
-  AssistantState copyWith({bool? busy, AssistantAnswer? lastAnswer}) =>
-      AssistantState(
-        busy: busy ?? this.busy,
-        lastAnswer: lastAnswer ?? this.lastAnswer,
-      );
+  AssistantState copyWith({
+    bool? busy,
+    AssistantAnswer? lastAnswer,
+    String? scopeId,
+  }) => AssistantState(
+    busy: busy ?? this.busy,
+    lastAnswer: lastAnswer ?? this.lastAnswer,
+    scopeId: scopeId ?? this.scopeId,
+  );
 }
 
 class AssistantController extends Notifier<AssistantState> {
@@ -108,7 +126,7 @@ class AssistantController extends Notifier<AssistantState> {
   /// showing it again would say the same thing twice.
   Future<String?> ask(String question, {String? documentId}) async {
     if (state.busy) return null;
-    state = const AssistantState(busy: true);
+    state = AssistantState(busy: true, scopeId: documentId);
 
     try {
       final result = await ref.read(askAssistantProvider)(
@@ -118,7 +136,7 @@ class AssistantController extends Notifier<AssistantState> {
 
       return switch (result) {
         Success(:final value) => () {
-          state = AssistantState(lastAnswer: value);
+          state = AssistantState(lastAnswer: value, scopeId: documentId);
           return null;
         }(),
         Failed(failure: ValidationFailure(:final message)) => message,
@@ -129,8 +147,8 @@ class AssistantController extends Notifier<AssistantState> {
     }
   }
 
-  Future<void> clear() async {
-    await ref.read(clearChatHistoryProvider)();
+  Future<void> clear({String? documentId}) async {
+    await ref.read(clearChatHistoryProvider)(documentId: documentId);
     state = const AssistantState();
   }
 }

@@ -175,6 +175,23 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
             ),
           ),
           const Divider(),
+          ListTile(
+            leading: Icon(
+              Icons.auto_awesome_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Ask about this document'),
+            subtitle: const Text(
+              'Answers quoted from these pages only, in their own conversation',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.pushNamed(
+              AppRoutes.askDocumentName,
+              pathParameters: {'id': document.id},
+              queryParameters: {'title': document.title},
+            ),
+          ),
+          const Divider(),
           ExtractedTextEntry(document: document),
         ],
       ),

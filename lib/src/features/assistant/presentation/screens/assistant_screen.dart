@@ -16,7 +16,14 @@ import '../widgets/thinking_indicator.dart';
 /// be traced back to a page. The screen makes that visible: each answer carries
 /// citation chips that open the document it came from.
 class AssistantScreen extends ConsumerStatefulWidget {
-  const AssistantScreen({super.key});
+  const AssistantScreen({this.documentId, this.documentTitle, super.key});
+
+  /// The document this conversation is about, or null for the library-wide
+  /// one reached from the Assistant tab.
+  final String? documentId;
+
+  /// Shown in the bar so a scoped conversation says what it is scoped to.
+  final String? documentTitle;
 
   @override
   ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
@@ -42,7 +49,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     final rejection = await ref
         .read(assistantControllerProvider.notifier)
-        .ask(question);
+        .ask(question, documentId: widget.documentId);
 
     // Only a question rejected before it was recorded needs telling; anything
     // else is already in the transcript as a failed turn.
@@ -61,7 +68,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final rejection = await ref
         .read(assistantControllerProvider.notifier)
-        .ask(question);
+        .ask(question, documentId: widget.documentId);
 
     if (rejection != null) {
       messenger.showSnackBar(SnackBar(content: Text(rejection)));
@@ -80,7 +87,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   }
 
   Future<void> _confirmClear() async {
-    final clear = ref.read(assistantControllerProvider.notifier).clear;
+    final notifier = ref.read(assistantControllerProvider.notifier);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -103,21 +110,33 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
       ),
     );
 
-    if (confirmed ?? false) await clear();
+    if (confirmed ?? false) {
+      await notifier.clear(documentId: widget.documentId);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final history = ref.watch(chatHistoryProvider);
-    final recent = ref.watch(recentQuestionsProvider);
+    final scope = widget.documentId;
+    final history = ref.watch(chatHistoryProvider(scope));
+    final recent = ref.watch(recentQuestionsProvider(scope));
     final assistant = ref.watch(assistantControllerProvider);
-    final busy = assistant.busy;
 
-    ref.listen(chatHistoryProvider, (previous, next) => _scrollToLatest());
+    // Only this conversation's own run drives its progress.
+    final busy = assistant.busy && assistant.scopeId == scope;
+
+    ref.listen(
+      chatHistoryProvider(scope),
+      (previous, next) => _scrollToLatest(),
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Assistant'),
+        title: Text(
+          widget.documentTitle == null
+              ? 'Assistant'
+              : 'Ask ${widget.documentTitle}',
+        ),
         actions: [
           if (recent.isNotEmpty && !busy)
             PopupMenuButton<String>(
@@ -150,12 +169,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 title: 'The conversation could not be loaded',
               ),
               data: (messages) => messages.isEmpty
-                  ? _Introduction(onAsk: _askNow)
+                  ? _Introduction(onAsk: _askNow, scoped: scope != null)
                   : _Transcript(
                       messages: messages,
                       controller: _scroll,
                       busy: busy,
-                      lastAnswer: assistant.lastAnswer,
+                      lastAnswer: assistant.scopeId == scope
+                          ? assistant.lastAnswer
+                          : null,
                     ),
             ),
           ),
@@ -210,12 +231,26 @@ class _Transcript extends StatelessWidget {
 /// assistant appears to work at all: it can only read documents whose text has
 /// been recognised, and it quotes rather than composes.
 class _Introduction extends ConsumerWidget {
-  const _Introduction({required this.onAsk});
+  const _Introduction({required this.onAsk, required this.scoped});
 
   final ValueChanged<String> onAsk;
 
+  /// True when this conversation is about one document rather than the whole
+  /// library — the suggestions and the explanation both change.
+  final bool scoped;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (scoped) {
+      return const AppEmptyState(
+        icon: Icons.auto_awesome_outlined,
+        title: 'Ask about this document',
+        message:
+            'Answers are quoted from this document only. Its conversation is '
+            'kept separately, so it is still here next time you open it.',
+      );
+    }
+
     // Suggestions are a convenience: a library that cannot produce any still
     // gets the explanation, never an error.
     final suggestions =

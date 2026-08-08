@@ -20,6 +20,7 @@ class ChatMessageModel {
     required this.createdAt,
     required this.citations,
     required this.errorMessage,
+    required this.documentId,
   });
 
   factory ChatMessageModel.fromEntity(ChatMessage message) => ChatMessageModel(
@@ -31,6 +32,7 @@ class ChatMessageModel {
         .map(AnswerCitationModel.fromEntity)
         .toList(growable: false),
     errorMessage: message.errorMessage,
+    documentId: message.documentId,
   );
 
   @HiveField(0)
@@ -51,6 +53,12 @@ class ChatMessageModel {
   @HiveField(5)
   final String? errorMessage;
 
+  /// Null for the library-wide conversation — which is also what every
+  /// transcript written before scoping existed reads back as, so those turns
+  /// stay where the user left them.
+  @HiveField(6)
+  final String? documentId;
+
   ChatMessage toEntity() => ChatMessage(
     id: id,
     role: _decodeRole(role),
@@ -60,6 +68,7 @@ class ChatMessageModel {
         .map((citation) => citation.toEntity())
         .toList(growable: false),
     errorMessage: errorMessage,
+    documentId: documentId,
   );
 
   /// An unrecognised role is read as the assistant's, because the alternative —

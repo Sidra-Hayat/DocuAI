@@ -23,13 +23,14 @@ class ChatMessageModelAdapter extends TypeAdapter<ChatMessageModel> {
       createdAt: fields[3] as DateTime,
       citations: (fields[4] as List).cast<AnswerCitationModel>(),
       errorMessage: fields[5] as String?,
+      documentId: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ChatMessageModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class ChatMessageModelAdapter extends TypeAdapter<ChatMessageModel> {
       ..writeByte(4)
       ..write(obj.citations)
       ..writeByte(5)
-      ..write(obj.errorMessage);
+      ..write(obj.errorMessage)
+      ..writeByte(6)
+      ..write(obj.documentId);
   }
 
   @override

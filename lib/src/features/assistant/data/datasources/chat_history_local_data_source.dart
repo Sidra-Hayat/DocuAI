@@ -48,9 +48,18 @@ class ChatHistoryLocalDataSource {
     }
   }
 
-  Future<void> clear() async {
+  /// Empties one conversation.
+  ///
+  /// Deletes only the turns in the named scope rather than clearing the box:
+  /// clearing a document's conversation must leave the library-wide one — and
+  /// every other document's — exactly as it was.
+  Future<void> clear({String? documentId}) async {
     try {
-      await _box.clear();
+      await _box.deleteAll(
+        readAll()
+            .where((message) => message.documentId == documentId)
+            .map((message) => message.id),
+      );
     } catch (error) {
       throw CacheException(
         'The conversation could not be cleared.',
@@ -59,14 +68,31 @@ class ChatHistoryLocalDataSource {
     }
   }
 
+  /// Caps each conversation independently.
+  ///
+  /// A single global cap would let a busy document's conversation evict the
+  /// library-wide one, or another document's — the user would watch history
+  /// they never touched disappear.
   Future<void> _trim() async {
     if (_box.length <= maxMessages) return;
 
-    final ordered = readAll();
-    final surplus = ordered.length - maxMessages;
-    await _box.deleteAll(
-      ordered.take(surplus).map((message) => message.id),
-    );
+    final byScope = <String?, List<ChatMessageModel>>{};
+    for (final message in readAll()) {
+      byScope.putIfAbsent(message.documentId, () => <ChatMessageModel>[])
+          .add(message);
+    }
+
+    final surplus = <String>[];
+    for (final conversation in byScope.values) {
+      if (conversation.length <= maxMessages) continue;
+      surplus.addAll(
+        conversation
+            .take(conversation.length - maxMessages)
+            .map((message) => message.id),
+      );
+    }
+
+    if (surplus.isNotEmpty) await _box.deleteAll(surplus);
   }
 }
 
