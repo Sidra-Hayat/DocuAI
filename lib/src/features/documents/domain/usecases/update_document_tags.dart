@@ -1,6 +1,7 @@
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/utils/clock.dart';
+import '../../../search/domain/repositories/search_repository.dart';
 import '../entities/document.dart';
 import '../repositories/document_repository.dart';
 
@@ -11,10 +12,15 @@ import '../repositories/document_repository.dart';
 /// fill up with near-duplicates that each match a different subset of the
 /// library.
 class UpdateDocumentTags {
-  const UpdateDocumentTags(this._repository, {Clock clock = systemClock})
-    : _now = clock;
+  const UpdateDocumentTags(
+    this._repository, {
+    required SearchRepository search,
+    Clock clock = systemClock,
+  }) : _search = search,
+       _now = clock;
 
   final DocumentRepository _repository;
+  final SearchRepository _search;
   final Clock _now;
 
   static const int maxTagsPerDocument = 12;
@@ -40,9 +46,23 @@ class UpdateDocumentTags {
         document = value;
     }
 
-    return _repository.saveDocument(
+    final saved = await _repository.saveDocument(
       document.copyWith(tags: normalised, updatedAt: _now()),
     );
+
+    if (saved case Success(:final value)) {
+      // Indexed here, as `EditPageText` and `DeleteDocument` already do.
+      // Without it a tag is only findable once the Search tab happens to
+      // trigger a full rebuild — the index fingerprint would notice the
+      // changed `updatedAt` eventually, which is not the same as a tag
+      // working the moment it is added.
+      //
+      // Best-effort: the tag is already stored, so a failure here costs
+      // discoverability until the next rebuild, not data.
+      await _search.indexDocument(value);
+    }
+
+    return saved;
   }
 
   /// Trims, lower-cases, drops blanks and over-long entries, and removes

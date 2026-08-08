@@ -92,7 +92,10 @@ final toggleFavoriteProvider = Provider<ToggleFavorite>(
 );
 
 final updateDocumentTagsProvider = Provider<UpdateDocumentTags>(
-  (ref) => UpdateDocumentTags(ref.watch(documentRepositoryProvider)),
+  (ref) => UpdateDocumentTags(
+    ref.watch(documentRepositoryProvider),
+    search: ref.watch(searchRepositoryProvider),
+  ),
 );
 
 // ---- Page editing ----------------------------------------------------------

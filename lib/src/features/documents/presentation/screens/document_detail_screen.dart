@@ -14,6 +14,7 @@ import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_actions.dart';
 import '../widgets/document_thumbnail.dart';
+import '../widgets/edit_tags_sheet.dart';
 import '../widgets/extracted_text_entry.dart';
 
 /// Single document view: pages, metadata, export and the library actions.
@@ -139,20 +140,31 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                if (document.tags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final tag in document.tags)
-                        Chip(
-                          label: Text(tag),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                    ],
-                  ),
-                ],
+                const SizedBox(height: 12),
+                // Shown even when empty, so tagging is discoverable from the
+                // document itself rather than only from a menu nobody opens
+                // looking for it.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    for (final tag in document.tags)
+                      Chip(
+                        label: Text(tag),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ActionChip(
+                      avatar: const Icon(Icons.sell_outlined, size: 16),
+                      label: Text(
+                        document.tags.isEmpty ? 'Add tags' : 'Edit tags',
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () =>
+                          showEditTagsSheet(context, ref, document),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 12,

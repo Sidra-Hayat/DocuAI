@@ -109,7 +109,7 @@ void main() {
 
     test('saves the normalised list', () async {
       documents.seed(buildDocument());
-      final update = UpdateDocumentTags(documents, clock: fixedClock);
+      final update = UpdateDocumentTags(documents, search: search, clock: fixedClock);
 
       await update(
         documentId: 'doc-1',
@@ -125,7 +125,7 @@ void main() {
 
     test('rejects more tags than a document may hold', () async {
       documents.seed(buildDocument());
-      final update = UpdateDocumentTags(documents, clock: fixedClock);
+      final update = UpdateDocumentTags(documents, search: search, clock: fixedClock);
 
       final result = await update(
         documentId: 'doc-1',

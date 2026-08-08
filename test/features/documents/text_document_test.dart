@@ -231,7 +231,7 @@ void main() {
     test('tags', () async {
       final note = await newNote();
 
-      final tagged = (await UpdateDocumentTags(repository)(
+      final tagged = (await UpdateDocumentTags(repository, search: search)(
         documentId: note.id,
         tags: const <String>['Home', 'rent'],
       )).valueOrNull!;

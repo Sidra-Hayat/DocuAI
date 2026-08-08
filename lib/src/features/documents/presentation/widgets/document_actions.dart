@@ -5,10 +5,11 @@ import '../../../export/presentation/providers/export_controller.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../providers/document_providers.dart';
+import 'edit_tags_sheet.dart';
 
 /// The rename / share / favourite / delete menu, shared by the library list and
 /// the detail screen so both offer exactly the same actions.
-enum DocumentAction { rename, sharePdf, toggleFavorite, delete }
+enum DocumentAction { rename, editTags, sharePdf, toggleFavorite, delete }
 
 class DocumentActionsMenu extends ConsumerWidget {
   const DocumentActionsMenu({required this.document, super.key});
@@ -26,6 +27,14 @@ class DocumentActionsMenu extends ConsumerWidget {
           child: ListTile(
             leading: Icon(Icons.drive_file_rename_outline),
             title: Text('Rename'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const PopupMenuItem(
+          value: DocumentAction.editTags,
+          child: ListTile(
+            leading: Icon(Icons.sell_outlined),
+            title: Text('Edit tags'),
             contentPadding: EdgeInsets.zero,
           ),
         ),
@@ -71,6 +80,8 @@ class DocumentActionsMenu extends ConsumerWidget {
     switch (action) {
       case DocumentAction.rename:
         await showRenameDocumentDialog(context, ref, document);
+      case DocumentAction.editTags:
+        await showEditTagsSheet(context, ref, document);
       case DocumentAction.sharePdf:
         await shareDocumentAsPdf(context, ref, document);
       case DocumentAction.toggleFavorite:
