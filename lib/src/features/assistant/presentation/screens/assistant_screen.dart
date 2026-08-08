@@ -16,7 +16,12 @@ import '../widgets/thinking_indicator.dart';
 /// be traced back to a page. The screen makes that visible: each answer carries
 /// citation chips that open the document it came from.
 class AssistantScreen extends ConsumerStatefulWidget {
-  const AssistantScreen({this.documentId, this.documentTitle, super.key});
+  const AssistantScreen({
+    this.documentId,
+    this.documentTitle,
+    this.initialQuestion,
+    super.key,
+  });
 
   /// The document this conversation is about, or null for the library-wide
   /// one reached from the Assistant tab.
@@ -25,6 +30,15 @@ class AssistantScreen extends ConsumerStatefulWidget {
   /// Shown in the bar so a scoped conversation says what it is scoped to.
   final String? documentTitle;
 
+  /// Asked once, on arrival, as though the user had typed it.
+  ///
+  /// How the Summarise button works. Routing it through the composer rather
+  /// than calling a summariser directly is what keeps the button and the typed
+  /// question the same feature: one analyser decides what "summarise" means,
+  /// and the result lands in the transcript with its citations like any other
+  /// turn.
+  final String? initialQuestion;
+
   @override
   ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
 }
@@ -32,6 +46,20 @@ class AssistantScreen extends ConsumerStatefulWidget {
 class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    final question = widget.initialQuestion;
+    if (question == null || question.trim().isEmpty) return;
+
+    // After the first frame: `ask` reads a provider and writes the transcript,
+    // neither of which may happen while the widget is still being built.
+    Future.microtask(() {
+      if (mounted) _askNow(question);
+    });
+  }
 
   @override
   void dispose() {
@@ -169,7 +197,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 title: 'The conversation could not be loaded',
               ),
               data: (messages) => messages.isEmpty
-                  ? _Introduction(onAsk: _askNow, scoped: scope != null)
+                  ? _Introduction(onAsk: _askNow, scope: scope)
                   : _Transcript(
                       messages: messages,
                       controller: _scroll,
@@ -231,30 +259,38 @@ class _Transcript extends StatelessWidget {
 /// assistant appears to work at all: it can only read documents whose text has
 /// been recognised, and it quotes rather than composes.
 class _Introduction extends ConsumerWidget {
-  const _Introduction({required this.onAsk, required this.scoped});
+  const _Introduction({required this.onAsk, required this.scope});
 
   final ValueChanged<String> onAsk;
 
-  /// True when this conversation is about one document rather than the whole
-  /// library — the suggestions and the explanation both change.
-  final bool scoped;
+  /// The document this conversation is about, or null for the library-wide
+  /// one — the suggestions and the explanation both change.
+  final String? scope;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (scoped) {
-      return const AppEmptyState(
+    // Suggestions are a convenience: a document or library that cannot produce
+    // any still gets the explanation, never an error.
+    final suggestions =
+        ref.watch(suggestedQuestionsProvider(scope)).value ?? const <String>[];
+
+    if (scope != null) {
+      return AppEmptyState(
         icon: Icons.auto_awesome_outlined,
         title: 'Ask about this document',
         message:
             'Answers are quoted from this document only. Its conversation is '
             'kept separately, so it is still here next time you open it.',
+        action: suggestions.isEmpty
+            ? null
+            : QuestionChips(
+                questions: suggestions,
+                label: 'TRY ASKING',
+                icon: Icons.north_east,
+                onSelected: onAsk,
+              ),
       );
     }
-
-    // Suggestions are a convenience: a library that cannot produce any still
-    // gets the explanation, never an error.
-    final suggestions =
-        ref.watch(suggestedQuestionsProvider).value ?? const <String>[];
 
     return AppEmptyState(
       icon: Icons.auto_awesome_outlined,

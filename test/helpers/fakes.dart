@@ -417,5 +417,6 @@ class FakeAssistantRepository implements AssistantRepository {
   List<String> suggestions = <String>[];
 
   @override
-  FutureResult<List<String>> suggestedQuestions() async => Success(suggestions);
+  FutureResult<List<String>> suggestedQuestions({String? documentId}) async =>
+      Success(suggestions);
 }

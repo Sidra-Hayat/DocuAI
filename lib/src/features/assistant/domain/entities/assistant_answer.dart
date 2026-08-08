@@ -26,6 +26,23 @@ enum AnswerKind {
   /// Quoted from the user's documents.
   grounded,
 
+  /// The document's own sentences, chosen to represent the whole of it.
+  ///
+  /// Grounded in exactly the same sense — every line is lifted from a page —
+  /// but it answers no question, so there is no coverage to be confident about.
+  summary,
+
+  /// Every value of one shape found in the document: the dates, the amounts,
+  /// the names.
+  extraction,
+
+  /// A summary or a listing was asked for without saying what of.
+  ///
+  /// Distinct from [unclearQuestion]: the request was perfectly clear, it just
+  /// arrived with no document attached, and the fix is to open one rather than
+  /// to rephrase.
+  needsDocument,
+
   /// Documents were searched and none contained the answer.
   noMatch,
 
@@ -89,8 +106,11 @@ abstract class AssistantAnswer with _$AssistantAnswer {
     @Default(AnswerSource.retrieval) AnswerSource source,
     @Default(AnswerKind.grounded) AnswerKind kind,
 
-    /// Null unless [kind] is [AnswerKind.grounded] — there is nothing to be
-    /// confident about when nothing was found.
+    /// Set only when a question was answered — [AnswerKind.grounded], or
+    /// [AnswerKind.extraction] where the shape found stands in for coverage.
+    ///
+    /// Null everywhere else. Nothing was found to be confident about, and a
+    /// summary answers no question, so there is no coverage to report.
     AnswerConfidence? confidence,
 
     /// How many documents were read to produce this. Shown so an answer drawn

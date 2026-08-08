@@ -47,6 +47,20 @@ void main() {
       expect(passages[1].text, 'Amount due 42.00 EUR');
     });
 
+    test('keeps a label with its value rather than splitting the colon', () {
+      // The reason this matters is the intent boost. Split at the colon, the
+      // half carrying the words a question matches on — "total", "amount" —
+      // holds no figure, so a passage that plainly answers "how much is the
+      // total" no longer looks like an amount. The half holding the figure is
+      // then too short to survive minPassageChars and is dropped outright.
+      final passages = PassageExtractor.extract(
+        documentWith(<String>['Total amount due: 248.60 EUR']),
+      );
+
+      expect(passages.single.text, 'Total amount due: 248.60 EUR');
+      expect(PassageSignals.hasAmount(passages.single.text), isTrue);
+    });
+
     test('discards fragments too short to answer anything', () {
       final passages = PassageExtractor.extract(
         documentWith(<String>['Page 3\nThe deposit is two months rent.']),

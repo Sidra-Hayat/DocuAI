@@ -53,15 +53,22 @@ final suggestQuestionsProvider = Provider<SuggestQuestions>(
   (ref) => SuggestQuestions(ref.watch(assistantRepositoryProvider)),
 );
 
-/// Questions worth asking of this particular library.
+/// Questions worth asking here — of this library, or of one document.
+///
+/// Keyed by the same nullable document id the conversation is, so a scoped
+/// screen offers what that document can be asked and the library-wide one keeps
+/// offering documents by name.
 ///
 /// Empty list on failure rather than an error state: suggestions are a
 /// convenience, and an empty state that reports "suggestions unavailable"
 /// would make a working assistant look broken.
-final suggestedQuestionsProvider = FutureProvider<List<String>>((ref) async {
-  final result = await ref.watch(suggestQuestionsProvider)();
-  return result.valueOrNull ?? const <String>[];
-});
+final suggestedQuestionsProvider =
+    FutureProvider.family<List<String>, String?>((ref, documentId) async {
+      final result = await ref.watch(suggestQuestionsProvider)(
+        documentId: documentId,
+      );
+      return result.valueOrNull ?? const <String>[];
+    });
 
 /// The last few questions actually asked, newest first.
 ///

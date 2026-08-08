@@ -7,7 +7,25 @@ class SuggestQuestions {
 
   final AssistantRepository _repository;
 
-  FutureResult<List<String>> call() => _repository.suggestedQuestions();
+  /// Scoped to one document when [documentId] is given.
+  FutureResult<List<String>> call({String? documentId}) =>
+      _repository.suggestedQuestions(documentId: documentId);
+}
+
+/// The questions the app asks on the user's behalf.
+///
+/// Named constants because the same strings have to arrive from three places
+/// and mean the same thing in all of them: the Summarise button on the document
+/// screen, the suggestion chips, and the user typing. Everything funnels
+/// through the one analyser — a button with its own private code path would be
+/// a second summariser to keep in step with the first.
+abstract final class DocumentQuestions {
+  static const String summarise = 'Summarise this document';
+  static const String dates = 'Find important dates';
+  static const String names = 'Find names';
+  static const String amounts = 'Find amounts';
+  static const String contact = 'Find contact details';
+  static const String references = 'Find reference numbers';
 }
 
 /// The last few questions actually asked, newest first.

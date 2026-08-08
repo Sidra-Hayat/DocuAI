@@ -36,13 +36,17 @@ abstract interface class AssistantRepository {
   /// conversation leaves the library-wide one intact and vice versa.
   FutureResult<void> clearHistory({String? documentId});
 
-  /// Questions worth asking of *this* library, for the empty state.
+  /// Questions worth asking here, for the empty state.
   ///
   /// Drawn from the user's own documents rather than written in advance: a
   /// generic "What is my policy number?" is useless to someone whose library
   /// is three utility bills, and the first thing an empty assistant has to do
   /// is show that it knows what it can answer.
   ///
+  /// Scoped to one document when [documentId] is given, where the offer becomes
+  /// what that document can be asked — summarise it, list its dates, its
+  /// amounts, its names — restricted to the shapes its pages actually carry.
+  ///
   /// Returns an empty list when there is nothing to suggest.
-  FutureResult<List<String>> suggestedQuestions();
+  FutureResult<List<String>> suggestedQuestions({String? documentId});
 }

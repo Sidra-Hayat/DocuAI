@@ -96,6 +96,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           // title on the first frame instead of flashing a
                           // placeholder while a stream resolves.
                           documentTitle: state.uri.queryParameters['title'],
+                          // Set by the Summarise button, which is this route
+                          // arriving with the question already typed.
+                          initialQuestion: state.uri.queryParameters['ask'],
                         ),
                       ),
                     ],

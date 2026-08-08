@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
@@ -9,11 +10,17 @@ import '../../../search/domain/repositories/search_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/repositories/assistant_repository.dart';
+import '../../domain/usecases/suggest_questions.dart';
 import '../datasources/chat_history_local_data_source.dart';
 import '../datasources/passage_extractor.dart';
 import '../datasources/passage_ranker.dart';
+import '../datasources/passage_summarizer.dart';
 import '../datasources/question_analyzer.dart';
+import '../datasources/shape_finder.dart';
 import '../models/chat_message_model.dart';
+
+/// One passage's contribution to an answer, before citations are merged.
+typedef _Cited = ({Passage passage, double relevance, List<String> terms});
 
 /// The offline assistant: retrieval and extractive answering, with no model.
 ///
@@ -73,6 +80,19 @@ class RetrievalAssistantRepository implements AssistantRepository {
       'I need something more specific to look for. Try naming a word that '
       'appears on the page — an amount, a date, or a company name.';
 
+  static const String needsDocumentMessage =
+      'Open the document you want and use the Summarise button there, or name '
+      'it in your question — for example "summarise the tenancy agreement".';
+
+  static const String documentHasNoTextMessage =
+      "This document's text has not been recognised yet, so there is nothing "
+      'for me to read. Recognition runs when a document is opened — give it a '
+      'moment and ask again.';
+
+  static const String tooLittleTextMessage =
+      'There is not enough recognised text in this document to summarise. It '
+      'may have scanned poorly — try rescanning the page.';
+
   @override
   FutureResult<AssistantAnswer> ask(
     String question, {
@@ -87,6 +107,13 @@ class RetrievalAssistantRepository implements AssistantRepository {
             kind: AnswerKind.unclearQuestion,
           ),
         );
+      }
+
+      // Summarising and listing work on one document at a time, and neither
+      // has query terms to rank with — so they resolve a target first and then
+      // run their own ranker over the same extracted passages.
+      if (analyzed.mode != QuestionMode.answer) {
+        return _wholeDocument(analyzed, documentId);
       }
 
       final candidates = await _candidates(analyzed, documentId);
@@ -296,9 +323,227 @@ class RetrievalAssistantRepository implements AssistantRepository {
     return AnswerConfidence.weak;
   }
 
+  // ---- Whole-document modes ------------------------------------------------
+
+  /// Summarising and listing, which both read one document end to end.
+  ///
+  /// The stages are unchanged — OCR text, extracted passages, a ranking, an
+  /// answer with citations. What differs is that neither request carries query
+  /// terms, so the document is resolved first and the ranking is over the whole
+  /// of it rather than against a question.
+  FutureResult<AssistantAnswer> _wholeDocument(
+    AnalyzedQuestion question,
+    String? documentId,
+  ) async {
+    final resolved = await _resolveTarget(question, documentId);
+    if (resolved case Failed(:final failure)) return Failed(failure);
+
+    final document = (resolved as Success<Document?>).value;
+    if (document == null) {
+      // Two different dead ends. Nothing named means the request never said
+      // which document; something named that matched nothing is a search that
+      // came back empty, and saying so is what lets the user correct the name.
+      return Success(
+        question.subjectTerms.isEmpty
+            ? const AssistantAnswer(
+                text: needsDocumentMessage,
+                kind: AnswerKind.needsDocument,
+              )
+            : AssistantAnswer(
+                text:
+                    'I could not find a document matching '
+                    '"${question.subjectTerms.join(' ')}".',
+                kind: AnswerKind.noMatch,
+              ),
+      );
+    }
+
+    if (!document.hasText) {
+      return const Success(
+        AssistantAnswer(
+          text: documentHasNoTextMessage,
+          kind: AnswerKind.noRecognisedText,
+          documentsSearched: 1,
+        ),
+      );
+    }
+
+    final passages = PassageExtractor.extract(document);
+
+    // Only summary and find reach here; `ask` routes the answer mode away
+    // above, before a document is ever resolved.
+    return Success(
+      question.mode == QuestionMode.summary
+          ? _composeSummary(document, passages)
+          : _composeFindings(question.intent, document, passages),
+    );
+  }
+
+  /// Which document a whole-document request is about.
+  ///
+  /// Null when the request named none — the caller turns that into advice
+  /// rather than an error, because "summarise this document" from the
+  /// library-wide conversation is a reasonable thing to type and only needs
+  /// pointing at a document.
+  FutureResult<Document?> _resolveTarget(
+    AnalyzedQuestion question,
+    String? documentId,
+  ) async {
+    if (documentId != null) {
+      return switch (await _documents.getDocument(documentId)) {
+        Failed(:final failure) => Failed(failure),
+        Success(:final value) => Success<Document?>(value),
+      };
+    }
+
+    if (question.subjectTerms.isEmpty) return const Success<Document?>(null);
+
+    // Whatever is left after the request vocabulary is the user naming the
+    // document — "summarise the tenancy agreement" — and search is precisely
+    // the stage that turns a name into a document.
+    final found = await _search.search(question.subjectTerms.join(' '));
+    return switch (found) {
+      Failed(:final failure) => Failed(failure),
+      Success(:final value) => Success<Document?>(
+        value.isEmpty ? null : value.first.document,
+      ),
+    };
+  }
+
+  /// The document's own sentences, chosen to stand for the whole of it.
+  static AssistantAnswer _composeSummary(
+    Document document,
+    List<Passage> passages,
+  ) {
+    final sentences = PassageSummarizer.summarize(
+      passages,
+      characterBudget: contextCharacterBudget,
+    );
+
+    if (sentences.isEmpty) {
+      return const AssistantAnswer(
+        text: tooLittleTextMessage,
+        kind: AnswerKind.noMatch,
+        documentsSearched: 1,
+      );
+    }
+
+    return AssistantAnswer(
+      // Bulleted rather than run together: these are separate statements
+      // pulled from separate places, and joining them into a paragraph would
+      // imply a connecting argument nobody wrote.
+      text: sentences
+          .map((sentence) => '• ${_flatten(sentence.passage.text)}')
+          .join('\n'),
+      kind: AnswerKind.summary,
+      documentsSearched: 1,
+      citations: _citationsByPage(<_Cited>[
+        for (final sentence in sentences)
+          (
+            passage: sentence.passage,
+            relevance: sentence.weight,
+            terms: sentence.highlights,
+          ),
+      ]),
+    );
+  }
+
+  /// Every value of one shape, in the order the document states them.
+  static AssistantAnswer _composeFindings(
+    QuestionIntent intent,
+    Document document,
+    List<Passage> passages,
+  ) {
+    final findings = ShapeFinder.find(intent, passages);
+
+    if (findings.isEmpty) {
+      return AssistantAnswer(
+        text:
+            'I could not find any '
+            '${ShapeFinder.labelFor(intent, plural: true)} in '
+            '${document.title}.',
+        kind: AnswerKind.noMatch,
+        documentsSearched: 1,
+      );
+    }
+
+    final label = ShapeFinder.labelFor(intent, plural: findings.length != 1);
+
+    return AssistantAnswer(
+      text:
+          'Found ${findings.length} $label:\n'
+          '${findings.map((finding) => '• ${finding.value}').join('\n')}',
+      kind: AnswerKind.extraction,
+      // A currency symbol beside a number is a fact about the page; two
+      // capitalised words is a convention that headings share with names. The
+      // chip says so rather than claiming the same certainty for both.
+      confidence: intent == QuestionIntent.person
+          ? AnswerConfidence.partial
+          : AnswerConfidence.strong,
+      documentsSearched: 1,
+      citations: _citationsByPage(<_Cited>[
+        for (final finding in findings)
+          (
+            passage: finding.passage,
+            relevance: 1,
+            // The values themselves, so the source card shows what was read
+            // off that page rather than which words happened to match.
+            terms: <String>[finding.value],
+          ),
+      ]),
+    );
+  }
+
+  /// Collapses per-sentence provenance into one citation per page.
+  ///
+  /// A summary quoting three sentences from page one is one place to look, not
+  /// three, and the source card renders a single snippet per document anyway —
+  /// so repeated pages would only produce "Page 1, Page 1, Page 2" under it.
+  static List<AnswerCitation> _citationsByPage(List<_Cited> cited) {
+    final byPage = <String, AnswerCitation>{};
+
+    for (final entry in cited) {
+      final passage = entry.passage;
+      final key = '${passage.documentId}#${passage.pageIndex}';
+      final existing = byPage[key];
+
+      byPage[key] = existing == null
+          ? AnswerCitation(
+              documentId: passage.documentId,
+              documentTitle: passage.documentTitle,
+              pageIndex: passage.pageIndex,
+              snippet: PassageExtractor.citationSnippet(passage),
+              matchedTerms: List<String>.unmodifiable(entry.terms),
+              relevance: entry.relevance.clamp(0, 1),
+            )
+          : existing.copyWith(
+              matchedTerms: List<String>.unmodifiable(<String>{
+                ...existing.matchedTerms,
+                ...entry.terms,
+              }),
+              relevance: math.max(existing.relevance, entry.relevance)
+                  .clamp(0, 1)
+                  .toDouble(),
+            );
+    }
+
+    return List<AnswerCitation>.unmodifiable(byPage.values);
+  }
+
+  static String _flatten(String text) =>
+      text.replaceAll(RegExp(r'\s+'), ' ').trim();
+
   @override
-  FutureResult<List<String>> suggestedQuestions() async {
+  FutureResult<List<String>> suggestedQuestions({String? documentId}) async {
     try {
+      if (documentId != null) {
+        final loaded = await _documents.getDocument(documentId);
+        return switch (loaded) {
+          Failed(:final failure) => Failed(failure),
+          Success(:final value) => Success(_questionsAbout(value)),
+        };
+      }
+
       final loaded = await _documents.getDocuments();
       if (loaded case Failed(:final failure)) return Failed(failure);
 
@@ -338,6 +583,29 @@ class RetrievalAssistantRepository implements AssistantRepository {
         ),
       );
     }
+  }
+
+  /// What is worth asking of one particular document.
+  ///
+  /// Offered only where the page demonstrably carries the shape, using the same
+  /// signals the finder will use to answer. A chip that returns "I could not
+  /// find any names" is worse than no chip — it teaches the user the assistant
+  /// does not work, when in fact it was asked for something that is not there.
+  static List<String> _questionsAbout(Document document) {
+    if (!document.hasText) return const <String>[];
+
+    final text = document.extractedText;
+
+    return List<String>.unmodifiable(<String>[
+      // Always available: any recognised text can be summarised, and this is
+      // the question people arrive with.
+      DocumentQuestions.summarise,
+      if (PassageSignals.hasDate(text)) DocumentQuestions.dates,
+      if (PassageSignals.hasAmount(text)) DocumentQuestions.amounts,
+      if (PassageSignals.hasProperName(text)) DocumentQuestions.names,
+      if (PassageSignals.hasContact(text)) DocumentQuestions.contact,
+      if (PassageSignals.hasIdentifier(text)) DocumentQuestions.references,
+    ].take(4));
   }
 
   // ---- Transcript ----------------------------------------------------------

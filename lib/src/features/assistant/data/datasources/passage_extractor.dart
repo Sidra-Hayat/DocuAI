@@ -51,7 +51,14 @@ abstract final class PassageExtractor {
   /// break. Line breaks matter more than punctuation here — recognised text
   /// from a form or a table often has no punctuation at all, but always has
   /// lines.
-  static final RegExp _boundary = RegExp(r'(?<=[.!?:;])\s+|\n+');
+  ///
+  /// A colon is deliberately **not** a boundary. On the documents this app
+  /// scans a colon binds a label to its value — `Total amount due: £248.60` —
+  /// and splitting there leaves the half carrying the words a question matches
+  /// on ("total", "amount") with no figure in it, and the half carrying the
+  /// figure too short to survive [minPassageChars]. The intent boost then
+  /// cannot fire on the one passage that actually answers the question.
+  static final RegExp _boundary = RegExp(r'(?<=[.!?;])\s+|\n+');
 
   static List<Passage> extract(Document document) {
     final passages = <Passage>[];
