@@ -8,6 +8,9 @@ import '../providers/document_providers.dart';
 import '../widgets/document_thumbnail.dart';
 import '../widgets/page_edit_actions.dart';
 
+/// Where a new page comes from.
+enum _AddPage { scan, import, text }
+
 /// Reorder, delete, rescan and add pages.
 ///
 /// A screen of its own rather than an edit mode on the detail screen: dragging
@@ -27,10 +30,48 @@ class ManagePagesScreen extends ConsumerWidget {
         title: const Text('Manage pages'),
         actions: [
           if (document.value != null)
-            IconButton(
-              tooltip: 'Add pages',
-              onPressed: () => addPagesToDocument(context, ref, documentId),
-              icon: const Icon(Icons.add_a_photo_outlined),
+            PopupMenuButton<_AddPage>(
+              tooltip: 'Add a page',
+              icon: const Icon(Icons.add),
+              onSelected: (choice) => switch (choice) {
+                _AddPage.scan => addPagesToDocument(context, ref, documentId),
+                _AddPage.import => importPagesIntoDocument(
+                  context,
+                  ref,
+                  documentId,
+                ),
+                _AddPage.text => addTextPageToDocument(
+                  context,
+                  ref,
+                  documentId,
+                ),
+              },
+              itemBuilder: (context) => const <PopupMenuEntry<_AddPage>>[
+                PopupMenuItem(
+                  value: _AddPage.scan,
+                  child: ListTile(
+                    leading: Icon(Icons.document_scanner_outlined),
+                    title: Text('Scan pages'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _AddPage.import,
+                  child: ListTile(
+                    leading: Icon(Icons.photo_library_outlined),
+                    title: Text('Import photos'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _AddPage.text,
+                  child: ListTile(
+                    leading: Icon(Icons.edit_note_outlined),
+                    title: Text('Add a text page'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
         ],
       ),
@@ -121,11 +162,32 @@ class _PageList extends ConsumerWidget {
     );
   }
 
-  static String _status(DocumentPage page) => switch (page.ocrStatus) {
-    OcrStatus.completed =>
-      page.hasText ? '${page.text.length} characters' : 'No text found',
-    OcrStatus.failed => 'Could not be read',
-    OcrStatus.running => 'Reading…',
-    OcrStatus.pending => 'Not read yet',
-  };
+  /// What the row says under the page number.
+  ///
+  /// Written pages are described by what they are rather than by an OCR state
+  /// they were never in: "not read yet" on a page nobody scanned would be
+  /// reporting on work that was never outstanding.
+  static String _status(DocumentPage page) {
+    final provenance = switch (page.kind) {
+      PageKind.text => 'Written',
+      PageKind.imported => 'Imported',
+      PageKind.scanned => 'Scanned',
+    };
+
+    if (!page.hasImage) {
+      return page.hasText
+          ? '$provenance · ${page.text.length} characters'
+          : '$provenance · blank';
+    }
+
+    final text = switch (page.ocrStatus) {
+      OcrStatus.completed =>
+        page.hasText ? '${page.text.length} characters' : 'No text found',
+      OcrStatus.failed => 'Could not be read',
+      OcrStatus.running => 'Reading…',
+      OcrStatus.pending => 'Not read yet',
+    };
+
+    return '$provenance · $text';
+  }
 }

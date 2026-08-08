@@ -33,6 +33,24 @@ final class StorageFailure extends Failure {
 }
 
 /// The document scanner failed or was dismissed by the user.
+/// Importing photos from the device went wrong.
+///
+/// Separate from [ScanFailure] because the two fail for different reasons and
+/// the messages have to say different things — a missing Play Services module
+/// is not the same problem as a photo this app cannot decode.
+final class ImportFailure extends Failure {
+  const ImportFailure(
+    super.message, {
+    this.cancelled = false,
+    super.cause,
+    super.stackTrace,
+  });
+
+  /// True when the picker was dismissed rather than something going wrong.
+  /// Reported silently, for the reason given on [ScanFailure.cancelled].
+  final bool cancelled;
+}
+
 final class ScanFailure extends Failure {
   const ScanFailure(
     super.message, {

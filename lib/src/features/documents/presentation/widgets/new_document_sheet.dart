@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/router/app_routes.dart';
+import '../../../import/presentation/providers/import_providers.dart';
 import '../../domain/usecases/create_text_document.dart';
 import '../providers/document_providers.dart';
 
@@ -39,6 +41,18 @@ class _NewDocumentSheet extends StatelessWidget {
             onTap: () {
               Navigator.of(context).pop();
               context.pushNamed(AppRoutes.scanName);
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.photo_library_outlined,
+              color: theme.colorScheme.primary,
+            ),
+            title: const Text('Import photos'),
+            subtitle: const Text('Use pictures already on this device'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              await importPhotosAsDocument(context);
             },
           ),
           ListTile(
@@ -94,6 +108,56 @@ Future<void> createAndOpenTextDocument(BuildContext context) async {
     case Failed(:final failure):
       messenger.showSnackBar(SnackBar(content: Text(failure.message)));
   }
+}
+
+/// Builds a document from photos on the device.
+///
+/// Every provider, messenger and router this needs is read *before* the picker
+/// is awaited. The picker is a platform round trip long enough for the sheet
+/// that started it to be gone by the time it returns, and reaching through a
+/// dead `BuildContext` afterwards is exactly how a disposed dependency gets
+/// touched.
+Future<void> importPhotosAsDocument(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final messenger = ScaffoldMessenger.of(context);
+  final router = GoRouter.of(context);
+
+  final result = await container.read(importImagesAsDocumentProvider)(
+    title: _importTitle(),
+  );
+
+  switch (result) {
+    case Success(:final value):
+      if (value.rejected.isNotEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${value.rejected.length} photo(s) could not be read: '
+              '${value.rejected.join(', ')}',
+            ),
+          ),
+        );
+      }
+      await router.pushNamed<void>(
+        AppRoutes.documentDetailName,
+        pathParameters: <String, String>{'id': value.document.id},
+      );
+    case Failed(:final failure):
+      if (failure is ImportFailure && failure.cancelled) return;
+      messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Imported documents are named after the day they were brought in.
+///
+/// Not asked for up front: the photos are already chosen by then, and stopping
+/// to name the result before it exists is a form the user did not come for.
+/// It is renameable like any other document.
+String _importTitle() {
+  final now = DateTime.now();
+  final month = now.month.toString().padLeft(2, '0');
+  final day = now.day.toString().padLeft(2, '0');
+  return 'Imported $day/$month/${now.year}';
 }
 
 class _TitleDialog extends StatefulWidget {

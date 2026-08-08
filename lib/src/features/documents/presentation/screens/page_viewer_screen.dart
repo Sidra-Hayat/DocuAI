@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/router/app_routes.dart';
 import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/document.dart';
@@ -56,7 +58,7 @@ class _PageViewerScreenState extends ConsumerState<PageViewerScreen> {
           elevation: 0,
           title: document.value == null
               ? null
-              : Text('Page ${_current + 1} of ${document.value!.pageCount}'),
+              : Text(document.value!.title, overflow: TextOverflow.ellipsis),
           actions: [
             if (document.value != null && document.value!.hasPages)
               PageEditActions(
@@ -81,6 +83,76 @@ class _PageViewerScreenState extends ConsumerState<PageViewerScreen> {
                   controller: _pages,
                   onPageChanged: (index) => setState(() => _current = index),
                 ),
+        ),
+        bottomNavigationBar: document.value == null || !document.value!.hasPages
+            ? null
+            : _PageNavigator(
+                current: _current.clamp(0, document.value!.pageCount - 1),
+                total: document.value!.pageCount,
+                onGo: _goToPage,
+              ),
+      ),
+    );
+  }
+
+  /// Animated rather than jumped, so the direction of travel is visible — the
+  /// only cue that a tap moved a page rather than replacing the whole view.
+  void _goToPage(int index) {
+    if (!_pages.hasClients) return;
+    _pages.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+}
+
+/// Previous, next, and where you are.
+///
+/// Swiping already works and is what most people will use. These exist because
+/// swiping a page that is zoomed in does not — the gesture pans the image
+/// instead — and because a document of thirty pages needs something that says
+/// how far through it you are.
+class _PageNavigator extends StatelessWidget {
+  const _PageNavigator({
+    required this.current,
+    required this.total,
+    required this.onGo,
+  });
+
+  final int current;
+  final int total;
+  final ValueChanged<int> onGo;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: .55),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              IconButton(
+                tooltip: 'Previous page',
+                onPressed: current > 0 ? () => onGo(current - 1) : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Text(
+                'Page ${current + 1} of $total',
+                style: theme.textTheme.labelLarge,
+              ),
+              IconButton(
+                tooltip: 'Next page',
+                onPressed: current < total - 1 ? () => onGo(current + 1) : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -110,13 +182,102 @@ class _Pages extends ConsumerWidget {
         final page = document.pages[index];
         final relative = page.imagePath;
 
+        // A written page has nothing to zoom into. Pinch and pan exist to
+        // inspect a photograph of small print; text reflows, so the reader's
+        // own font size is the control that means anything for it.
+        if (relative == null) {
+          return _WrittenPage(document: document, page: page);
+        }
+
         return _ZoomablePage(
           page: page,
-          absolutePath: relative == null ? null : paths.absolutePath(relative),
+          absolutePath: paths.absolutePath(relative),
         );
       },
     );
   }
+}
+
+/// A page that was written rather than captured.
+///
+/// Kept inside the viewer's dark surround rather than breaking out to the app
+/// theme: this is one screen showing one document, and a written page that lit
+/// up white between two scans would read as a different screen entirely.
+class _WrittenPage extends StatelessWidget {
+  const _WrittenPage({required this.document, required this.page});
+
+  final Document document;
+  final DocumentPage page;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (!page.hasText) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.edit_note_outlined,
+                size: 48,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This page is blank',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.tonalIcon(
+                onPressed: () => _edit(context),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Write on it'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SelectionArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 88, 24, 24),
+                child: Text(
+                  page.text,
+                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 88),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _edit(context),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit this page'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _edit(BuildContext context) => context.pushNamed(
+    AppRoutes.editPageName,
+    pathParameters: <String, String>{'id': document.id, 'page': page.id},
+  );
 }
 
 class _ZoomablePage extends StatefulWidget {
@@ -124,9 +285,7 @@ class _ZoomablePage extends StatefulWidget {
 
   final DocumentPage page;
 
-  /// Null for a page with no image. Rendering its text belongs to the reader
-  /// rather than to a zoomable image viewer, so this only has to say so.
-  final String? absolutePath;
+  final String absolutePath;
 
   @override
   State<_ZoomablePage> createState() => _ZoomablePageState();
@@ -168,13 +327,6 @@ class _ZoomablePageState extends State<_ZoomablePage> {
   @override
   Widget build(BuildContext context) {
     final path = widget.absolutePath;
-    if (path == null) {
-      return const AppEmptyState(
-        icon: Icons.notes_outlined,
-        title: 'This page has no image',
-        message: 'Open the document text to read it.',
-      );
-    }
 
     return GestureDetector(
       onDoubleTapDown: _toggleZoom,

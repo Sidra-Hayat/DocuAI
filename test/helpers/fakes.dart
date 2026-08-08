@@ -151,6 +151,8 @@ class FakeDocumentRepository implements DocumentRepository {
   FutureResult<Document> createFromImages({
     required String title,
     required List<String> sourceImagePaths,
+    DocumentSource source = DocumentSource.scanned,
+    PageKind pageKind = PageKind.scanned,
   }) async {
     lastCreatedTitle = title;
     lastSourceImagePaths = sourceImagePaths;
@@ -164,8 +166,14 @@ class FakeDocumentRepository implements DocumentRepository {
       updatedAt: kNow,
       pages: <DocumentPage>[
         for (var i = 0; i < sourceImagePaths.length; i++)
-          buildPage(id: 'page-$i', index: i, imagePath: 'documents/new/$i.jpg'),
+          buildPage(
+            id: 'page-$i',
+            index: i,
+            imagePath: 'documents/new/$i.jpg',
+            kind: pageKind,
+          ),
       ],
+      source: source,
     );
     store[document.id] = document;
     _emit();
@@ -277,6 +285,7 @@ class FakeDocumentRepository implements DocumentRepository {
   FutureResult<Document> addPages({
     required String documentId,
     required List<String> sourceImagePaths,
+    PageKind pageKind = PageKind.scanned,
   }) async {
     pageOperations.add('add:$documentId');
     final document = store[documentId];
@@ -291,6 +300,7 @@ class FakeDocumentRepository implements DocumentRepository {
           id: 'added-${document.pages.length + i}',
           index: document.pages.length + i,
           imagePath: 'documents/$documentId/added_$i.jpg',
+          kind: pageKind,
         ),
     ];
     return _store(document.copyWith(pages: pages, pdfPath: null));

@@ -49,6 +49,10 @@ dependencies:
   pdf: ^3.12.0
   share_plus: ^13.3.0
   image: ^4.8.0
+  # Gallery import. On API 33+ this goes through the system Photo Picker and on
+  # 24-32 through ACTION_GET_CONTENT — both are system UIs handing back a URI
+  # grant, so neither needs a storage permission.
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:

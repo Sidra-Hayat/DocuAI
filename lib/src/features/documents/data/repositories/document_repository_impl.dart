@@ -4,6 +4,7 @@ import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../domain/entities/document.dart';
+import '../../domain/entities/document_page.dart';
 import '../../domain/repositories/document_repository.dart';
 import '../datasources/document_local_data_source.dart';
 import '../models/document_model.dart';
@@ -87,10 +88,14 @@ class DocumentRepositoryImpl implements DocumentRepository {
   FutureResult<Document> createFromImages({
     required String title,
     required List<String> sourceImagePaths,
+    DocumentSource source = DocumentSource.scanned,
+    PageKind pageKind = PageKind.scanned,
   }) => _guard(() async {
     final model = await _local.create(
       title: title,
       sourceImagePaths: sourceImagePaths,
+      source: source,
+      pageKind: pageKind,
     );
     return model.toEntity();
   });
@@ -129,8 +134,13 @@ class DocumentRepositoryImpl implements DocumentRepository {
   FutureResult<Document> addPages({
     required String documentId,
     required List<String> sourceImagePaths,
+    PageKind pageKind = PageKind.scanned,
   }) => _guard(() async {
-    final model = await _local.addPages(documentId, sourceImagePaths);
+    final model = await _local.addPages(
+      documentId,
+      sourceImagePaths,
+      pageKind: pageKind,
+    );
     return model.toEntity();
   });
 

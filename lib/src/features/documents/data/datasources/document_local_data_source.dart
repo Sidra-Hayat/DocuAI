@@ -70,6 +70,8 @@ class DocumentLocalDataSource {
   Future<DocumentModel> create({
     required String title,
     required List<String> sourceImagePaths,
+    DocumentSource source = DocumentSource.scanned,
+    PageKind pageKind = PageKind.scanned,
   }) async {
     final id = _uuid.v4();
     final pages = <DocumentPageModel>[];
@@ -88,7 +90,7 @@ class DocumentLocalDataSource {
             index: i,
             text: '',
             ocrStatus: OcrStatus.pending.name,
-            kind: PageKind.scanned.name,
+            kind: pageKind.name,
           ),
         );
       }
@@ -109,7 +111,7 @@ class DocumentLocalDataSource {
       tags: const <String>[],
       pdfPath: null,
       isFavorite: false,
-      source: DocumentSource.scanned.name,
+      source: source.name,
     );
 
     return write(model);
@@ -209,8 +211,9 @@ class DocumentLocalDataSource {
   /// Appends pages, copying each source image into the document's folder.
   Future<DocumentModel> addPages(
     String documentId,
-    List<String> sourceImagePaths,
-  ) async {
+    List<String> sourceImagePaths, {
+    PageKind pageKind = PageKind.scanned,
+  }) async {
     final model = read(documentId);
     final directory = await _paths.documentDir(documentId);
     final added = <DocumentPageModel>[];
@@ -231,7 +234,7 @@ class DocumentLocalDataSource {
             index: model.pages.length + added.length,
             text: '',
             ocrStatus: OcrStatus.pending.name,
-            kind: PageKind.scanned.name,
+            kind: pageKind.name,
           ),
         );
       }

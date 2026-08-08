@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/error/failure.dart';
+import '../../../import/presentation/providers/import_providers.dart';
 import '../../domain/entities/document.dart';
+import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 
 enum PageAction { replace, delete }
@@ -34,7 +36,7 @@ class PageEditActions extends ConsumerWidget {
           context,
           ref,
           documentId: document.id,
-          pageId: page.id,
+          page: page,
         ),
         PageAction.delete => confirmDeletePage(
           context,
@@ -44,14 +46,18 @@ class PageEditActions extends ConsumerWidget {
         ),
       },
       itemBuilder: (context) => <PopupMenuEntry<PageAction>>[
-        const PopupMenuItem(
-          value: PageAction.replace,
-          child: ListTile(
-            leading: Icon(Icons.document_scanner_outlined),
-            title: Text('Rescan this page'),
-            contentPadding: EdgeInsets.zero,
+        // Rescanning swaps the image for a new capture. A written page has no
+        // image to swap, and offering it would mean replacing authored content
+        // with a photograph.
+        if (page.hasImage)
+          const PopupMenuItem(
+            value: PageAction.replace,
+            child: ListTile(
+              leading: Icon(Icons.document_scanner_outlined),
+              title: Text('Rescan this page'),
+              contentPadding: EdgeInsets.zero,
+            ),
           ),
-        ),
         PopupMenuItem(
           value: PageAction.delete,
           // A document with no pages is not a document. Removing the last one
@@ -73,16 +79,48 @@ class PageEditActions extends ConsumerWidget {
 }
 
 /// Re-captures a page in place, keeping its position.
+///
+/// Confirmed only when the page carries a correction. Rescanning always
+/// discards the old image and text, but recognised text can be recognised
+/// again — text a person typed cannot be recovered by any means the app has,
+/// so that is the case worth stopping for. Confirming every rescan would put a
+/// dialog in front of the ordinary fix for a bad capture.
 Future<void> replaceDocumentPage(
   BuildContext context,
   WidgetRef ref, {
   required String documentId,
-  required String pageId,
+  required DocumentPage page,
 }) async {
   final replace = ref.read(replacePageProvider);
   final messenger = ScaffoldMessenger.of(context);
 
-  final result = await replace(documentId: documentId, pageId: pageId);
+  if (page.hasEditedText) {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Replace your corrected text?'),
+        content: Text(
+          'You corrected the text on ${page.displayLabel.toLowerCase()}. '
+          'Rescanning replaces the image and reads it again, so that '
+          'correction is lost.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep it'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Rescan anyway'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+  }
+
+  final result = await replace(documentId: documentId, pageId: page.id);
 
   result.fold(
     onSuccess: (_) => messenger.showSnackBar(
@@ -138,6 +176,61 @@ Future<void> confirmDeletePage(
   final result = await delete(documentId: document.id, pageId: pageId);
   result.fold(
     onSuccess: (_) {},
+    onFailure: (failure) =>
+        messenger.showSnackBar(SnackBar(content: Text(failure.message))),
+  );
+}
+
+/// Adds pages from photos already on the device.
+///
+/// Reads the use case before the picker is awaited, and captures the messenger
+/// with it: the picker is a platform round trip long enough for this widget to
+/// be gone by the time it returns, and reaching for `ref` or `context` then is
+/// exactly how a disposed dependency gets touched.
+Future<void> importPagesIntoDocument(
+  BuildContext context,
+  WidgetRef ref,
+  String documentId,
+) async {
+  final import = ref.read(importImagesIntoDocumentProvider);
+  final messenger = ScaffoldMessenger.of(context);
+
+  final result = await import(documentId);
+
+  result.fold(
+    onSuccess: (imported) => messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          imported.rejected.isEmpty
+              ? 'Pages added. Recognise the text to include them.'
+              : 'Pages added. ${imported.rejected.length} could not be read: '
+                    '${imported.rejected.join(', ')}',
+        ),
+      ),
+    ),
+    onFailure: (failure) {
+      // Dismissing the picker is not a failure worth reporting.
+      if (failure is ImportFailure && failure.cancelled) return;
+      messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+    },
+  );
+}
+
+/// Appends an empty page to write on.
+Future<void> addTextPageToDocument(
+  BuildContext context,
+  WidgetRef ref,
+  String documentId,
+) async {
+  final add = ref.read(addTextPageProvider);
+  final messenger = ScaffoldMessenger.of(context);
+
+  final result = await add(documentId);
+
+  result.fold(
+    onSuccess: (_) => messenger.showSnackBar(
+      const SnackBar(content: Text('A blank page was added at the end.')),
+    ),
     onFailure: (failure) =>
         messenger.showSnackBar(SnackBar(content: Text(failure.message))),
   );

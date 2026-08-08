@@ -1,5 +1,6 @@
 import '../../../../core/error/result.dart';
 import '../entities/document.dart';
+import '../entities/document_page.dart';
 
 /// The library's persistence contract.
 ///
@@ -40,9 +41,16 @@ abstract interface class DocumentRepository {
   /// files do not belong to the app yet. The implementation copies each into
   /// the document's own folder, stores the relative paths, and deletes nothing
   /// on failure so a retry is possible.
+  ///
+  /// [source] and [pageKind] record where the images came from. They change no
+  /// behaviour — an imported JPEG and a scanned one take the same path through
+  /// storage — but the library can say which a document is, and a page can say
+  /// which it is.
   FutureResult<Document> createFromImages({
     required String title,
     required List<String> sourceImagePaths,
+    DocumentSource source = DocumentSource.scanned,
+    PageKind pageKind = PageKind.scanned,
   });
 
   /// Creates a document to be written rather than captured.
@@ -100,6 +108,7 @@ abstract interface class DocumentRepository {
   FutureResult<Document> addPages({
     required String documentId,
     required List<String> sourceImagePaths,
+    PageKind pageKind = PageKind.scanned,
   });
 
   /// Removes one page and its image, renumbering the pages that follow.
