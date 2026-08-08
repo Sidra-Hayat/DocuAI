@@ -1,3 +1,4 @@
+import '../../../../core/text/markup.dart';
 import '../../../documents/domain/entities/document.dart';
 
 /// A candidate answer: one span of text, and exactly where it came from.
@@ -124,9 +125,11 @@ abstract final class PassageExtractor {
   /// Widens a passage to about [citationChars] of surrounding page text, so a
   /// citation reads as a quotation rather than a clipping.
   ///
-  /// Whitespace is collapsed only at the very end, on a string nobody indexes
-  /// into — unlike search snippets, a citation carries no highlight offsets, so
-  /// there is no range to keep in step.
+  /// Whitespace collapsing and marker stripping both happen at the very end, on
+  /// a string nobody indexes into — unlike search snippets, a citation carries
+  /// no highlight offsets, so there is no range to keep in step. The window is
+  /// cut from the *original* text using the passage's own offsets first, which
+  /// is what keeps the citation pointing at the page it actually came from.
   static String citationSnippet(Passage passage) {
     final padding = ((citationChars - passage.text.length) / 2)
         .clamp(0, citationChars)
@@ -135,10 +138,9 @@ abstract final class PassageExtractor {
     final start = (passage.start - padding).clamp(0, passage.pageText.length);
     final end = (passage.end + padding).clamp(0, passage.pageText.length);
 
-    final excerpt = passage.pageText
-        .substring(start, end)
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final excerpt = Markup.toInlineText(
+      passage.pageText.substring(start, end),
+    );
 
     final prefix = start > 0 ? '…' : '';
     final suffix = end < passage.pageText.length ? '…' : '';

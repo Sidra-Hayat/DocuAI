@@ -102,6 +102,24 @@ abstract final class Markup {
     text,
   ).map((block) => block.text).join('\n');
 
+  /// [toPlainText] on one line, for quoting inside a sentence.
+  ///
+  /// What the assistant shows. A quoted answer, a summary line and a citation
+  /// snippet are all single runs of prose in a chat bubble, and a heading's
+  /// hashes or a bullet's dash in the middle of one is the syntax leaking out
+  /// where only the words belong.
+  ///
+  /// **Display only.** Nothing here touches what is stored, what is indexed, or
+  /// the offsets a passage carries — it runs on a string that has already been
+  /// selected, ranked and cited, at the moment before it is drawn. That
+  /// separation is the whole design: strip earlier and every offset behind it
+  /// would shift.
+  static String toInlineText(String text) => parse(text)
+      .map((block) => block.text)
+      .join(' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
   static final RegExp _heading = RegExp(r'^(#{1,3})\s+(.*)$');
   static final RegExp _bullet = RegExp(r'^\s*[-*•]\s+(.*)$');
   static final RegExp _numbered = RegExp(r'^\s*(\d{1,3})[.)]\s+(.*)$');

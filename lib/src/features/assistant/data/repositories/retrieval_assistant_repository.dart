@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/text/markup.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../../documents/domain/repositories/document_repository.dart';
 import '../../../search/domain/repositories/search_repository.dart';
@@ -301,7 +302,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
     final top = best.score;
 
     return AssistantAnswer(
-      text: best.passage.text.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      text: _flatten(best.passage.text),
       kind: AnswerKind.grounded,
       confidence: _confidenceOf(best),
       documentsSearched: documentsSearched,
@@ -676,8 +677,16 @@ class RetrievalAssistantRepository implements AssistantRepository {
     return List<AnswerCitation>.unmodifiable(byPage.values);
   }
 
-  static String _flatten(String text) =>
-      text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  /// The one place a passage becomes something to read.
+  ///
+  /// Every answer this class composes — a quoted reply, a summary line, an
+  /// explained selection — passes through here, and markers are removed at
+  /// this point and nowhere earlier. Retrieval never sees the change: the
+  /// tokeniser already splits on non-alphanumerics, so `**total**` and `total`
+  /// have always been the same term to BM25 and to passage ranking. Stripping
+  /// before extraction would move `Passage.start`/`end` off the text they
+  /// index into and quietly point every citation at the wrong span.
+  static String _flatten(String text) => Markup.toInlineText(text);
 
   @override
   FutureResult<List<String>> suggestedQuestions({String? documentId}) async {

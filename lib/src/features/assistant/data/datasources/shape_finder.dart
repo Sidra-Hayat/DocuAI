@@ -104,11 +104,13 @@ abstract final class ShapeFinder {
     return byPage.values.toList(growable: false);
   }
 
-  /// Collapses the whitespace a scan introduced and drops the sentence
-  /// punctuation a pattern ran into — a phone number is not "+44 7700 900123."
+  /// Collapses the whitespace a scan introduced and drops what a pattern ran
+  /// into at either end — the sentence punctuation ("a phone number is not
+  /// `+44 7700 900123.`") and any emphasis marker the value was wrapped in, so
+  /// `**248.60**` is listed as an amount rather than as decoration.
   static String _tidy(String value) => value
       .replaceAll(RegExp(r'\s+'), ' ')
-      .replaceAll(RegExp(r'^[\s.,;:]+|[\s.,;:]+$'), '');
+      .replaceAll(RegExp(r'^[\s.,;:*_]+|[\s.,;:*_]+$'), '');
 
   /// What counts as the same value.
   ///
