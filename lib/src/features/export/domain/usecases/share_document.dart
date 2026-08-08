@@ -43,3 +43,24 @@ class ShareDocument {
     return _export.shareFile(pdfPath, subject: document.title);
   }
 }
+
+/// Builds the document as a Word file and offers it to the share sheet.
+///
+/// Rebuilt every time rather than cached on the document. Composing a PDF
+/// re-encodes every page image, which is why that one is kept; this is string
+/// building, so a stored path would buy nothing and could only ever be wrong.
+/// It is also the simplest possible answer to "never export stale content".
+class ShareDocumentAsDocx {
+  const ShareDocumentAsDocx(this._export);
+
+  final ExportRepository _export;
+
+  FutureResult<void> call(Document document) async {
+    final built = await _export.buildDocx(document);
+
+    return switch (built) {
+      Failed(:final failure) => Failed(failure),
+      Success(:final value) => _export.shareFile(value, subject: document.title),
+    };
+  }
+}

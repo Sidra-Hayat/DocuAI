@@ -8,6 +8,7 @@ import '../../../../core/error/result.dart';
 import '../../../../core/storage/storage_paths.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../domain/repositories/export_repository.dart';
+import '../datasources/docx_composer.dart';
 import '../datasources/pdf_composer.dart';
 
 /// How the share sheet is opened. Injected so tests do not need a platform.
@@ -22,13 +23,16 @@ class ExportRepositoryImpl implements ExportRepository {
   const ExportRepositoryImpl({
     required StoragePaths paths,
     PdfRenderer renderer = renderPdfInIsolate,
+    DocxWriter docxWriter = writeDocxInIsolate,
     ShareLauncher launcher = _launchSystemShare,
   }) : _paths = paths,
        _render = renderer,
+       _writeDocx = docxWriter,
        _share = launcher;
 
   final StoragePaths _paths;
   final PdfRenderer _render;
+  final DocxWriter _writeDocx;
   final ShareLauncher _share;
 
   @override
@@ -83,6 +87,54 @@ class ExportRepositoryImpl implements ExportRepository {
       return Failed(
         ExportFailure(
           'The PDF could not be created.',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
+  @override
+  FutureResult<String> buildDocx(Document document) async {
+    try {
+      // Every page's text, scanned and written alike. A Word file is wanted
+      // because it can be edited, and recognised text is the part of a scan
+      // that anyone would want to edit.
+      final pages = <DocxPage>[
+        for (final page in document.pages)
+          if (page.hasText) DocxPage(page.text),
+      ];
+
+      // Refused, not written empty. A Word file that opens to a blank page
+      // looks exactly like an export that worked, and the user would only
+      // find out after sending it.
+      if (pages.isEmpty) {
+        return Failed(
+          ExportFailure(
+            document.hasImagePages
+                ? 'There is no text in this document yet. Recognise the text '
+                      'first, or export it as a PDF to send the pages '
+                      'themselves.'
+                : 'There is nothing written in this document yet.',
+          ),
+        );
+      }
+
+      final bytes = await _writeDocx(
+        DocxJob(pages: pages, title: document.title),
+      );
+
+      final directory = await _paths.documentDir(document.id);
+      final file = File(
+        p.join(directory.path, _fileNameFor(document.title, 'docx')),
+      );
+      await file.writeAsBytes(bytes, flush: true);
+
+      return Success(_paths.relativePath(file.path));
+    } catch (error, stackTrace) {
+      return Failed(
+        ExportFailure(
+          'The Word file could not be created.',
           cause: error,
           stackTrace: stackTrace,
         ),
@@ -154,20 +206,20 @@ class ExportRepositoryImpl implements ExportRepository {
 
   /// Names the file after the document, because the title is what the share
   /// sheet and the receiving app display — `document.pdf` tells the recipient
-  /// nothing.
+  /// nothing. The extension decides which export it names.
   ///
   /// Kept to characters that are safe on the filesystems an Android share can
   /// land on, including FAT-formatted SD cards and Windows machines at the
   /// other end of an email.
-  static String _fileNameFor(String title) {
+  static String _fileNameFor(String title, [String extension = 'pdf']) {
     final cleaned = title
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
-    if (cleaned.isEmpty) return 'document.pdf';
+    if (cleaned.isEmpty) return 'document.$extension';
 
     final truncated = cleaned.length > 60 ? cleaned.substring(0, 60) : cleaned;
-    return '${truncated.trim()}.pdf';
+    return '${truncated.trim()}.$extension';
   }
 }

@@ -27,6 +27,10 @@ final shareExtractedTextProvider = Provider<ShareExtractedText>(
   (ref) => ShareExtractedText(ref.watch(exportRepositoryProvider)),
 );
 
+final shareDocumentAsDocxProvider = Provider<ShareDocumentAsDocx>(
+  (ref) => ShareDocumentAsDocx(ref.watch(exportRepositoryProvider)),
+);
+
 final shareDocumentProvider = Provider<ShareDocument>(
   (ref) => ShareDocument(
     export: ref.watch(exportRepositoryProvider),
@@ -96,6 +100,22 @@ class ExportController extends Notifier<ExportState> {
     state = result.fold(
       // Back to idle rather than a "shared" state: the sheet has closed and
       // there is nothing left for the screen to report.
+      onSuccess: (_) => const ExportIdle(),
+      onFailure: (failure) => ExportFailedState(document.id, failure.message),
+    );
+  }
+
+  /// Shares the document's text as a Word file.
+  ///
+  /// No rebuild flag and no cached path: the file is composed on every share,
+  /// so it cannot be stale and there is nothing to retry around.
+  Future<void> shareAsDocx(Document document) async {
+    if (state is ExportRunning) return;
+    state = ExportRunning(document.id);
+
+    final result = await ref.read(shareDocumentAsDocxProvider)(document);
+
+    state = result.fold(
       onSuccess: (_) => const ExportIdle(),
       onFailure: (failure) => ExportFailedState(document.id, failure.message),
     );

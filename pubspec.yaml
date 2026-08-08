@@ -53,6 +53,7 @@ dependencies:
   # 24-32 through ACTION_GET_CONTENT — both are system UIs handing back a URI
   # grant, so neither needs a storage permission.
   image_picker: ^1.2.3
+  archive: ^4.0.9
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +70,7 @@ dev_dependencies:
   riverpod_generator: ^4.0.3
   hive_ce_generator: ^1.11.0
   flutter_launcher_icons: ^0.14.4
+  xml: ^6.6.1
 
 # Launcher icon generation. Run after changing anything in assets/icons/:
 #

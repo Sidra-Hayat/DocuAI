@@ -223,4 +223,61 @@ void main() {
       expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
     });
   });
+
+  group('formatting in a written page', () {
+    Future<String> pdfFor(String source) async {
+      final bytes = await composePdfBytes(
+        PdfJob(pages: <PdfPageJob>[PdfTextPage(source)], title: 'Formatted'),
+      );
+      return String.fromCharCodes(bytes);
+    }
+
+    test('markers are drawn, never printed', () async {
+      // A `# Total` sitting in an exported PDF is worse than no formatting at
+      // all: it shows the reader the syntax instead of the result.
+      final pdf = await pdfFor(
+        '# Invoice\n- **Total** 500.00 EUR\n> as agreed',
+      );
+
+      expect(pdf, isNot(contains('# Invoice')));
+      expect(pdf, isNot(contains('**Total**')));
+      expect(pdf, isNot(contains('- **')));
+    });
+
+    test('a heading, a list and a quote all render', () async {
+      final pdf = await pdfFor('## Summary\n1. first\n- bullet\n> quoted');
+
+      expect(pdf.substring(0, 5), '%PDF-');
+      expect(pdf, isNotEmpty);
+    });
+
+    test('recognised text with no markers still renders', () async {
+      // Every existing scanned document takes this path, and must come out
+      // exactly as it did before formatting existed.
+      final pdf = await pdfFor(
+        'Northwind Utilities\nTotal amount due: 248.60 EUR',
+      );
+
+      expect(pdf.substring(0, 5), '%PDF-');
+    });
+
+    test('a page of only whitespace draws no sheet', () async {
+      final bytes = await composePdfBytes(
+        const PdfJob(
+          pages: <PdfPageJob>[
+            PdfTextPage('   \n  '),
+            PdfTextPage('Real content.'),
+          ],
+          title: 'Mostly empty',
+        ),
+      );
+
+      expect(
+        RegExp(r'/Type\s*/Page[^s]')
+            .allMatches(String.fromCharCodes(bytes))
+            .length,
+        1,
+      );
+    });
+  });
 }

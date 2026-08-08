@@ -16,6 +16,18 @@ abstract interface class ExportRepository {
   /// no way to garbage-collect them.
   FutureResult<String> buildPdf(Document document);
 
+  /// Writes the document's text as a Word file inside the document's folder.
+  ///
+  /// Returns the **relative** path, and stores nothing on the document. A PDF
+  /// is cached on `Document.pdfPath` because composing one re-encodes every
+  /// page image; this is string building, so rebuilding costs nothing and a
+  /// path that could go stale is a liability with no upside.
+  ///
+  /// A document with no text is refused rather than written empty — see
+  /// [ExportFailure]. PDF carries the pages; this carries the text, and a Word
+  /// file with nothing in it looks like the export worked.
+  FutureResult<String> buildDocx(Document document);
+
   /// Opens the Android share sheet for a file already inside the app's storage.
   ///
   /// Takes a relative path for the same reason the rest of the app does. A user

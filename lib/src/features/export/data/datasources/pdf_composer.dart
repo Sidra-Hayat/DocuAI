@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../../core/text/markup.dart';
+
 /// One page to draw.
 ///
 /// A sealed pair rather than two lists, because the order pages are drawn in is
@@ -69,11 +71,11 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
         );
 
       case PdfTextPage(:final text):
-        final paragraphs = _paragraphsOf(text);
+        final blocks = Markup.parse(text);
         // Nothing written on it. A blank sheet in the middle of a document is
         // noise, and the caller has already refused a document with nothing in
         // it at all.
-        if (paragraphs.isEmpty) continue;
+        if (blocks.isEmpty) continue;
 
         document.addPage(
           // MultiPage, not Page: written text has no fixed extent, and a single
@@ -87,11 +89,7 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
               vertical: 64,
             ),
             build: (context) => <pw.Widget>[
-              for (final paragraph in paragraphs)
-                pw.Paragraph(
-                  text: paragraph,
-                  style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
-                ),
+              for (final block in blocks) _blockWidget(block),
             ],
           ),
         );
@@ -101,16 +99,92 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
   return document.save();
 }
 
-/// Splits written text into paragraphs on blank lines.
+/// Sets one parsed line.
 ///
-/// Single newlines are left inside a paragraph, where the layout engine wraps
-/// them as part of the same block. That matches how the text was typed: a blank
-/// line is a deliberate break, a wrapped line is not.
-List<String> _paragraphsOf(String text) => text
-    .split(RegExp(r'\n[ \t]*\n+'))
-    .map((paragraph) => paragraph.trim())
-    .where((paragraph) => paragraph.isNotEmpty)
-    .toList(growable: false);
+/// Headings, lists and quotes are *drawn*, never reproduced as their markers.
+/// A `# Total` sitting in an exported PDF would be worse than no formatting at
+/// all: it shows the reader the syntax instead of the result.
+pw.Widget _blockWidget(MarkupBlock block) {
+  final inline = pw.RichText(
+    text: pw.TextSpan(
+      children: <pw.InlineSpan>[
+        for (final span in block.spans)
+          pw.TextSpan(
+            text: span.text,
+            style: pw.TextStyle(
+              fontWeight: span.bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontStyle: span.italic
+                  ? pw.FontStyle.italic
+                  : pw.FontStyle.normal,
+            ),
+          ),
+      ],
+    ),
+  );
+
+  return switch (block.kind) {
+    MarkupBlockKind.heading1 => _heading(block, 20, 14),
+    MarkupBlockKind.heading2 => _heading(block, 16, 12),
+    MarkupBlockKind.heading3 => _heading(block, 13, 10),
+    MarkupBlockKind.bullet => _listItem('•', inline),
+    MarkupBlockKind.numbered => _listItem('${block.number ?? 1}.', inline),
+    MarkupBlockKind.quote => pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 6, left: 12),
+      padding: const pw.EdgeInsets.only(left: 10),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          left: pw.BorderSide(color: PdfColors.grey500, width: 2),
+        ),
+      ),
+      child: pw.DefaultTextStyle(
+        style: pw.TextStyle(
+          fontSize: 11,
+          lineSpacing: 3,
+          fontStyle: pw.FontStyle.italic,
+          color: PdfColors.grey800,
+        ),
+        child: inline,
+      ),
+    ),
+    MarkupBlockKind.paragraph => pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 6),
+      child: pw.DefaultTextStyle(
+        style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
+        child: inline,
+      ),
+    ),
+  };
+}
+
+/// Headings are set from their plain text: emphasis inside one adds nothing to
+/// a line that is already bold and larger than everything around it.
+pw.Widget _heading(MarkupBlock block, double size, double topGap) =>
+    pw.Container(
+      margin: pw.EdgeInsets.only(top: topGap, bottom: size / 3),
+      child: pw.Text(
+        block.text,
+        style: pw.TextStyle(fontSize: size, fontWeight: pw.FontWeight.bold),
+      ),
+    );
+
+pw.Widget _listItem(String marker, pw.Widget content) => pw.Container(
+  margin: const pw.EdgeInsets.only(bottom: 4, left: 8),
+  child: pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: <pw.Widget>[
+      pw.SizedBox(
+        width: 18,
+        child: pw.Text(marker, style: const pw.TextStyle(fontSize: 11)),
+      ),
+      pw.Expanded(
+        child: pw.DefaultTextStyle(
+          style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
+          child: content,
+        ),
+      ),
+    ],
+  ),
+);
 
 /// How the composer runs a job. Injected so tests can render inline instead of
 /// paying for an isolate spawn per case.

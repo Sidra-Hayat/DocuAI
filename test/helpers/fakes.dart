@@ -456,6 +456,16 @@ class FakeOcrRepository implements OcrRepository {
 }
 
 class FakeExportRepository implements ExportRepository {
+  /// Documents handed to [buildDocx], so a test can assert what was asked for.
+  final List<Document> docxRequests = <Document>[];
+  Result<String> docxResult = const Success('documents/doc-1/doc-1.docx');
+
+  @override
+  FutureResult<String> buildDocx(Document document) async {
+    docxRequests.add(document);
+    return docxResult;
+  }
+
   Result<String> buildResult = const Success('documents/doc-1/doc-1.pdf');
   Failure? shareFailure;
   final List<String> sharedPaths = <String>[];

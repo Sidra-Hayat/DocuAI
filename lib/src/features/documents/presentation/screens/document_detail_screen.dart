@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../assistant/presentation/widgets/summarise_button.dart';
-import '../../../export/presentation/widgets/share_pdf_button.dart';
+import '../../../export/presentation/widgets/export_menu.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
@@ -157,7 +157,7 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    SharePdfButton(document: document),
+                    ExportMenu(document: document),
                     SummariseButton(document: document),
                   ],
                 ),
