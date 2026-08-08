@@ -6,3 +6,4 @@ import 'bootstrap.dart';
 /// trivial and integration tests can boot the app with their own dependency
 /// overrides.
 void main() => bootstrap();
+

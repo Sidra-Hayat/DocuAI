@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../../core/widgets/app_skeleton.dart';
+import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_tile.dart';
@@ -37,10 +39,12 @@ class DocumentsScreen extends ConsumerWidget {
         data: (items) => items.isEmpty
             ? const _EmptyLibrary()
             : _DocumentList(documents: items),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        // Shaped like the list that is coming, so nothing shifts under a
+        // thumb already moving when the data lands.
+        loading: () => const AppListSkeleton(),
         // Storage failing is not something the user can fix, so this states
         // what happened rather than suggesting an action that would not help.
-        error: (error, stackTrace) => const AppEmptyState(
+        error: (error, stackTrace) => const AppStateView.problem(
           icon: Icons.error_outline,
           title: 'Could not open your library',
           message:

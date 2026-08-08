@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/router/app_routes.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../assistant/presentation/widgets/summarise_button.dart';
@@ -273,7 +274,7 @@ class _PageCarousel extends StatelessWidget {
         itemBuilder: (context, index) {
           final page = document.pages[index];
           return InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             // Tapping a page opens it full screen at that page — the first
             // thing anyone does with a thumbnail of dense text.
             onTap: () => context.pushNamed(

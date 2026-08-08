@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../documents/presentation/widgets/document_thumbnail.dart';
 import '../../domain/entities/search_hit.dart';
 
@@ -95,7 +96,7 @@ class _MatchBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
         border: Border.all(color: colour.withValues(alpha: .45)),
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
         hit.kind.label,

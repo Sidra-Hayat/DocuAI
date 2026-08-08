@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import 'app_state_view.dart';
+
 /// Shared empty-state panel.
 ///
-/// Every feature screen shows one of these before it has data, so the app never
-/// presents a blank rectangle. Centralising it also keeps the tone and spacing
-/// of empty states consistent, which is one of the clearest signals of a
-/// finished app.
+/// Now a thin wrapper over [AppStateView], which every screen's empty, busy and
+/// error states share. Kept as its own name because a dozen screens already say
+/// `AppEmptyState` and read perfectly well doing so — replacing the call sites
+/// would be churn for no gain, and the rendering improves for all of them
+/// either way.
+///
+/// Reach for [AppStateView] directly when the state is a wait or a failure
+/// rather than an absence: it carries the tone through to the colour and to
+/// what a screen reader announces.
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     required this.icon,
@@ -23,49 +30,10 @@ class AppEmptyState extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 40,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (message != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                message!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            if (action != null) ...[const SizedBox(height: 24), action!],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppStateView(
+    icon: icon,
+    title: title,
+    message: message,
+    action: action,
+  );
 }

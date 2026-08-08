@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:docuai/src/core/storage/storage_paths.dart';
+import 'package:docuai/src/core/widgets/app_skeleton.dart';
 import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
@@ -122,7 +123,9 @@ void main() {
     expect(find.byIcon(Icons.star), findsOneWidget);
   });
 
-  testWidgets('shows a spinner until the first emission', (tester) async {
+  testWidgets('shows a loading placeholder until the first emission', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -136,7 +139,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // A skeleton shaped like the list, rather than a spinner: the layout does
+    // not shift when the documents arrive.
+    expect(find.byType(AppListSkeleton), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Loading'),
+      findsOneWidget,
+      reason: 'a screen reader has to be told the wait is a wait',
+    );
   });
 
   testWidgets('explains itself when storage cannot be read', (tester) async {
