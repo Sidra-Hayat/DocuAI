@@ -1,3 +1,25 @@
+/// Text with its markers removed, and where every character went.
+class StrippedText {
+  const StrippedText(this.text, this.offsets);
+
+  /// The text as it will be shown.
+  final String text;
+
+  /// `offsets[i]` is where source character `i` now sits in [text]. One longer
+  /// than the source, so an exclusive end index maps too.
+  final List<int> offsets;
+
+  /// Maps a range in the source onto the same range in [text].
+  ///
+  /// Clamped rather than trusted: a caller working from a stale index should
+  /// get an unhighlighted snippet, not a `RangeError` inside a `build`.
+  (int, int) mapRange(int start, int end) {
+    final from = offsets[start.clamp(0, offsets.length - 1)];
+    final to = offsets[end.clamp(0, offsets.length - 1)];
+    return (from, to < from ? from : to);
+  }
+}
+
 /// What a line of a document is.
 enum MarkupBlockKind {
   paragraph,
@@ -102,6 +124,120 @@ abstract final class Markup {
     text,
   ).map((block) => block.text).join('\n');
 
+  /// Stripped text together with a map from where every character *was* to
+  /// where it now is.
+  ///
+  /// The map is what makes a search highlight survive the cleaning. A snippet
+  /// carries `highlightStart`/`highlightLength` into the string it renders, so
+  /// removing characters without moving those offsets would leave the
+  /// highlight sitting over the wrong words — later in the line by exactly the
+  /// number of markers removed before it.
+  ///
+  /// `offsets` has one entry per source character plus one, so an exclusive end
+  /// index maps as cleanly as a start does. Characters that were removed map to
+  /// the position their successor took, which is what makes a match that begins
+  /// or ends inside a marker collapse onto the text rather than beside it.
+  static StrippedText strip(String source) {
+    final offsets = List<int>.filled(source.length + 1, 0);
+    final buffer = StringBuffer();
+
+    var i = 0;
+    var lineStart = true;
+    var lineEnd = _lineEndFrom(source, 0);
+    var bold = false;
+    var italic = false;
+
+    void skip(int count) {
+      for (var k = 0; k < count; k++) {
+        offsets[i + k] = buffer.length;
+      }
+      i += count;
+    }
+
+    void keep(int count) {
+      for (var k = 0; k < count; k++) {
+        offsets[i + k] = buffer.length;
+        buffer.write(source[i + k]);
+      }
+      i += count;
+    }
+
+    while (i < source.length) {
+      if (lineStart) {
+        lineStart = false;
+        final prefix = _prefixLength(source.substring(i, lineEnd));
+        if (prefix > 0) {
+          skip(prefix);
+          continue;
+        }
+      }
+
+      final char = source[i];
+
+      if (char == '\n') {
+        keep(1);
+        lineStart = true;
+        lineEnd = _lineEndFrom(source, i);
+        bold = false;
+        italic = false;
+        continue;
+      }
+
+      // Emphasis is resolved within the line, exactly as [parse] does it — a
+      // marker cannot pair with one on the next line.
+      if (i + 1 < lineEnd && source.startsWith('**', i)) {
+        final partner = source.indexOf('**', i + 2);
+        if (bold || (partner != -1 && partner < lineEnd)) {
+          bold = !bold;
+          skip(2);
+          continue;
+        }
+        // Not a marker, so both characters are literal — and kept together, so
+        // the second cannot then be read as an italic opener.
+        keep(2);
+        continue;
+      }
+
+      if (char == '*' || char == '_') {
+        final partner = source.indexOf(char, i + 1);
+        if (italic || (partner != -1 && partner < lineEnd)) {
+          italic = !italic;
+          skip(1);
+          continue;
+        }
+      }
+
+      keep(1);
+    }
+
+    offsets[source.length] = buffer.length;
+    return StrippedText(buffer.toString(), offsets);
+  }
+
+  static int _lineEndFrom(String source, int index) {
+    final newline = source.indexOf('\n', index);
+    return newline < 0 ? source.length : newline;
+  }
+
+  /// How many characters at the start of [line] are a block marker.
+  ///
+  /// Mirrors the patterns [parse] classifies on, in the same order, so the two
+  /// cannot disagree about what counts as a marker.
+  static int _prefixLength(String line) {
+    for (final pattern in _prefixes) {
+      final match = pattern.firstMatch(line);
+      if (match != null) return match.end;
+    }
+    return 0;
+  }
+
+  static final List<RegExp> _prefixes = <RegExp>[
+    RegExp(r'^#{1,3}\s+'),
+    RegExp(r'^\s*\d{1,3}[.)]\s+'),
+    RegExp(r'^\s*[-*•]\s+'),
+    RegExp(r'^\s*>\s?'),
+  ];
+
   /// [toPlainText] on one line, for quoting inside a sentence.
   ///
   /// What the assistant shows. A quoted answer, a summary line and a citation
@@ -114,11 +250,8 @@ abstract final class Markup {
   /// selected, ranked and cited, at the moment before it is drawn. That
   /// separation is the whole design: strip earlier and every offset behind it
   /// would shift.
-  static String toInlineText(String text) => parse(text)
-      .map((block) => block.text)
-      .join(' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  static String toInlineText(String text) =>
+      strip(text).text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   static final RegExp _heading = RegExp(r'^(#{1,3})\s+(.*)$');
   static final RegExp _bullet = RegExp(r'^\s*[-*•]\s+(.*)$');

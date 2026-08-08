@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/text/markup.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../../documents/domain/repositories/document_repository.dart';
 import '../../domain/entities/search_hit.dart';
@@ -385,9 +386,20 @@ class Bm25SearchRepository implements SearchRepository {
     final start = math.max(0, matchAt - snippetRadius);
     final end = math.min(text.length, matchAt + matchLength + snippetRadius);
 
-    // Newlines become spaces one-for-one, so offsets survive.
-    final core = text
-        .substring(start, end)
+    // Markers come off *before* the highlight is worked out, not after. The
+    // stripper hands back where every character moved to, so the match is
+    // re-located in the string that will actually be drawn. Stripping
+    // afterwards would leave the highlight later in the line by exactly the
+    // number of markers removed ahead of it — over the wrong words, and
+    // silently, since a highlight has no way to look wrong on its own.
+    final stripped = Markup.strip(text.substring(start, end));
+    final (highlightStart, highlightEnd) = stripped.mapRange(
+      matchAt - start,
+      matchAt + matchLength - start,
+    );
+
+    // Newlines become spaces one-for-one, so the offsets just computed survive.
+    final core = stripped.text
         .replaceAll('\n', ' ')
         .replaceAll('\r', ' ')
         .replaceAll('\t', ' ');
@@ -398,8 +410,8 @@ class Bm25SearchRepository implements SearchRepository {
     return SearchSnippet(
       pageIndex: pageIndex,
       text: '$prefix$core$suffix',
-      highlightStart: (matchAt - start) + prefix.length,
-      highlightLength: matchLength,
+      highlightStart: highlightStart + prefix.length,
+      highlightLength: highlightEnd - highlightStart,
     );
   }
 
