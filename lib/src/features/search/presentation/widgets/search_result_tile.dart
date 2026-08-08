@@ -86,6 +86,7 @@ class _MatchBadge extends StatelessWidget {
     final colour = switch (hit.kind) {
       SearchMatchKind.exactTitle ||
       SearchMatchKind.partialTitle => theme.colorScheme.primary,
+      SearchMatchKind.exactPhrase => theme.colorScheme.secondary,
       SearchMatchKind.content => theme.colorScheme.onSurfaceVariant,
       SearchMatchKind.tag => theme.colorScheme.tertiary,
     };

@@ -47,9 +47,10 @@ class Bm25SearchRepository implements SearchRepository {
       final entries = _index.readAll();
       if (entries.isEmpty) return const Success(<SearchHit>[]);
 
-      final scored = _score(query, terms, entries);
-      if (scored.isEmpty) return const Success(<SearchHit>[]);
-
+      // Loaded before scoring, not after. Deciding whether a document contains
+      // the query *as a phrase* needs its actual text, which a forward index of
+      // term counts cannot answer — and the library is read for snippets
+      // anyway, so this costs nothing but a reordering.
       final loaded = await _documents.getDocuments();
       final List<Document> documents;
       switch (loaded) {
@@ -62,6 +63,10 @@ class Bm25SearchRepository implements SearchRepository {
       final byId = <String, Document>{
         for (final document in documents) document.id: document,
       };
+
+      final phrase = phrasePatternFor(query);
+      final scored = _score(query, terms, entries, byId, phrase);
+      if (scored.isEmpty) return const Success(<SearchHit>[]);
 
       // Kind first, then score within the kind. This is what "priority" means:
       // a weak title match still beats a strong content match.
@@ -86,7 +91,7 @@ class Bm25SearchRepository implements SearchRepository {
             matchedTags: match.matchedTags,
             // Passages are worth showing whenever the text contains the query,
             // even for a title match — seeing where else it appears is useful.
-            snippets: _snippetsFor(document, terms),
+            snippets: _snippetsFor(document, terms, phrase),
           ),
         );
         if (hits.length >= maxResults) break;
@@ -130,6 +135,8 @@ class Bm25SearchRepository implements SearchRepository {
     String query,
     List<String> terms,
     List<IndexedDocument> entries,
+    Map<String, Document> byId,
+    RegExp? phrase,
   ) {
     final normalisedQuery = SearchTokenizer.tokenize(query).join(' ');
 
@@ -171,7 +178,27 @@ class Bm25SearchRepository implements SearchRepository {
         continue;
       }
 
-      // Tier 2 — recognised text, ranked by BM25 exactly as before.
+      // Tier 2 — the query appears word-for-word in the text.
+      if (phrase != null) {
+        final body = byId[entry.id]?.extractedText ?? '';
+        final occurrences = phrase.allMatches(body).length;
+
+        if (occurrences > 0) {
+          matches.add(
+            _Match(
+              id: entry.id,
+              kind: SearchMatchKind.exactPhrase,
+              // Density, not a raw count: a receipt saying it once in twenty
+              // words is more about the phrase than a forty-page contract
+              // that mentions it once.
+              score: occurrences / math.max(1, entry.bodyLength),
+            ),
+          );
+          continue;
+        }
+      }
+
+      // Tier 3 — recognised text, ranked by BM25 exactly as before.
       final bodyScore = _bm25(terms, entry, entries.length, averageLength);
       if (bodyScore > 0) {
         matches.add(
@@ -180,7 +207,7 @@ class Bm25SearchRepository implements SearchRepository {
         continue;
       }
 
-      // Tier 3 — a tag, and nothing else.
+      // Tier 4 — a tag, and nothing else.
       final matchedTags = terms.where(entry.tagTerms.contains).toList();
       if (matchedTags.isNotEmpty) {
         matches.add(
@@ -240,6 +267,29 @@ class Bm25SearchRepository implements SearchRepository {
     return score;
   }
 
+  /// The query as a phrase: its words in order, separated by anything that is
+  /// not a word character.
+  ///
+  /// Null for a single word, where "phrase" would mean nothing and every term
+  /// match would be promoted a whole tier.
+  ///
+  /// Matched against the *original* text rather than a normalised copy, so the
+  /// offsets it reports can be used for a highlight directly. That is why the
+  /// separator is a pattern rather than a literal space: a phrase may be split
+  /// by a line break, a comma or the run of spaces a scan leaves between
+  /// columns, and all of those still read as the same phrase. Letters are
+  /// excluded from the separator, so "amount, but due" does not match
+  /// "amount due".
+  static RegExp? phrasePatternFor(String query) {
+    final words = SearchTokenizer.tokenize(query);
+    if (words.length < 2) return null;
+
+    return RegExp(
+      words.map(RegExp.escape).join('[^A-Za-z0-9]+'),
+      caseSensitive: false,
+    );
+  }
+
   /// Builds an index entry for [document].
   ///
   /// Every document is indexed, whether or not its text has been recognised.
@@ -277,14 +327,18 @@ class Bm25SearchRepository implements SearchRepository {
 
   // ---- Snippets ------------------------------------------------------------
 
-  List<SearchSnippet> _snippetsFor(Document document, List<String> terms) {
+  List<SearchSnippet> _snippetsFor(
+    Document document,
+    List<String> terms,
+    RegExp? phrase,
+  ) {
     final snippets = <SearchSnippet>[];
 
     for (final page in document.pages) {
       if (snippets.length >= maxSnippetsPerHit) break;
       if (!page.hasText) continue;
 
-      final snippet = _snippetFor(page.text, page.index, terms);
+      final snippet = _snippetFor(page.text, page.index, terms, phrase);
       if (snippet != null) snippets.add(snippet);
     }
 
@@ -302,16 +356,28 @@ class Bm25SearchRepository implements SearchRepository {
     String text,
     int pageIndex,
     List<String> terms,
+    RegExp? phrase,
   ) {
     final haystack = text.toLowerCase();
 
     var matchAt = -1;
     var matchLength = 0;
-    for (final term in terms) {
-      final index = haystack.indexOf(term);
-      if (index >= 0 && (matchAt < 0 || index < matchAt)) {
-        matchAt = index;
-        matchLength = term.length;
+
+    // The whole phrase, when the page carries it. Highlighting one word of a
+    // phrase the user typed in full shows them less than they asked about, and
+    // the pattern matches against the original string precisely so that the
+    // offsets it returns still line up with it.
+    final phraseMatch = phrase?.firstMatch(text);
+    if (phraseMatch != null) {
+      matchAt = phraseMatch.start;
+      matchLength = phraseMatch.end - phraseMatch.start;
+    } else {
+      for (final term in terms) {
+        final index = haystack.indexOf(term);
+        if (index >= 0 && (matchAt < 0 || index < matchAt)) {
+          matchAt = index;
+          matchLength = term.length;
+        }
       }
     }
     if (matchAt < 0) return null;

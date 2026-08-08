@@ -17,6 +17,14 @@ enum SearchMatchKind {
   /// title.
   partialTitle,
 
+  /// The query appears in the text word-for-word, in order.
+  ///
+  /// Above BM25 because a phrase is a much stronger statement of intent than
+  /// the same words scattered across a page: someone typing "total amount
+  /// due" wants the document that says exactly that, not the one that
+  /// happens to use all three words in different paragraphs.
+  exactPhrase,
+
   /// Matched recognised page text, ranked by BM25.
   content,
 
@@ -29,6 +37,7 @@ enum SearchMatchKind {
   String get label => switch (this) {
     SearchMatchKind.exactTitle => 'Title',
     SearchMatchKind.partialTitle => 'Title',
+    SearchMatchKind.exactPhrase => 'Phrase',
     SearchMatchKind.content => 'Text',
     SearchMatchKind.tag => 'Tag',
   };
