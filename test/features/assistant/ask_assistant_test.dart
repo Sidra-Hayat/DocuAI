@@ -37,7 +37,7 @@ void main() {
       ),
     );
 
-    final result = await ask('  When is the deadline?  ');
+    final result = await ask('  When is the deadline?  ', conversationId: 'c1');
 
     expect(result.valueOrNull?.isGrounded, isTrue);
     expect(repository.askedQuestions, <String>['When is the deadline?']);
@@ -60,7 +60,7 @@ void main() {
       AssistantFailure('The on-device model is not installed.'),
     );
 
-    final result = await ask('Why?');
+    final result = await ask('Why?', conversationId: 'c1');
 
     expect(result.failureOrNull, isA<AssistantFailure>());
     expect(repository.messages, hasLength(2));
@@ -72,7 +72,7 @@ void main() {
   });
 
   test('rejects a blank question without touching the transcript', () async {
-    final result = await ask('   ');
+    final result = await ask('   ', conversationId: 'c1');
 
     expect(result.failureOrNull, isA<ValidationFailure>());
     expect(repository.messages, isEmpty);
@@ -80,14 +80,17 @@ void main() {
   });
 
   test('rejects an over-long question', () async {
-    final result = await ask('x' * (AskAssistant.maxQuestionLength + 1));
+    final result = await ask(
+      'x' * (AskAssistant.maxQuestionLength + 1),
+      conversationId: 'c1',
+    );
 
     expect(result.failureOrNull, isA<ValidationFailure>());
     expect(repository.messages, isEmpty);
   });
 
   test('forwards the document scope for "ask this document"', () async {
-    await ask('What is the total?', documentId: 'doc-7');
+    await ask('What is the total?', conversationId: 'c1', documentId: 'doc-7');
 
     expect(repository.lastScopedDocumentId, 'doc-7');
   });

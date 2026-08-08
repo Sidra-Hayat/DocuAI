@@ -1,6 +1,7 @@
 import '../../../../core/error/result.dart';
 import '../entities/assistant_answer.dart';
 import '../entities/chat_message.dart';
+import '../entities/conversation.dart';
 
 /// The offline question-answering engine and its transcript.
 ///
@@ -20,21 +21,28 @@ abstract interface class AssistantRepository {
   /// reply, and rendering it as an error would be misleading.
   FutureResult<AssistantAnswer> ask(String question, {String? documentId});
 
-  /// The persisted transcript, oldest first, re-emitted as turns are added.
+  /// Every conversation, newest first, re-emitted as turns are added.
   ///
-  /// Scoped to [documentId] when given, and to the library-wide conversation
-  /// otherwise. Asking about one document should not be interleaved with
-  /// questions about the whole library.
-  Stream<List<ChatMessage>> watchHistory({String? documentId});
+  /// Derived from the messages rather than stored separately — see
+  /// [Conversation]. Scoped to [documentId] when given, so a document's screen
+  /// lists only the threads about it.
+  Stream<List<Conversation>> watchConversations({String? documentId});
+
+  /// One conversation's turns, oldest first, re-emitted as they are added.
+  ///
+  /// A conversation that has never been spoken in emits an empty list rather
+  /// than failing: it exists as soon as the user opens it, and on disk only
+  /// once there is something in it.
+  Stream<List<ChatMessage>> watchHistory({required String conversationId});
 
   /// Appends a turn to the transcript.
   FutureResult<void> appendMessage(ChatMessage message);
 
-  /// Empties one conversation. Does not touch documents or the search index.
+  /// Removes one conversation and every turn in it.
   ///
-  /// Clears only the scope named by [documentId], so clearing a document's
-  /// conversation leaves the library-wide one intact and vice versa.
-  FutureResult<void> clearHistory({String? documentId});
+  /// Does not touch documents or the search index — a thread is a record of
+  /// what was asked, not of anything that was scanned.
+  FutureResult<void> deleteConversation(String conversationId);
 
   /// Questions worth asking here, for the empty state.
   ///

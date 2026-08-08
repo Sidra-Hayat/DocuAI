@@ -1,27 +1,37 @@
 import '../../../../core/error/result.dart';
 import '../entities/chat_message.dart';
+import '../entities/conversation.dart';
 import '../repositories/assistant_repository.dart';
 
-/// Streams the assistant transcript, oldest first.
+/// One conversation's turns, oldest first.
 class WatchChatHistory {
   const WatchChatHistory(this._repository);
 
   final AssistantRepository _repository;
 
-  Stream<List<ChatMessage>> call({String? documentId}) =>
-      _repository.watchHistory(documentId: documentId);
+  Stream<List<ChatMessage>> call(String conversationId) =>
+      _repository.watchHistory(conversationId: conversationId);
 }
 
-/// Clears the transcript.
+/// Every conversation, newest first.
 ///
-/// Paired with [WatchChatHistory] in one file because they are the same
-/// concern from two directions, and splitting them would leave two files of
-/// four lines each.
-class ClearChatHistory {
-  const ClearChatHistory(this._repository);
+/// Scoped to one document when [documentId] is given, so a document's own
+/// threads are listed without the library-wide ones among them.
+class WatchConversations {
+  const WatchConversations(this._repository);
 
   final AssistantRepository _repository;
 
-  FutureResult<void> call({String? documentId}) =>
-      _repository.clearHistory(documentId: documentId);
+  Stream<List<Conversation>> call({String? documentId}) =>
+      _repository.watchConversations(documentId: documentId);
+}
+
+/// Removes one conversation and everything said in it.
+class DeleteConversation {
+  const DeleteConversation(this._repository);
+
+  final AssistantRepository _repository;
+
+  FutureResult<void> call(String conversationId) =>
+      _repository.deleteConversation(conversationId);
 }

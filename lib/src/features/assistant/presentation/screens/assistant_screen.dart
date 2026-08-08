@@ -17,11 +17,19 @@ import '../widgets/thinking_indicator.dart';
 /// citation chips that open the document it came from.
 class AssistantScreen extends ConsumerStatefulWidget {
   const AssistantScreen({
+    required this.conversationId,
     this.documentId,
     this.documentTitle,
     this.initialQuestion,
     super.key,
   });
+
+  /// The thread this screen is showing.
+  ///
+  /// Always known before the screen opens, including for a brand-new thread:
+  /// a conversation exists as soon as the user is looking at it, and reaches
+  /// the box only once something has been said in it.
+  final String conversationId;
 
   /// The document this conversation is about, or null for the library-wide
   /// one reached from the Assistant tab.
@@ -77,7 +85,11 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     final rejection = await ref
         .read(assistantControllerProvider.notifier)
-        .ask(question, documentId: widget.documentId);
+        .ask(
+          question,
+          conversationId: widget.conversationId,
+          documentId: widget.documentId,
+        );
 
     // Only a question rejected before it was recorded needs telling; anything
     // else is already in the transcript as a failed turn.
@@ -96,7 +108,11 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final rejection = await ref
         .read(assistantControllerProvider.notifier)
-        .ask(question, documentId: widget.documentId);
+        .ask(
+          question,
+          conversationId: widget.conversationId,
+          documentId: widget.documentId,
+        );
 
     if (rejection != null) {
       messenger.showSnackBar(SnackBar(content: Text(rejection)));
@@ -120,9 +136,9 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear conversation?'),
+        title: const Text('Delete this conversation?'),
         content: const Text(
-          'The questions and answers will be removed. Your documents are not '
+          'The questions and answers are removed. Your documents are not '
           'affected.',
         ),
         actions: [
@@ -132,20 +148,27 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear'),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
 
-    if (confirmed ?? false) {
-      await notifier.clear(documentId: widget.documentId);
-    }
+    if (!(confirmed ?? false) || !mounted) return;
+
+    // Resolved before the delete, not after: the thread this screen shows is
+    // about to stop existing, and reaching through the context afterwards is
+    // how a disposed dependency gets touched.
+    final navigator = Navigator.of(context);
+    await notifier.delete(widget.conversationId);
+    // The thread this screen exists to show is gone, so the screen goes with
+    // it rather than sitting on an empty transcript the user has to leave.
+    if (navigator.canPop()) navigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final scope = widget.documentId;
+    final scope = widget.conversationId;
     final history = ref.watch(chatHistoryProvider(scope));
     final recent = ref.watch(recentQuestionsProvider(scope));
     final assistant = ref.watch(assistantControllerProvider);
@@ -181,9 +204,9 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
             ),
           if ((history.value?.isNotEmpty ?? false) && !busy)
             IconButton(
-              tooltip: 'Clear conversation',
+              tooltip: 'Delete this conversation',
               onPressed: _confirmClear,
-              icon: const Icon(Icons.delete_sweep_outlined),
+              icon: const Icon(Icons.delete_outline),
             ),
         ],
       ),
@@ -197,7 +220,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
                 title: 'The conversation could not be loaded',
               ),
               data: (messages) => messages.isEmpty
-                  ? _Introduction(onAsk: _askNow, scope: scope)
+                  ? _Introduction(onAsk: _askNow, scope: widget.documentId)
                   : _Transcript(
                       messages: messages,
                       controller: _scroll,

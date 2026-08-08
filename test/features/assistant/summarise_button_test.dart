@@ -32,10 +32,10 @@ void main() {
               Scaffold(body: SummariseButton(document: document)),
           routes: <RouteBase>[
             GoRoute(
-              path: 'documents/:id/ask',
-              name: AppRoutes.askDocumentName,
+              path: 'c/:conversation',
+              name: AppRoutes.conversationName,
               builder: (context, state) {
-                askedDocumentId = state.pathParameters['id'];
+                askedDocumentId = state.uri.queryParameters['document'];
                 askedQuery = state.uri.queryParameters;
                 return const Scaffold(body: Text('conversation'));
               },

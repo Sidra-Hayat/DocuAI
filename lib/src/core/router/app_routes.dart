@@ -59,10 +59,10 @@ abstract final class AppRoutes {
   static String editPagePath(String id, String pageId) =>
       '${documentDetailPath(id)}/edit/$pageId';
 
-  /// A conversation about one document, kept separate from the library-wide
-  /// one on the Assistant tab.
-  static const String askDocument = 'ask';
-  static const String askDocumentName = 'askDocument';
+  /// One conversation, nested under the Assistant tab so Back returns to the
+  /// list of threads rather than to wherever it was opened from.
+  static const String conversation = 'c/:conversation';
+  static const String conversationName = 'conversation';
 
-  static String askDocumentPath(String id) => '${documentDetailPath(id)}/ask';
+  static String conversationPath(String id) => '$assistant/c/$id';
 }

@@ -370,7 +370,7 @@ void main() {
         message('bb', ChatRole.assistant, 'first answer'),
       );
 
-      final transcript = await repository.watchHistory().first;
+      final transcript = await repository.watchHistory(conversationId: 'legacy:library').first;
 
       expect(
         transcript.map((entry) => entry.text),
@@ -397,7 +397,7 @@ void main() {
         ),
       );
 
-      final restored = (await repository.watchHistory().first).single;
+      final restored = (await repository.watchHistory(conversationId: 'legacy:library').first).single;
 
       expect(restored.citations.single.documentTitle, 'Rental agreement');
       expect(restored.citations.single.pageLabel, 'Page 3');
@@ -414,7 +414,7 @@ void main() {
         ),
       );
 
-      final restored = (await repository.watchHistory().first).single;
+      final restored = (await repository.watchHistory(conversationId: 'legacy:library').first).single;
 
       expect(restored.hasFailed, isTrue);
       expect(restored.errorMessage, 'The index could not be read.');
@@ -423,9 +423,9 @@ void main() {
     test('clearHistory empties the transcript', () async {
       await repository.appendMessage(message('a', ChatRole.user, 'question'));
 
-      await repository.clearHistory();
+      await repository.deleteConversation('legacy:library');
 
-      expect(await repository.watchHistory().first, isEmpty);
+      expect(await repository.watchHistory(conversationId: 'legacy:library').first, isEmpty);
     });
 
     test('drops the oldest turns past the cap', () async {
@@ -440,7 +440,7 @@ void main() {
         );
       }
 
-      final transcript = await repository.watchHistory().first;
+      final transcript = await repository.watchHistory(conversationId: 'legacy:library').first;
 
       expect(transcript, hasLength(ChatHistoryLocalDataSource.maxMessages));
       expect(
@@ -452,7 +452,7 @@ void main() {
 
     test('re-emits when a turn is appended', () async {
       final emissions = <List<ChatMessage>>[];
-      final subscription = repository.watchHistory().listen(emissions.add);
+      final subscription = repository.watchHistory(conversationId: 'legacy:library').listen(emissions.add);
       await Future<void>.delayed(Duration.zero);
 
       await repository.appendMessage(message('a', ChatRole.user, 'hello'));

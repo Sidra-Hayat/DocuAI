@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../assistant/presentation/widgets/summarise_button.dart';
 import '../../../export/presentation/widgets/export_menu.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -216,10 +217,10 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
               'Answers quoted from these pages only, in their own conversation',
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.pushNamed(
-              AppRoutes.askDocumentName,
-              pathParameters: {'id': document.id},
-              queryParameters: {'title': document.title},
+            onTap: () => openNewConversation(
+              context,
+              documentId: document.id,
+              documentTitle: document.title,
             ),
           ),
           const Divider(),

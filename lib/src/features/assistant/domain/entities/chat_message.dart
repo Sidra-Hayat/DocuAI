@@ -30,6 +30,13 @@ abstract class ChatMessage with _$ChatMessage {
     /// conversation" a filter instead of a fan-out.
     String? documentId,
 
+    /// Which conversation this turn belongs to.
+    ///
+    /// Null on every message written before conversations existed. Those are
+    /// not orphans: [conversation] folds them into one conversation per scope,
+    /// which is exactly what they were.
+    String? conversationId,
+
     /// Populated on assistant turns only, and kept on the message rather than
     /// recomputed, so scrolling back through the transcript shows the sources
     /// that answer was actually built from.
@@ -40,6 +47,18 @@ abstract class ChatMessage with _$ChatMessage {
     /// leaves an unanswered question on screen.
     String? errorMessage,
   }) = _ChatMessage;
+
+  /// The conversation this turn is in, resolving the legacy case.
+  ///
+  /// Everything downstream groups and filters on this rather than on the raw
+  /// field, so a transcript written before conversations existed keeps working
+  /// without a migration pass over the box.
+  String get conversation =>
+      conversationId ?? legacyConversationFor(documentId);
+
+  /// The conversation that pre-conversation messages belong to.
+  static String legacyConversationFor(String? documentId) =>
+      documentId == null ? 'legacy:library' : 'legacy:$documentId';
 
   bool get isFromUser => role == ChatRole.user;
 

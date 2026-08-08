@@ -21,6 +21,7 @@ class ChatMessageModel {
     required this.citations,
     required this.errorMessage,
     required this.documentId,
+    this.conversationId,
   });
 
   factory ChatMessageModel.fromEntity(ChatMessage message) => ChatMessageModel(
@@ -33,6 +34,7 @@ class ChatMessageModel {
         .toList(growable: false),
     errorMessage: message.errorMessage,
     documentId: message.documentId,
+    conversationId: message.conversation,
   );
 
   @HiveField(0)
@@ -59,6 +61,11 @@ class ChatMessageModel {
   @HiveField(6)
   final String? documentId;
 
+  /// Appended field. Null in every record written before conversations
+  /// existed; the entity resolves those to one conversation per scope.
+  @HiveField(7)
+  final String? conversationId;
+
   ChatMessage toEntity() => ChatMessage(
     id: id,
     role: _decodeRole(role),
@@ -69,6 +76,7 @@ class ChatMessageModel {
         .toList(growable: false),
     errorMessage: errorMessage,
     documentId: documentId,
+    conversationId: conversationId,
   );
 
   /// An unrecognised role is read as the assistant's, because the alternative —

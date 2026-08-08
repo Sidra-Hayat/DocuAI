@@ -48,37 +48,50 @@ class ChatHistoryLocalDataSource {
     }
   }
 
-  /// Empties one conversation.
+  /// Removes one conversation.
   ///
-  /// Deletes only the turns in the named scope rather than clearing the box:
-  /// clearing a document's conversation must leave the library-wide one — and
-  /// every other document's — exactly as it was.
-  Future<void> clear({String? documentId}) async {
+  /// Deletes only that thread's turns rather than clearing the box: every other
+  /// conversation must survive, which is the whole reason threads exist.
+  Future<void> deleteConversation(String conversationId) async {
     try {
       await _box.deleteAll(
         readAll()
-            .where((message) => message.documentId == documentId)
+            .where(
+              (message) =>
+                  (message.conversationId ??
+                      _legacyIdFor(message.documentId)) ==
+                  conversationId,
+            )
             .map((message) => message.id),
       );
     } catch (error) {
       throw CacheException(
-        'The conversation could not be cleared.',
+        'The conversation could not be deleted.',
         cause: error,
       );
     }
   }
 
+  /// Mirrors `ChatMessage.legacyConversationFor`, which the data layer cannot
+  /// import. Kept beside the only two places that need it so the two cannot
+  /// drift without a test noticing.
+  static String _legacyIdFor(String? documentId) =>
+      documentId == null ? 'legacy:library' : 'legacy:$documentId';
+
   /// Caps each conversation independently.
   ///
-  /// A single global cap would let a busy document's conversation evict the
-  /// library-wide one, or another document's — the user would watch history
-  /// they never touched disappear.
+  /// A single global cap would let a busy thread evict a quiet one — the user
+  /// would watch history they never touched disappear.
   Future<void> _trim() async {
     if (_box.length <= maxMessages) return;
 
-    final byScope = <String?, List<ChatMessageModel>>{};
+    final byScope = <String, List<ChatMessageModel>>{};
     for (final message in readAll()) {
-      byScope.putIfAbsent(message.documentId, () => <ChatMessageModel>[])
+      byScope
+          .putIfAbsent(
+            message.conversationId ?? _legacyIdFor(message.documentId),
+            () => <ChatMessageModel>[],
+          )
           .add(message);
     }
 

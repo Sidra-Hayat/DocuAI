@@ -36,6 +36,12 @@ enum AnswerKind {
   /// the names.
   extraction,
 
+  /// What a passage contains, and where else its terms appear.
+  ///
+  /// Never a paraphrase — see `QuestionMode.explain`. Everything in it was
+  /// read off a page.
+  explanation,
+
   /// A summary or a listing was asked for without saying what of.
   ///
   /// Distinct from [unclearQuestion]: the request was perfectly clear, it just

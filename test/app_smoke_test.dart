@@ -89,7 +89,8 @@ void main() {
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Assistant'));
     await tester.pumpAndSettle();
-    expect(find.text('Ask about your documents'), findsOneWidget);
+    // The Assistant tab lands on the list of threads, not in one of them.
+    expect(find.text('No conversations yet'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Documents'));
     await tester.pumpAndSettle();

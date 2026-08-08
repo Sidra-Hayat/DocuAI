@@ -28,6 +28,7 @@ class AskAssistant {
 
   FutureResult<AssistantAnswer> call(
     String question, {
+    required String conversationId,
     String? documentId,
   }) async {
     final trimmed = question.trim();
@@ -46,8 +47,9 @@ class AskAssistant {
         role: ChatRole.user,
         text: trimmed,
         createdAt: _now(),
-        // Both turns carry the scope, so the transcript can be filtered back
-        // into the conversation it belongs to.
+        // Both turns carry the thread and the scope, so the transcript can be
+        // filtered back into the conversation it belongs to.
+        conversationId: conversationId,
         documentId: documentId,
       ),
     );
@@ -62,6 +64,7 @@ class AskAssistant {
           text: value.text,
           createdAt: _now(),
           citations: value.citations,
+          conversationId: conversationId,
           documentId: documentId,
         ),
         Failed(:final failure) => ChatMessage(
@@ -70,6 +73,7 @@ class AskAssistant {
           text: '',
           createdAt: _now(),
           errorMessage: failure.message,
+          conversationId: conversationId,
           documentId: documentId,
         ),
       },

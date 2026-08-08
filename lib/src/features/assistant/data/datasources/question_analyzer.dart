@@ -29,6 +29,15 @@ enum QuestionMode {
 
   /// List everything of a given shape — every date, every amount, every name.
   find,
+
+  /// Say what a piece of text contains, and where else its terms appear.
+  ///
+  /// Not a paraphrase. With no language model there is nothing to paraphrase
+  /// *with*, and inventing one would be the single thing this assistant
+  /// promises never to do. What it can honestly offer is what the passage
+  /// holds — its dates, amounts, names and references — and the other places in
+  /// the library those terms turn up.
+  explain,
 }
 
 /// A question, reduced to what retrieval can act on.
@@ -41,6 +50,8 @@ class AnalyzedQuestion {
     required this.intent,
     required this.mode,
     required this.subjectTerms,
+    this.brief = false,
+    this.subject = '',
   });
 
   final String original;
@@ -60,6 +71,12 @@ class AnalyzedQuestion {
   final QuestionIntent intent;
 
   final QuestionMode mode;
+
+  /// True when a summary was asked for in fewer words.
+  final bool brief;
+
+  /// For [QuestionMode.explain], the passage to be explained.
+  final String subject;
 
   /// [terms] with the words that only describe the *request* removed — the
   /// summary verbs, the intent vocabulary, the qualifiers, and the words that
@@ -181,6 +198,17 @@ abstract final class QuestionAnalyzer {
     'summaries', 'overview', 'gist', 'tldr', 'recap', 'synopsis', 'outline',
   };
 
+  /// Asks for the summary to be shorter than the default.
+  static const Set<String> _briefWords = <String>{
+    'brief', 'briefly', 'short', 'shortly', 'quick', 'quickly', 'tldr',
+    'concise', 'concisely', 'one', 'two',
+  };
+
+  /// Opens a request to be told what a passage holds.
+  static const Set<String> _explainWords = <String>{
+    'explain', 'explanation', 'clarify', 'meaning', 'means',
+  };
+
   static const List<String> _summaryPhrases = <String>[
     'key points',
     'main points',
@@ -244,14 +272,18 @@ abstract final class QuestionAnalyzer {
 
     final intent = _intentOf(all);
 
+    final mode = _modeOf(all, normalised, intent);
+
     return AnalyzedQuestion(
       original: question,
       terms: List<String>.unmodifiable(terms),
       synonyms: Set<String>.unmodifiable(SynonymIndex.expand(terms)),
       phrases: phrases,
       intent: intent,
-      mode: _modeOf(all, normalised, intent),
+      mode: mode,
       subjectTerms: List<String>.unmodifiable(_subjectOf(terms)),
+      brief: mode == QuestionMode.summary && all.any(_briefWords.contains),
+      subject: mode == QuestionMode.explain ? _passageOf(question) : '',
     );
   }
 
@@ -291,6 +323,10 @@ abstract final class QuestionAnalyzer {
     String normalised,
     QuestionIntent intent,
   ) {
+    // Checked first: "explain the summary of clause 4" is a request about a
+    // passage, not a request to summarise the document.
+    if (tokens.any(_explainWords.contains)) return QuestionMode.explain;
+
     if (tokens.any(_summaryWords.contains)) return QuestionMode.summary;
     if (_summaryPhrases.any(normalised.contains)) return QuestionMode.summary;
 
@@ -323,6 +359,26 @@ abstract final class QuestionAnalyzer {
     );
 
     return narrowing.isEmpty ? QuestionMode.find : QuestionMode.answer;
+  }
+
+  /// The passage an explain request is about.
+  ///
+  /// Everything after the first colon, when there is one — the shape the
+  /// Explain action produces. Otherwise the whole question minus its opening
+  /// verb, so a typed "explain the standing charge" still has something to
+  /// work with.
+  static String _passageOf(String question) {
+    final colon = question.indexOf(':');
+    if (colon >= 0 && colon + 1 < question.length) {
+      return question.substring(colon + 1).trim();
+    }
+
+    return question
+        .replaceFirst(
+          RegExp(r'^\s*(explain|clarify)\b[:\s]*', caseSensitive: false),
+          '',
+        )
+        .trim();
   }
 
   /// The part of a question that could name a document.

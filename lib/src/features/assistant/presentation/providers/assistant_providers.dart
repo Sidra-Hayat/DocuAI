@@ -9,6 +9,7 @@ import '../../data/datasources/chat_history_local_data_source.dart';
 import '../../data/repositories/retrieval_assistant_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/conversation.dart';
 import '../../domain/repositories/assistant_repository.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../../domain/usecases/suggest_questions.dart';
@@ -35,18 +36,26 @@ final askAssistantProvider = Provider<AskAssistant>(
   ),
 );
 
-final clearChatHistoryProvider = Provider<ClearChatHistory>(
-  (ref) => ClearChatHistory(ref.watch(assistantRepositoryProvider)),
+final deleteConversationProvider = Provider<DeleteConversation>(
+  (ref) => DeleteConversation(ref.watch(assistantRepositoryProvider)),
 );
+
+/// Every conversation, newest first. Keyed by document scope: null lists the
+/// library-wide threads, an id lists that document's own.
+final conversationsProvider =
+    StreamProvider.family<List<Conversation>, String?>(
+      (ref, documentId) => WatchConversations(
+        ref.watch(assistantRepositoryProvider),
+      )(documentId: documentId),
+    );
 
 /// One conversation's transcript, oldest first, re-emitted as turns are added.
 ///
-/// Keyed by document id, with null for the library-wide conversation — the
-/// same key the messages themselves carry.
-final chatHistoryProvider = StreamProvider.family<List<ChatMessage>, String?>(
-  (ref, documentId) => WatchChatHistory(
+/// Keyed by conversation id — the same key the messages themselves carry.
+final chatHistoryProvider = StreamProvider.family<List<ChatMessage>, String>(
+  (ref, conversationId) => WatchChatHistory(
     ref.watch(assistantRepositoryProvider),
-  )(documentId: documentId),
+  )(conversationId),
 );
 
 final suggestQuestionsProvider = Provider<SuggestQuestions>(
@@ -74,12 +83,13 @@ final suggestedQuestionsProvider =
 ///
 /// A projection of the transcript rather than a second stored list — the
 /// history already records what was asked.
-final recentQuestionsProvider = Provider.family<List<String>, String?>((
+final recentQuestionsProvider = Provider.family<List<String>, String>((
   ref,
-  documentId,
+  conversationId,
 ) {
   final history =
-      ref.watch(chatHistoryProvider(documentId)).value ?? const <ChatMessage>[];
+      ref.watch(chatHistoryProvider(conversationId)).value ??
+      const <ChatMessage>[];
 
   return RecentQuestions.from(
     history.where((message) => message.isFromUser).map((message) => message.text),
@@ -98,9 +108,9 @@ class AssistantState {
 
   final bool busy;
 
-  /// The conversation the last run belonged to. Carried for the same reason
+  /// The conversation id the last run belonged to. Carried for the same reason
   /// `OcrState` and `ExportState` carry a document id: a run started in one
-  /// conversation must not paint its result into another.
+  /// thread must not paint its progress or its confidence into another.
   final String? scopeId;
 
   /// Confidence and the searched-document count describe one run, and are
@@ -131,19 +141,24 @@ class AssistantController extends Notifier<AssistantState> {
   /// explains it and the composer has to. Every other failure happens after the
   /// question was recorded, and is appended as a failed assistant turn — so
   /// showing it again would say the same thing twice.
-  Future<String?> ask(String question, {String? documentId}) async {
+  Future<String?> ask(
+    String question, {
+    required String conversationId,
+    String? documentId,
+  }) async {
     if (state.busy) return null;
-    state = AssistantState(busy: true, scopeId: documentId);
+    state = AssistantState(busy: true, scopeId: conversationId);
 
     try {
       final result = await ref.read(askAssistantProvider)(
         question,
+        conversationId: conversationId,
         documentId: documentId,
       );
 
       return switch (result) {
         Success(:final value) => () {
-          state = AssistantState(lastAnswer: value, scopeId: documentId);
+          state = AssistantState(lastAnswer: value, scopeId: conversationId);
           return null;
         }(),
         Failed(failure: ValidationFailure(:final message)) => message,
@@ -154,8 +169,8 @@ class AssistantController extends Notifier<AssistantState> {
     }
   }
 
-  Future<void> clear({String? documentId}) async {
-    await ref.read(clearChatHistoryProvider)(documentId: documentId);
+  Future<void> delete(String conversationId) async {
+    await ref.read(deleteConversationProvider)(conversationId);
     state = const AssistantState();
   }
 }

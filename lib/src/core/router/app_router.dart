@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
+import '../../features/assistant/presentation/screens/conversations_screen.dart';
 import '../../features/documents/presentation/screens/document_detail_screen.dart';
 import '../../features/documents/presentation/screens/documents_screen.dart';
 import '../../features/documents/presentation/screens/extracted_text_screen.dart';
@@ -96,20 +97,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                           pageId: state.pathParameters['page']!,
                         ),
                       ),
-                      GoRoute(
-                        path: AppRoutes.askDocument,
-                        name: AppRoutes.askDocumentName,
-                        builder: (context, state) => AssistantScreen(
-                          documentId: state.pathParameters['id']!,
-                          // Passed rather than looked up so the bar has a
-                          // title on the first frame instead of flashing a
-                          // placeholder while a stream resolves.
-                          documentTitle: state.uri.queryParameters['title'],
-                          // Set by the Summarise button, which is this route
-                          // arriving with the question already typed.
-                          initialQuestion: state.uri.queryParameters['ask'],
-                        ),
-                      ),
                     ],
                   ),
                 ],
@@ -134,7 +121,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.assistant,
                 name: AppRoutes.assistantName,
-                builder: (context, state) => const AssistantScreen(),
+                builder: (context, state) => const ConversationsScreen(),
+                routes: [
+                  GoRoute(
+                    path: AppRoutes.conversation,
+                    name: AppRoutes.conversationName,
+                    builder: (context, state) => AssistantScreen(
+                      conversationId: state.pathParameters['conversation']!,
+                      documentId: state.uri.queryParameters['document'],
+                      // Passed rather than looked up so the bar has a title on
+                      // the first frame instead of flashing a placeholder
+                      // while a stream resolves.
+                      documentTitle: state.uri.queryParameters['title'],
+                      // Set by Summarise and Explain, which are this route
+                      // arriving with the question already typed.
+                      initialQuestion: state.uri.queryParameters['ask'],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

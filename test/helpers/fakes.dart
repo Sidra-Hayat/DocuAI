@@ -4,6 +4,7 @@ import 'package:docuai/src/core/error/failure.dart';
 import 'package:docuai/src/core/error/result.dart';
 import 'package:docuai/src/features/assistant/domain/entities/assistant_answer.dart';
 import 'package:docuai/src/features/assistant/domain/entities/chat_message.dart';
+import 'package:docuai/src/features/assistant/domain/entities/conversation.dart';
 import 'package:docuai/src/features/assistant/domain/repositories/assistant_repository.dart';
 import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
@@ -518,9 +519,25 @@ class FakeAssistantRepository implements AssistantRepository {
   }
 
   @override
-  Stream<List<ChatMessage>> watchHistory({String? documentId}) => Stream.value(
-    messages.where((message) => message.documentId == documentId).toList(),
-  );
+  Stream<List<ChatMessage>> watchHistory({required String conversationId}) =>
+      Stream.value(
+        messages
+            .where((message) => message.conversation == conversationId)
+            .toList(),
+      );
+
+  @override
+  Stream<List<Conversation>> watchConversations({String? documentId}) =>
+      Stream.value(
+        Conversation.from(
+          messages
+              .where(
+                (message) =>
+                    documentId == null || message.documentId == documentId,
+              )
+              .toList(),
+        ),
+      );
 
   @override
   FutureResult<void> appendMessage(ChatMessage message) async {
@@ -529,11 +546,14 @@ class FakeAssistantRepository implements AssistantRepository {
   }
 
   @override
-  FutureResult<void> clearHistory({String? documentId}) async {
+  FutureResult<void> deleteConversation(String conversationId) async {
     historyCleared = true;
-    messages.removeWhere((message) => message.documentId == documentId);
+    deletedConversations.add(conversationId);
+    messages.removeWhere((message) => message.conversation == conversationId);
     return const Success<void>(null);
   }
+
+  final List<String> deletedConversations = <String>[];
 
   List<String> suggestions = <String>[];
 

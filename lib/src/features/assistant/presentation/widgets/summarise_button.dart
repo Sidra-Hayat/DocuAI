@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../../../core/router/app_routes.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../domain/usecases/suggest_questions.dart';
+import '../screens/conversations_screen.dart';
 
 /// Summarises the document, offline, from its own recognised text.
 ///
@@ -26,13 +24,14 @@ class SummariseButton extends StatelessWidget {
       // assistant explains the wait better than a dead button does.
       onPressed: !document.hasPages
           ? null
-          : () => context.pushNamed(
-              AppRoutes.askDocumentName,
-              pathParameters: <String, String>{'id': document.id},
-              queryParameters: <String, String>{
-                'title': document.title,
-                'ask': DocumentQuestions.summarise,
-              },
+          // A fresh thread every time. A summary asked today has nothing to do
+          // with one asked last month, and appending them to the same
+          // transcript is how a conversation becomes a log nobody reads.
+          : () => openNewConversation(
+              context,
+              documentId: document.id,
+              documentTitle: document.title,
+              ask: DocumentQuestions.summarise,
             ),
       icon: const Icon(Icons.subject_outlined),
       label: const Text('Summarise'),

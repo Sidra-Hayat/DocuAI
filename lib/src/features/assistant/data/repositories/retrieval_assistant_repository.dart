@@ -9,6 +9,7 @@ import '../../../documents/domain/repositories/document_repository.dart';
 import '../../../search/domain/repositories/search_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/conversation.dart';
 import '../../domain/repositories/assistant_repository.dart';
 import '../../domain/usecases/suggest_questions.dart';
 import '../datasources/chat_history_local_data_source.dart';
@@ -89,6 +90,13 @@ class RetrievalAssistantRepository implements AssistantRepository {
       'for me to read. Recognition runs when a document is opened — give it a '
       'moment and ask again.';
 
+  /// Sentences in a summary that was asked for briefly.
+  static const int briefSummarySentences = 2;
+
+  static const String nothingToExplainMessage =
+      'Select some text and choose Explain, or paste the part you want me to '
+      'look at.';
+
   static const String tooLittleTextMessage =
       'There is not enough recognised text in this document to summarise. It '
       'may have scanned poorly — try rescanning the page.';
@@ -107,6 +115,13 @@ class RetrievalAssistantRepository implements AssistantRepository {
             kind: AnswerKind.unclearQuestion,
           ),
         );
+      }
+
+      // Explaining reads a passage the user already has in front of them, so
+      // it needs no target document — only the library, to say where else the
+      // same terms appear.
+      if (analyzed.mode == QuestionMode.explain) {
+        return _explain(analyzed, documentId);
       }
 
       // Summarising and listing work on one document at a time, and neither
@@ -323,6 +338,131 @@ class RetrievalAssistantRepository implements AssistantRepository {
     return AnswerConfidence.weak;
   }
 
+  /// Says what a passage holds, and where else its terms appear.
+  ///
+  /// Not a paraphrase, and deliberately so: with no language model there is
+  /// nothing to paraphrase with, and producing one would be the single thing
+  /// this assistant promises never to do. What it can say honestly is what is
+  /// *in* the passage — the dates, amounts, names and references it carries —
+  /// and which other pages use the same words. Both are read off documents the
+  /// user already has.
+  FutureResult<AssistantAnswer> _explain(
+    AnalyzedQuestion question,
+    String? documentId,
+  ) async {
+    final passage = question.subject.trim();
+    if (passage.isEmpty) {
+      return const Success(
+        AssistantAnswer(
+          text: nothingToExplainMessage,
+          kind: AnswerKind.unclearQuestion,
+        ),
+      );
+    }
+
+    final lines = <String>['This passage says:', '“${_flatten(passage)}”'];
+
+    // What it contains, by shape. These are facts about the characters on the
+    // page rather than an interpretation of them.
+    final found = <String>[];
+    for (final intent in const <QuestionIntent>[
+      QuestionIntent.date,
+      QuestionIntent.amount,
+      QuestionIntent.identifier,
+      QuestionIntent.contact,
+      QuestionIntent.person,
+    ]) {
+      final values = PassageSignals.matches(intent, passage);
+      if (values.isEmpty) continue;
+
+      final label = ShapeFinder.labelFor(intent, plural: values.length != 1);
+      found.add('• $label: ${values.take(6).join(', ')}');
+    }
+
+    if (found.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('It contains:')
+        ..addAll(found);
+    }
+
+    // Where else the same words appear. The passage is used as a query, which
+    // is the same retrieval every question goes through.
+    final related = await _relatedTo(question, passage, documentId);
+    if (related.isNotEmpty) {
+      lines
+        ..add('')
+        ..add(
+          related.length == 1
+              ? 'One other place mentions the same terms:'
+              : '${related.length} other places mention the same terms:',
+        )
+        ..addAll(
+          related.map(
+            (candidate) =>
+                '• ${candidate.passage.documentTitle}, '
+                'page ${candidate.passage.pageIndex + 1}',
+          ),
+        );
+    }
+
+    return Success(
+      AssistantAnswer(
+        text: lines.join('\n'),
+        kind: AnswerKind.explanation,
+        documentsSearched: related.isEmpty ? 0 : related.length,
+        citations: _citationsByPage(<_Cited>[
+          for (final candidate in related)
+            (
+              passage: candidate.passage,
+              relevance: candidate.coverage,
+              terms: candidate.matchedTerms,
+            ),
+        ]),
+      ),
+    );
+  }
+
+  /// Passages elsewhere that use the same words as [passage].
+  Future<List<RankedPassage>> _relatedTo(
+    AnalyzedQuestion question,
+    String passage,
+    String? documentId,
+  ) async {
+    final asQuery = QuestionAnalyzer.analyze(passage);
+    if (asQuery.isEmpty) return const <RankedPassage>[];
+
+    final candidates = await _candidates(asQuery, documentId);
+    if (candidates case Success(:final value)) {
+      final passages = <Passage>[
+        for (final document in value.documents)
+          ...PassageExtractor.extract(document),
+      ];
+
+      final ranked = PassageRanker.rank(
+        question: asQuery,
+        passages: passages,
+        documentPriors: value.priors,
+      );
+
+      // The selection ranks first against itself, which tells the user nothing
+      // they are not already looking at. Excluded by equality, not by
+      // containment: a *longer* sentence that quotes the same words is the
+      // most useful result there is, and dropping those left nothing at all.
+      final flattened = _flatten(passage).toLowerCase();
+      return _select(
+        ranked
+            .where(
+              (candidate) =>
+                  _flatten(candidate.passage.text).toLowerCase() != flattened,
+            )
+            .toList(growable: false),
+      );
+    }
+
+    return const <RankedPassage>[];
+  }
+
   // ---- Whole-document modes ------------------------------------------------
 
   /// Summarising and listing, which both read one document end to end.
@@ -374,7 +514,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
     // above, before a document is ever resolved.
     return Success(
       question.mode == QuestionMode.summary
-          ? _composeSummary(document, passages)
+          ? _composeSummary(document, passages, brief: question.brief)
           : _composeFindings(question.intent, document, passages),
     );
   }
@@ -413,11 +553,17 @@ class RetrievalAssistantRepository implements AssistantRepository {
   /// The document's own sentences, chosen to stand for the whole of it.
   static AssistantAnswer _composeSummary(
     Document document,
-    List<Passage> passages,
-  ) {
+    List<Passage> passages, {
+    bool brief = false,
+  }) {
     final sentences = PassageSummarizer.summarize(
       passages,
-      characterBudget: contextCharacterBudget,
+      // A brief summary is two sentences, not five. Asked for "briefly", a
+      // wall of text is the wrong answer however well chosen its sentences.
+      maxSentences: brief ? briefSummarySentences : PassageSummarizer.maxSentences,
+      characterBudget: brief
+          ? contextCharacterBudget ~/ 2
+          : contextCharacterBudget,
     );
 
     if (sentences.isEmpty) {
@@ -611,13 +757,42 @@ class RetrievalAssistantRepository implements AssistantRepository {
   // ---- Transcript ----------------------------------------------------------
 
   @override
-  Stream<List<ChatMessage>> watchHistory({String? documentId}) {
-    final controller = StreamController<List<ChatMessage>>();
+  Stream<List<Conversation>> watchConversations({String? documentId}) =>
+      _watch(() {
+        final all = _history
+            .readAll()
+            .map((model) => model.toEntity())
+            .where(
+              (message) =>
+                  documentId == null || message.documentId == documentId,
+            )
+            .toList(growable: false);
+
+        return Conversation.from(all);
+      });
+
+  @override
+  Stream<List<ChatMessage>> watchHistory({required String conversationId}) =>
+      _watch(
+        () => _history
+            .readAll()
+            .map((model) => model.toEntity())
+            .where((message) => message.conversation == conversationId)
+            .toList(growable: false),
+      );
+
+  /// Re-reads [read] on every change to the box.
+  ///
+  /// Subscribes before the first read, for the reason the document library
+  /// does: a generator that yields a snapshot and then subscribes misses
+  /// anything written in between, and Hive's broadcast feed buffers nothing.
+  Stream<T> _watch<T>(T Function() read) {
+    final controller = StreamController<T>();
     StreamSubscription<void>? changes;
 
     void emit() {
       try {
-        controller.add(_readHistory(documentId));
+        controller.add(read());
       } on CacheException catch (error, stackTrace) {
         controller.addError(
           StorageFailure(error.message, cause: error),
@@ -627,12 +802,6 @@ class RetrievalAssistantRepository implements AssistantRepository {
     }
 
     controller.onListen = () {
-      // Subscribe before the first read, for the same reason the document
-      // library does: an `async*` generator that yields a snapshot and then
-      // `yield*`s the feed subscribes only after the first yield is
-      // delivered, and Hive's broadcast feed buffers nothing — a turn written
-      // in that window is dropped, leaving a transcript that is already wrong
-      // with no event left to correct it.
       changes = _history.watch().listen(
         (_) => emit(),
         onError: controller.addError,
@@ -669,9 +838,9 @@ class RetrievalAssistantRepository implements AssistantRepository {
   }
 
   @override
-  FutureResult<void> clearHistory({String? documentId}) async {
+  FutureResult<void> deleteConversation(String conversationId) async {
     try {
-      await _history.clear(documentId: documentId);
+      await _history.deleteConversation(conversationId);
       return const Success<void>(null);
     } on CacheException catch (error, stackTrace) {
       return Failed(
@@ -680,13 +849,5 @@ class RetrievalAssistantRepository implements AssistantRepository {
     }
   }
 
-  /// The turns belonging to one conversation.
-  ///
-  /// Filtered here rather than in the data source because "which conversation"
-  /// is a domain idea; the store only knows it is holding messages.
-  List<ChatMessage> _readHistory(String? documentId) => _history
-      .readAll()
-      .where((model) => model.documentId == documentId)
-      .map((model) => model.toEntity())
-      .toList(growable: false);
+
 }

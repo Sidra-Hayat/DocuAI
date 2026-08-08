@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../export/presentation/providers/export_controller.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
 import '../../domain/entities/document.dart';
@@ -221,7 +222,8 @@ class _Body extends ConsumerWidget {
         Expanded(
           // Selection spans the whole document even though the list builds
           // lazily, which a per-paragraph SelectableText could not do.
-          child: SelectionArea(
+          child: _ExplainableSelection(
+            document: document,
             child: ListView.builder(
               controller: scroll,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 48),
@@ -340,6 +342,61 @@ class _EmptyPageNote extends StatelessWidget {
         color: theme.colorScheme.onSurfaceVariant,
         fontStyle: FontStyle.italic,
       ),
+    );
+  }
+}
+
+/// Wraps the reader's text so a selection can be explained.
+///
+/// Stateful only to remember what is currently selected. `SelectionArea` hands
+/// the text to `onSelectionChanged` and takes it away again when the toolbar
+/// closes, so it has to be caught while it exists — reading it back off the
+/// clipboard would work, and would also overwrite whatever the user had
+/// copied.
+class _ExplainableSelection extends StatefulWidget {
+  const _ExplainableSelection({required this.document, required this.child});
+
+  final Document document;
+  final Widget child;
+
+  @override
+  State<_ExplainableSelection> createState() => _ExplainableSelectionState();
+}
+
+class _ExplainableSelectionState extends State<_ExplainableSelection> {
+  String _selected = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectionArea(
+      onSelectionChanged: (content) =>
+          _selected = content?.plainText.trim() ?? '',
+      // Explain belongs on the selection itself: the reader is where someone
+      // meets a passage they do not follow, and sending them to another screen
+      // to paste it in would be asking them to find it twice.
+      contextMenuBuilder: (context, state) =>
+          AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: state.contextMenuAnchors,
+            buttonItems: <ContextMenuButtonItem>[
+              ...state.contextMenuButtonItems,
+              ContextMenuButtonItem(
+                label: 'Explain',
+                onPressed: () {
+                  final selected = _selected;
+                  state.hideToolbar();
+                  if (selected.isEmpty) return;
+
+                  openNewConversation(
+                    context,
+                    documentId: widget.document.id,
+                    documentTitle: widget.document.title,
+                    ask: 'Explain: $selected',
+                  );
+                },
+              ),
+            ],
+          ),
+      child: widget.child,
     );
   }
 }
