@@ -87,6 +87,7 @@ class DocumentLocalDataSource {
             index: i,
             text: '',
             ocrStatus: OcrStatus.pending.name,
+            kind: PageKind.scanned.name,
           ),
         );
       }
@@ -146,6 +147,7 @@ class DocumentLocalDataSource {
             index: model.pages.length + added.length,
             text: '',
             ocrStatus: OcrStatus.pending.name,
+            kind: PageKind.scanned.name,
           ),
         );
       }
@@ -240,6 +242,9 @@ class DocumentLocalDataSource {
       // The old text described the old image, so it goes with it.
       text: '',
       ocrStatus: OcrStatus.pending.name,
+      // The page keeps its provenance. Which kind a replacement *should* carry
+      // is the caller's to say, and no caller can say it yet.
+      kind: existing.kind,
     );
 
     final saved = await write(
@@ -272,6 +277,10 @@ class DocumentLocalDataSource {
               index: i,
               text: pages[i].text,
               ocrStatus: pages[i].ocrStatus,
+              // Carried explicitly. This rebuild runs on every add, delete and
+              // reorder, so dropping the field here would quietly turn every
+              // page in an edited document back into a scan.
+              kind: pages[i].kind,
             ),
         ],
         tags: model.tags,
@@ -281,7 +290,13 @@ class DocumentLocalDataSource {
         isFavorite: model.isFavorite,
       );
 
-  Future<void> _deleteImage(String relativePath) async {
+  /// Removes a page's image if it has one.
+  ///
+  /// Accepts null so callers do not have to ask first: a page with no image and
+  /// a page whose image is already gone want the same thing done about it.
+  Future<void> _deleteImage(String? relativePath) async {
+    if (relativePath == null) return;
+
     try {
       final file = File(_paths.absolutePath(relativePath));
       if (file.existsSync()) await file.delete();

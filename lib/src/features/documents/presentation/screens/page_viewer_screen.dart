@@ -106,10 +106,15 @@ class _Pages extends ConsumerWidget {
       controller: controller,
       onPageChanged: onPageChanged,
       itemCount: document.pageCount,
-      itemBuilder: (context, index) => _ZoomablePage(
-        page: document.pages[index],
-        absolutePath: paths.absolutePath(document.pages[index].imagePath),
-      ),
+      itemBuilder: (context, index) {
+        final page = document.pages[index];
+        final relative = page.imagePath;
+
+        return _ZoomablePage(
+          page: page,
+          absolutePath: relative == null ? null : paths.absolutePath(relative),
+        );
+      },
     );
   }
 }
@@ -118,7 +123,10 @@ class _ZoomablePage extends StatefulWidget {
   const _ZoomablePage({required this.page, required this.absolutePath});
 
   final DocumentPage page;
-  final String absolutePath;
+
+  /// Null for a page with no image. Rendering its text belongs to the reader
+  /// rather than to a zoomable image viewer, so this only has to say so.
+  final String? absolutePath;
 
   @override
   State<_ZoomablePage> createState() => _ZoomablePageState();
@@ -159,6 +167,15 @@ class _ZoomablePageState extends State<_ZoomablePage> {
 
   @override
   Widget build(BuildContext context) {
+    final path = widget.absolutePath;
+    if (path == null) {
+      return const AppEmptyState(
+        icon: Icons.notes_outlined,
+        title: 'This page has no image',
+        message: 'Open the document text to read it.',
+      );
+    }
+
     return GestureDetector(
       onDoubleTapDown: _toggleZoom,
       // The handler lives on onDoubleTap so the details from onDoubleTapDown
@@ -173,7 +190,7 @@ class _ZoomablePageState extends State<_ZoomablePage> {
         boundaryMargin: const EdgeInsets.all(48),
         child: Center(
           child: Image.file(
-            File(widget.absolutePath),
+            File(path),
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) => const AppEmptyState(
               icon: Icons.broken_image_outlined,

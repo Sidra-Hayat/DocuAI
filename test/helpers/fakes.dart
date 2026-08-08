@@ -38,6 +38,7 @@ Document buildDocument({
   List<String> tags = const <String>[],
   String? pdfPath,
   bool isFavorite = false,
+  DocumentSource source = DocumentSource.scanned,
 }) => Document(
   id: id,
   title: title,
@@ -47,20 +48,41 @@ Document buildDocument({
   tags: tags,
   pdfPath: pdfPath,
   isFavorite: isFavorite,
+  source: source,
 );
 
 DocumentPage buildPage({
   String id = 'page-1',
-  String imagePath = 'documents/doc-1/page_000.jpg',
+  String? imagePath = 'documents/doc-1/page_000.jpg',
   int index = 0,
   String text = '',
   OcrStatus ocrStatus = OcrStatus.pending,
+  PageKind kind = PageKind.scanned,
 }) => DocumentPage(
   id: id,
   imagePath: imagePath,
   index: index,
   text: text,
   ocrStatus: ocrStatus,
+  kind: kind,
+);
+
+/// A page with no image: content written rather than captured.
+///
+/// Born [OcrStatus.completed] because there is nothing to recognise. A text
+/// page left pending would keep its document pending too, and the detail screen
+/// starts a recognition run on every document that reports as much.
+DocumentPage buildTextPage({
+  String id = 'text-1',
+  int index = 0,
+  String text = 'Typed by hand.',
+}) => DocumentPage(
+  id: id,
+  imagePath: null,
+  index: index,
+  text: text,
+  ocrStatus: OcrStatus.completed,
+  kind: PageKind.text,
 );
 
 class FakeDocumentRepository implements DocumentRepository {

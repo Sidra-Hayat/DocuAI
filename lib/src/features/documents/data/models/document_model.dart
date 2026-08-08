@@ -23,6 +23,7 @@ class DocumentModel {
     required this.tags,
     required this.pdfPath,
     required this.isFavorite,
+    this.source,
   });
 
   factory DocumentModel.fromEntity(Document document) => DocumentModel(
@@ -34,6 +35,7 @@ class DocumentModel {
     tags: List<String>.of(document.tags),
     pdfPath: document.pdfPath,
     isFavorite: document.isFavorite,
+    source: document.source.name,
   );
 
   @HiveField(0)
@@ -61,6 +63,11 @@ class DocumentModel {
   @HiveField(7)
   final bool isFavorite;
 
+  /// Appended field. Null in every record written before origins were tracked,
+  /// and every one of those was scanned.
+  @HiveField(8)
+  final String? source;
+
   Document toEntity() => Document(
     id: id,
     title: title,
@@ -75,5 +82,15 @@ class DocumentModel {
     tags: List<String>.unmodifiable(tags),
     pdfPath: pdfPath,
     isFavorite: isFavorite,
+    source: _decodeSource(source),
   );
+
+  /// Stored by name, like every other enum here. An index is a position in a
+  /// list: inserting a case would silently reinterpret every stored value,
+  /// whereas a name only breaks on a rename, which is a visible edit.
+  static DocumentSource _decodeSource(String? raw) =>
+      DocumentSource.values.firstWhere(
+        (source) => source.name == raw,
+        orElse: () => DocumentSource.scanned,
+      );
 }

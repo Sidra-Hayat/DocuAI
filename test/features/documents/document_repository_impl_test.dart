@@ -86,7 +86,12 @@ void main() {
       expect(document.pageCount, 3);
       for (final page in document.pages) {
         expect(
-          File(paths.absolutePath(page.imagePath)).existsSync(),
+          page.imagePath,
+          isNotNull,
+          reason: 'a scanned page is backed by a file',
+        );
+        expect(
+          File(paths.absolutePath(page.imagePath!)).existsSync(),
           isTrue,
           reason: '${page.imagePath} should have been copied in',
         );
@@ -97,7 +102,7 @@ void main() {
       final document = await create();
 
       for (final page in document.pages) {
-        expect(p.isRelative(page.imagePath), isTrue);
+        expect(p.isRelative(page.imagePath!), isTrue);
         expect(page.imagePath, isNot(contains(tempDir.path)));
       }
     });
@@ -123,7 +128,7 @@ void main() {
         <int>[0, 1, 2],
       );
       expect(
-        document.pages.map((page) => p.basename(page.imagePath)),
+        document.pages.map((page) => p.basename(page.imagePath!)),
         <String>['page_000.jpg', 'page_001.jpg', 'page_002.jpg'],
       );
     });
@@ -233,7 +238,7 @@ void main() {
   group('deleteDocument', () {
     test('removes the record and the page files', () async {
       final document = await create(pages: 2);
-      final pagePath = paths.absolutePath(document.pages.first.imagePath);
+      final pagePath = paths.absolutePath(document.pages.first.imagePath!);
       expect(File(pagePath).existsSync(), isTrue);
 
       final result = await repository.deleteDocument(document.id);
@@ -262,7 +267,7 @@ void main() {
       final remaining = (await repository.getDocuments()).valueOrNull!;
       expect(remaining.map((document) => document.id), <String>[keep.id]);
       expect(
-        File(paths.absolutePath(keep.pages.first.imagePath)).existsSync(),
+        File(paths.absolutePath(keep.pages.first.imagePath!)).existsSync(),
         isTrue,
       );
     });

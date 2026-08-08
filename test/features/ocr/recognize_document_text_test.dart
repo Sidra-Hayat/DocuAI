@@ -214,4 +214,67 @@ void main() {
     expect(result.failureOrNull, isA<StorageFailure>());
     expect(ocr.requestedPaths, isEmpty);
   });
+
+  group('pages with no image', () {
+    test('a forced re-run never reaches one', () async {
+      // The highest-consequence guard in the page-kind change. `force` exists
+      // to re-read pages that already succeeded, and a text page's content was
+      // written by the user, not read off a scan. Handing it to recognition
+      // would replace it with the output of a run that has no file to read —
+      // silent, unrecoverable data loss.
+      documents.seed(
+        buildDocument(
+          pages: <DocumentPage>[
+            buildPage(id: 'a', index: 0, imagePath: 'p/0.jpg'),
+            buildTextPage(id: 't', index: 1, text: 'Written by hand.'),
+          ],
+        ),
+      );
+      ocr.defaultResult = const Success('recognised text');
+
+      final saved = (await recognize('doc-1', force: true)).valueOrNull!;
+
+      expect(ocr.requestedPaths, <String>['p/0.jpg']);
+      expect(saved.pages.last.text, 'Written by hand.');
+      expect(saved.pages.last.ocrStatus, OcrStatus.completed);
+      expect(saved.pages.last.kind, PageKind.text);
+    });
+
+    test('an ordinary run does not count one as outstanding work', () async {
+      documents.seed(
+        buildDocument(pages: <DocumentPage>[buildTextPage(text: 'Only text.')]),
+      );
+
+      var reportedTotal = -1;
+      final saved = (await recognize(
+        'doc-1',
+        onProgress: (done, total) => reportedTotal = total,
+      )).valueOrNull!;
+
+      expect(ocr.requestedPaths, isEmpty);
+      expect(reportedTotal, 0);
+      expect(saved.pages.single.text, 'Only text.');
+    });
+
+    test('a mixed document reads only the pages that have an image', () async {
+      documents.seed(
+        buildDocument(
+          pages: <DocumentPage>[
+            buildTextPage(id: 't', index: 0, text: 'Heading I typed.'),
+            buildPage(id: 's', index: 1, imagePath: 'p/1.jpg'),
+          ],
+        ),
+      );
+      ocr.results['p/1.jpg'] = const Success('scanned body');
+
+      final saved = (await recognize('doc-1')).valueOrNull!;
+
+      expect(ocr.requestedPaths, <String>['p/1.jpg']);
+      expect(saved.pages.map((page) => page.text), <String>[
+        'Heading I typed.',
+        'scanned body',
+      ]);
+      expect(saved.ocrStatus, OcrStatus.completed);
+    });
+  });
 }

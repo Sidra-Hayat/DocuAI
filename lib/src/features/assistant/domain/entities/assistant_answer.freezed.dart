@@ -308,8 +308,11 @@ as double,
 /// @nodoc
 mixin _$AssistantAnswer {
 
- String get text; List<AnswerCitation> get citations; AnswerSource get source; AnswerKind get kind;/// Null unless [kind] is [AnswerKind.grounded] — there is nothing to be
-/// confident about when nothing was found.
+ String get text; List<AnswerCitation> get citations; AnswerSource get source; AnswerKind get kind;/// Set only when a question was answered — [AnswerKind.grounded], or
+/// [AnswerKind.extraction] where the shape found stands in for coverage.
+///
+/// Null everywhere else. Nothing was found to be confident about, and a
+/// summary answers no question, so there is no coverage to report.
  AnswerConfidence? get confidence;/// How many documents were read to produce this. Shown so an answer drawn
 /// from one document out of forty does not look like the whole library
 /// agreed with it.
@@ -523,8 +526,11 @@ class _AssistantAnswer extends AssistantAnswer {
 
 @override@JsonKey() final  AnswerSource source;
 @override@JsonKey() final  AnswerKind kind;
-/// Null unless [kind] is [AnswerKind.grounded] — there is nothing to be
-/// confident about when nothing was found.
+/// Set only when a question was answered — [AnswerKind.grounded], or
+/// [AnswerKind.extraction] where the shape found stands in for coverage.
+///
+/// Null everywhere else. Nothing was found to be confident about, and a
+/// summary answers no question, so there is no coverage to report.
 @override final  AnswerConfidence? confidence;
 /// How many documents were read to produce this. Shown so an answer drawn
 /// from one document out of forty does not look like the whole library

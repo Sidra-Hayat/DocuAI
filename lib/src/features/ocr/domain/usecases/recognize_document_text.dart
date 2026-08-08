@@ -54,7 +54,13 @@ class RecognizeDocumentText {
         document = value;
     }
 
-    final targets = force ? document.pages : document.pagesAwaitingOcr;
+    // `force` re-runs pages that already succeeded, but it must never reach a
+    // page with no image. There is nothing to recognise there, and the text on
+    // such a page was written by the user — replacing it with the output of a
+    // run that has no file to read would be silent data loss.
+    final targets = force
+        ? document.pages.where((page) => page.hasImage).toList(growable: false)
+        : document.pagesAwaitingOcr;
     if (targets.isEmpty) {
       onProgress?.call(0, 0);
       return Success(document);
@@ -68,7 +74,10 @@ class RecognizeDocumentText {
       final page = updatedPages[i];
       if (!targetIds.contains(page.id)) continue;
 
-      final recognised = await _ocr.recognizeText(page.imagePath);
+      final imagePath = page.imagePath;
+      if (imagePath == null) continue;
+
+      final recognised = await _ocr.recognizeText(imagePath);
       updatedPages[i] = switch (recognised) {
         Success(:final value) => page.copyWith(
           text: value,

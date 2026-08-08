@@ -78,7 +78,8 @@ void main() {
   }
 
   bool imageExists(DocumentPage page) =>
-      File(paths.absolutePath(page.imagePath)).existsSync();
+      page.imagePath != null &&
+      File(paths.absolutePath(page.imagePath!)).existsSync();
 
   group('addPages', () {
     test('appends pages after the existing ones', () async {
@@ -366,6 +367,123 @@ void main() {
 
       expect(documents.pageOperations, contains('delete:doc-1'));
       expect(search.indexedIds, contains('doc-1'));
+    });
+  });
+
+  group('page kinds survive editing', () {
+    /// A document holding one of each kind, written through the repository so
+    /// the models on disk are the ones the app would have written.
+    Future<Document> mixed() async {
+      final scanned = await create(pages: 1);
+
+      return (await repository.saveDocument(
+        scanned.copyWith(
+          pages: <DocumentPage>[
+            scanned.pages.single,
+            DocumentPage(
+              id: 'shot',
+              imagePath: 'documents/${scanned.id}/shot.jpg',
+              index: 1,
+              kind: PageKind.imported,
+            ),
+            const DocumentPage(
+              id: 'note',
+              index: 2,
+              text: 'Ask about the deposit.',
+              ocrStatus: OcrStatus.completed,
+              kind: PageKind.text,
+            ),
+          ],
+        ),
+      )).valueOrNull!;
+    }
+
+    test('a reorder does not turn every page back into a scan', () async {
+      // Reorder, delete and add all rebuild the page list to renumber it. That
+      // rebuild copies field by field, so a kind left out of it would be
+      // silently reset on the next edit — and a text page would then be
+      // offered to OCR, which is how typed content gets overwritten.
+      final document = await mixed();
+
+      final reordered = (await repository.reorderPages(
+        documentId: document.id,
+        orderedPageIds: <String>['note', 'shot', document.pages.first.id],
+      )).valueOrNull!;
+
+      expect(reordered.pages.map((page) => page.id), <String>[
+        'note',
+        'shot',
+        document.pages.first.id,
+      ]);
+      expect(reordered.pages.map((page) => page.kind), <PageKind>[
+        PageKind.text,
+        PageKind.imported,
+        PageKind.scanned,
+      ]);
+      expect(reordered.pages.first.imagePath, isNull);
+      expect(reordered.pages.first.text, 'Ask about the deposit.');
+    });
+
+    test('a delete leaves the surviving kinds alone', () async {
+      final document = await mixed();
+
+      final remaining = (await repository.deletePage(
+        documentId: document.id,
+        pageId: 'shot',
+      )).valueOrNull!;
+
+      expect(remaining.pages.map((page) => page.kind), <PageKind>[
+        PageKind.scanned,
+        PageKind.text,
+      ]);
+      expect(remaining.pages.last.text, 'Ask about the deposit.');
+    });
+
+    test('deleting a page with no image does not fail on the missing file', () async {
+      final document = await mixed();
+
+      final result = await repository.deletePage(
+        documentId: document.id,
+        pageId: 'note',
+      );
+
+      expect(result, isA<Success<Document>>());
+      expect(
+        result.valueOrNull!.pages.map((page) => page.kind),
+        <PageKind>[PageKind.scanned, PageKind.imported],
+      );
+    });
+
+    test('adding a scan does not disturb the pages already there', () async {
+      final document = await mixed();
+
+      final grown = (await repository.addPages(
+        documentId: document.id,
+        sourceImagePaths: await captures(1),
+      )).valueOrNull!;
+
+      expect(grown.pages.map((page) => page.kind), <PageKind>[
+        PageKind.scanned,
+        PageKind.imported,
+        PageKind.text,
+        PageKind.scanned,
+      ]);
+      expect(grown.pages[2].text, 'Ask about the deposit.');
+      expect(grown.pages[2].imagePath, isNull);
+    });
+
+    test('a replacement keeps the page it replaced', () async {
+      final document = await mixed();
+
+      final replaced = (await repository.replacePage(
+        documentId: document.id,
+        pageId: 'shot',
+        sourceImagePath: (await captures(1)).single,
+      )).valueOrNull!;
+
+      final page = replaced.pages.firstWhere((page) => page.id == 'shot');
+      expect(page.kind, PageKind.imported);
+      expect(page.ocrStatus, OcrStatus.pending);
     });
   });
 }

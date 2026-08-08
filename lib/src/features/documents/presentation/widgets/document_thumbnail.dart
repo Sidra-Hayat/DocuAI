@@ -40,18 +40,18 @@ class DocumentThumbnail extends ConsumerWidget {
       child: SizedBox(
         width: width,
         height: height,
-        child: coverPage == null
-            ? _Fallback(theme: theme)
-            : Image.file(
-                File(
-                  ref
-                      .watch(storagePathsProvider)
-                      .absolutePath(coverPage.imagePath),
-                ),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _Fallback(theme: theme),
-              ),
+        // One branch covers both "no page" and "a page with no image": neither
+        // has anything to draw, and both already have a fallback that reads as
+        // a document rather than as a broken image.
+        child: switch (coverPage?.imagePath) {
+          null => _Fallback(theme: theme),
+          final relative => Image.file(
+            File(ref.watch(storagePathsProvider).absolutePath(relative)),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _Fallback(theme: theme),
+          ),
+        },
       ),
     );
   }

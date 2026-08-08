@@ -18,17 +18,18 @@ class DocumentPageModelAdapter extends TypeAdapter<DocumentPageModel> {
     };
     return DocumentPageModel(
       id: fields[0] as String,
-      imagePath: fields[1] as String,
+      imagePath: fields[1] as String?,
       index: (fields[2] as num).toInt(),
       text: fields[3] as String,
       ocrStatus: fields[4] as String,
+      kind: fields[5] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, DocumentPageModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class DocumentPageModelAdapter extends TypeAdapter<DocumentPageModel> {
       ..writeByte(3)
       ..write(obj.text)
       ..writeByte(4)
-      ..write(obj.ocrStatus);
+      ..write(obj.ocrStatus)
+      ..writeByte(5)
+      ..write(obj.kind);
   }
 
   @override

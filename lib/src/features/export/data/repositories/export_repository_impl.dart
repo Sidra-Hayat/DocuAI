@@ -36,7 +36,13 @@ class ExportRepositoryImpl implements ExportRepository {
     try {
       final imagePaths = <String>[];
       for (final page in document.pages) {
-        final absolute = _paths.absolutePath(page.imagePath);
+        // Pages with no image are skipped rather than failed. Drawing them is
+        // the composer's job and it cannot do it yet, so until then a mixed
+        // document exports the pages that can be drawn.
+        final relative = page.imagePath;
+        if (relative == null) continue;
+
+        final absolute = _paths.absolutePath(relative);
         // Checked up front so a document with a missing page fails in
         // milliseconds instead of after rendering everything before it.
         if (!File(absolute).existsSync()) {
@@ -48,6 +54,16 @@ class ExportRepositoryImpl implements ExportRepository {
           );
         }
         imagePaths.add(absolute);
+      }
+
+      // A PDF with no pages is not a document. Refusing says what happened;
+      // writing an empty file would only be discovered after it was shared.
+      if (imagePaths.isEmpty) {
+        return const Failed(
+          ExportFailure(
+            'This document has no scanned pages to export as a PDF yet.',
+          ),
+        );
       }
 
       final bytes = await _render(

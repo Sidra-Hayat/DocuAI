@@ -23,6 +23,7 @@ class DocumentPageModel {
     required this.index,
     required this.text,
     required this.ocrStatus,
+    this.kind,
   });
 
   factory DocumentPageModel.fromEntity(DocumentPage page) => DocumentPageModel(
@@ -31,6 +32,7 @@ class DocumentPageModel {
     index: page.index,
     text: page.text,
     ocrStatus: page.ocrStatus.name,
+    kind: page.kind.name,
   );
 
   @HiveField(0)
@@ -38,8 +40,12 @@ class DocumentPageModel {
 
   /// Relative to the app documents directory. Never absolute — see
   /// `StoragePaths`.
+  ///
+  /// Null for a page with no image. Widened from a non-null `String`, which is
+  /// safe in this direction only: every record written before text pages
+  /// existed holds a string here and still reads.
   @HiveField(1)
-  final String imagePath;
+  final String? imagePath;
 
   @HiveField(2)
   final int index;
@@ -50,12 +56,18 @@ class DocumentPageModel {
   @HiveField(4)
   final String ocrStatus;
 
+  /// Appended field. Null in every record written before page kinds existed,
+  /// which is exactly the set of records that are scans — hence the fallback.
+  @HiveField(5)
+  final String? kind;
+
   DocumentPage toEntity() => DocumentPage(
     id: id,
     imagePath: imagePath,
     index: index,
     text: text,
     ocrStatus: _decodeStatus(ocrStatus),
+    kind: _decodeKind(kind),
   );
 
   /// Defensive: an unknown status means the record was written by a different
@@ -64,5 +76,14 @@ class DocumentPageModel {
   static OcrStatus _decodeStatus(String raw) => OcrStatus.values.firstWhere(
     (status) => status.name == raw,
     orElse: () => OcrStatus.pending,
+  );
+
+  /// Absent means a record from before this field existed, and every one of
+  /// those is a scan. An unrecognised value means a record from a *later*
+  /// version; falling back keeps the library openable after a downgrade
+  /// instead of throwing on the page that introduced the new kind.
+  static PageKind _decodeKind(String? raw) => PageKind.values.firstWhere(
+    (kind) => kind.name == raw,
+    orElse: () => PageKind.scanned,
   );
 }

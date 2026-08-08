@@ -41,7 +41,10 @@ void main() {
   /// Writes the page files a document claims to have.
   Future<Document> seedDocumentFiles(Document document) async {
     for (final page in document.pages) {
-      final file = File(paths.absolutePath(page.imagePath));
+      final relative = page.imagePath;
+      if (relative == null) continue;
+
+      final file = File(paths.absolutePath(relative));
       await file.parent.create(recursive: true);
       await file.writeAsBytes(<int>[0xFF, 0xD8, 0xFF, 0xD9]);
     }
