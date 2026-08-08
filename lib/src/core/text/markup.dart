@@ -1,3 +1,37 @@
+/// One run of characters that share a classification.
+///
+/// Tokens tile their source exactly — no gaps, no overlaps — which is what lets
+/// an editor turn them into text spans without the caret drifting from what is
+/// drawn.
+class MarkupToken {
+  const MarkupToken({
+    required this.start,
+    required this.end,
+    required this.isMarker,
+    required this.bold,
+    required this.italic,
+    required this.block,
+  });
+
+  /// Range in the source, end exclusive.
+  final int start;
+  final int end;
+
+  /// True for syntax rather than content: `**`, a leading `# `, a bullet's
+  /// dash. Removed for display, dimmed in an editor.
+  final bool isMarker;
+
+  /// Emphasis in force across this run. A closing marker carries the emphasis
+  /// of the run it closes, so it reads as part of that run.
+  final bool bold;
+  final bool italic;
+
+  /// The kind of line this run sits on.
+  final MarkupBlockKind block;
+
+  int get length => end - start;
+}
+
 /// Text with its markers removed, and where every character went.
 class StrippedText {
   const StrippedText(this.text, this.offsets);
@@ -141,33 +175,64 @@ abstract final class Markup {
     final offsets = List<int>.filled(source.length + 1, 0);
     final buffer = StringBuffer();
 
+    for (final token in tokenize(source)) {
+      for (var i = token.start; i < token.end; i++) {
+        offsets[i] = buffer.length;
+        if (!token.isMarker) buffer.write(source[i]);
+      }
+    }
+
+    offsets[source.length] = buffer.length;
+    return StrippedText(buffer.toString(), offsets);
+  }
+
+  /// Every character of [source], classified, in order and without gaps.
+  ///
+  /// The primitive the rest of this file is built on. [strip] keeps the text
+  /// tokens and maps the markers onto their neighbours; an editor renders the
+  /// text tokens styled and the markers dimmed. One scanner rather than one per
+  /// consumer, because three traversals that each decide what a marker is would
+  /// eventually disagree — and the disagreement would show up as a highlight in
+  /// the wrong place or a caret out of step, neither of which looks like a
+  /// parsing bug.
+  ///
+  /// Tokens tile the input exactly: the first starts at 0, each begins where
+  /// the last ended, and the last ends at `source.length`. An editor depends on
+  /// that, since spans whose lengths do not sum to the text length desynchronise
+  /// the caret from what is drawn.
+  static List<MarkupToken> tokenize(String source) {
+    final tokens = <MarkupToken>[];
+
     var i = 0;
     var lineStart = true;
     var lineEnd = _lineEndFrom(source, 0);
+    var block = MarkupBlockKind.paragraph;
     var bold = false;
     var italic = false;
 
-    void skip(int count) {
-      for (var k = 0; k < count; k++) {
-        offsets[i + k] = buffer.length;
-      }
-      i += count;
-    }
-
-    void keep(int count) {
-      for (var k = 0; k < count; k++) {
-        offsets[i + k] = buffer.length;
-        buffer.write(source[i + k]);
-      }
-      i += count;
+    void emit(int length, {required bool isMarker}) {
+      tokens.add(
+        MarkupToken(
+          start: i,
+          end: i + length,
+          isMarker: isMarker,
+          bold: bold,
+          italic: italic,
+          block: block,
+        ),
+      );
+      i += length;
     }
 
     while (i < source.length) {
       if (lineStart) {
         lineStart = false;
-        final prefix = _prefixLength(source.substring(i, lineEnd));
+        final line = source.substring(i, lineEnd);
+        block = _blockKindOf(line);
+
+        final prefix = _prefixLength(line);
         if (prefix > 0) {
-          skip(prefix);
+          emit(prefix, isMarker: true);
           continue;
         }
       }
@@ -175,26 +240,41 @@ abstract final class Markup {
       final char = source[i];
 
       if (char == '\n') {
-        keep(1);
-        lineStart = true;
-        lineEnd = _lineEndFrom(source, i);
+        // Emphasis and block kind both reset: a marker cannot pair across a
+        // line break, which is the rule [parse] follows by working line by
+        // line.
         bold = false;
         italic = false;
+        block = MarkupBlockKind.paragraph;
+        emit(1, isMarker: false);
+        lineStart = true;
+        lineEnd = _lineEndFrom(source, i);
         continue;
       }
 
-      // Emphasis is resolved within the line, exactly as [parse] does it — a
-      // marker cannot pair with one on the next line.
       if (i + 1 < lineEnd && source.startsWith('**', i)) {
         final partner = source.indexOf('**', i + 2);
         if (bold || (partner != -1 && partner < lineEnd)) {
           bold = !bold;
-          skip(2);
+          // Emitted *after* the flip so the closing marker carries the same
+          // styling as the run it closes, which is what makes it read as part
+          // of that run rather than of the text after it.
+          tokens.add(
+            MarkupToken(
+              start: i,
+              end: i + 2,
+              isMarker: true,
+              bold: !bold,
+              italic: italic,
+              block: block,
+            ),
+          );
+          i += 2;
           continue;
         }
-        // Not a marker, so both characters are literal — and kept together, so
-        // the second cannot then be read as an italic opener.
-        keep(2);
+        // Not a marker, so both characters are literal — kept together so the
+        // second cannot then be read as an italic opener.
+        emit(2, isMarker: false);
         continue;
       }
 
@@ -202,16 +282,77 @@ abstract final class Markup {
         final partner = source.indexOf(char, i + 1);
         if (italic || (partner != -1 && partner < lineEnd)) {
           italic = !italic;
-          skip(1);
+          tokens.add(
+            MarkupToken(
+              start: i,
+              end: i + 1,
+              isMarker: true,
+              bold: bold,
+              italic: !italic,
+              block: block,
+            ),
+          );
+          i += 1;
           continue;
         }
       }
 
-      keep(1);
+      emit(1, isMarker: false);
     }
 
-    offsets[source.length] = buffer.length;
-    return StrippedText(buffer.toString(), offsets);
+    return _merged(tokens);
+  }
+
+  /// Joins neighbouring runs that are classified the same.
+  ///
+  /// The scanner works a character at a time, so without this a paragraph
+  /// becomes one token per letter — and an editor one `TextSpan` per letter,
+  /// which is a great deal of work for a page of text and makes the tokens
+  /// awkward to reason about. Merging preserves the tiling, since two adjacent
+  /// ranges become one range covering both.
+  static List<MarkupToken> _merged(List<MarkupToken> tokens) {
+    final merged = <MarkupToken>[];
+
+    for (final token in tokens) {
+      final previous = merged.isEmpty ? null : merged.last;
+
+      if (previous != null &&
+          previous.end == token.start &&
+          previous.isMarker == token.isMarker &&
+          previous.bold == token.bold &&
+          previous.italic == token.italic &&
+          previous.block == token.block) {
+        merged[merged.length - 1] = MarkupToken(
+          start: previous.start,
+          end: token.end,
+          isMarker: token.isMarker,
+          bold: token.bold,
+          italic: token.italic,
+          block: token.block,
+        );
+        continue;
+      }
+
+      merged.add(token);
+    }
+
+    return List<MarkupToken>.unmodifiable(merged);
+  }
+
+  /// Which block a line is, without parsing its contents.
+  static MarkupBlockKind _blockKindOf(String line) {
+    final heading = _heading.firstMatch(line);
+    if (heading != null) {
+      return switch (heading.group(1)!.length) {
+        1 => MarkupBlockKind.heading1,
+        2 => MarkupBlockKind.heading2,
+        _ => MarkupBlockKind.heading3,
+      };
+    }
+    if (_numbered.hasMatch(line)) return MarkupBlockKind.numbered;
+    if (_bullet.hasMatch(line)) return MarkupBlockKind.bullet;
+    if (_quote.hasMatch(line)) return MarkupBlockKind.quote;
+    return MarkupBlockKind.paragraph;
   }
 
   static int _lineEndFrom(String source, int index) {

@@ -6,6 +6,8 @@ import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
+import '../widgets/markup_editing_controller.dart';
+import '../widgets/markup_toolbar.dart';
 
 /// Writes one page of a document.
 ///
@@ -27,7 +29,7 @@ class TextEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
-  final TextEditingController _editor = TextEditingController();
+  final MarkupEditingController _editor = MarkupEditingController();
   final FocusNode _focus = FocusNode();
 
   /// Set once the page's stored text has been put into the field.
@@ -222,6 +224,10 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
                   ),
                 ),
               ),
+              // Below the field and above the keyboard, which is where a
+              // formatting bar is reached from without covering what is being
+              // formatted.
+              MarkupToolbar(controller: _editor),
             ],
           ),
         ),
