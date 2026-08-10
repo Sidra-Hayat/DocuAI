@@ -13,6 +13,26 @@ class DocumentTopic {
   final int pageIndex;
 }
 
+/// What a document says it covers, and where that came from.
+///
+/// The source matters to the wording. Headings list well inline — "covers
+/// Project setup, UI design and Permissions" — because that is what a heading
+/// is. Sentences do not, and have to be shown as what they are.
+class DocumentOutline {
+  const DocumentOutline({required this.topics, required this.fromHeadings});
+
+  const DocumentOutline.empty()
+    : topics = const <DocumentTopic>[],
+      fromHeadings = false;
+
+  final List<DocumentTopic> topics;
+
+  /// True when the document divided itself up and this is that division.
+  final bool fromHeadings;
+
+  bool get isEmpty => topics.isEmpty;
+}
+
 /// What a document is about, in the document's own words.
 ///
 /// This is what makes "Explain this document" answerable without a language
@@ -35,11 +55,16 @@ abstract final class DocumentTopics {
   static const int maxTopicChars = 90;
 
   /// The document's own account of itself, best source first.
-  static List<DocumentTopic> of(Document document) {
+  static DocumentOutline of(Document document) {
     final headings = _headings(document);
-    if (headings.isNotEmpty) return headings;
+    if (headings.isNotEmpty) {
+      return DocumentOutline(topics: headings, fromHeadings: true);
+    }
 
-    return _leadingSentences(document);
+    return DocumentOutline(
+      topics: _leadingSentences(document),
+      fromHeadings: false,
+    );
   }
 
   /// Headings, in page then document order.

@@ -412,15 +412,32 @@ abstract final class QuestionAnalyzer {
     'clarify',
     'meaning',
     'means',
+    // "What does this mean?" is the commonest way anyone asks, and it was the
+    // one spelling missing.
+    'mean',
   };
 
   static const List<String> _summaryPhrases = <String>[
     'key points',
     'main points',
     'key takeaways',
+    'in short',
+  ];
+
+  /// Asks what the document *is*, rather than for the points inside it.
+  ///
+  /// A distinction worth keeping. "What are the main points?" wants the
+  /// document's own sentences; "What is this about?" wants to be told what kind
+  /// of thing is on screen, which is what an explanation answers. Both used to
+  /// produce a bulleted summary, and for the second of them that is a list of
+  /// details in answer to a question about the whole.
+  static const List<String> _aboutPhrases = <String>[
     'what is this about',
     'what is this document about',
-    'in short',
+    'what is this',
+    'what kind of document',
+    'what type of document',
+    'what document is this',
   ];
 
   /// Asks for *everything* of a kind rather than one instance. Without one of
@@ -442,6 +459,52 @@ abstract final class QuestionAnalyzer {
     'list of',
     'are there any',
   ];
+
+  /// A shape asked for in the plural is a request for all of them.
+  ///
+  /// The cue that "What dates are mentioned?" needs and "When is it due?" must
+  /// not have. Both reduce to nothing but request vocabulary, so neither can be
+  /// told apart by what is left over — but one asks for *dates* and the other
+  /// for the date something is due, and the plural is the whole of the
+  /// difference. Without this, a question about a page covered in dates was
+  /// answered "I could not find that".
+  static const Set<String> _pluralShapeWords = <String>{
+    'dates',
+    'deadlines',
+    'names',
+    'signatories',
+    'people',
+    'amounts',
+    'costs',
+    'prices',
+    'charges',
+    'fees',
+    'totals',
+    'figures',
+    'numbers',
+    'references',
+    'codes',
+    'addresses',
+    'locations',
+    'contacts',
+    'emails',
+    'phones',
+  };
+
+  /// Verbs that ask what a document contains rather than what it says.
+  ///
+  /// "Who is mentioned in this document?" carries no "find" or "list", and so
+  /// read as an ordinary question about the word "mentioned" — which appears on
+  /// no page, so it found nothing on a document full of names.
+  static const Set<String> _mentionWords = <String>{
+    'mentioned',
+    'mention',
+    'mentions',
+    'listed',
+    'included',
+    'contains',
+    'contain',
+  };
 
   /// Words that grade a request without narrowing it. "Important" in "find
   /// important dates" tells retrieval nothing — no page marks its dates as
@@ -488,6 +551,17 @@ abstract final class QuestionAnalyzer {
     'detail',
     'facts',
     'data',
+    // Structural references to a part of what is on screen. "What does this
+    // section mean?" points at the document in front of the user, not at a page
+    // that contains the word "section".
+    //
+    // "Clause" is deliberately absent: a clause is nearly always numbered, and
+    // "explain clause 4" names something specific to go and find.
+    'section',
+    'sections',
+    'passage',
+    'paragraph',
+    'paragraphs',
   };
 
   static AnalyzedQuestion analyze(String question) {
@@ -598,13 +672,19 @@ abstract final class QuestionAnalyzer {
     // Checked first: "explain the summary of clause 4" is a request about a
     // passage, not a request to summarise the document.
     if (tokens.any(_explainWords.contains)) return QuestionMode.explain;
+    if (_aboutPhrases.any(normalised.contains)) return QuestionMode.explain;
 
     if (tokens.any(_summaryWords.contains)) return QuestionMode.summary;
     if (_summaryPhrases.any(normalised.contains)) return QuestionMode.summary;
 
+    // Four ways of asking for everything of a kind. The first two are explicit
+    // — "find", "list all". The last two are how people actually phrase it:
+    // naming the shape in the plural, or asking what the document mentions.
     final enumerating =
         tokens.any(_enumerationWords.contains) ||
-        _enumerationPhrases.any(normalised.contains);
+        _enumerationPhrases.any(normalised.contains) ||
+        tokens.any(_pluralShapeWords.contains) ||
+        tokens.any(_mentionWords.contains);
     if (!enumerating) return QuestionMode.answer;
 
     // "Find the amount on the electricity bill" names which amount, and is a
@@ -691,11 +771,23 @@ abstract final class PassageSignals {
   /// Trailing year is optional but captured when present: these patterns are
   /// read for their extent as well as their presence, and "12 March" is a worse
   /// answer to "find important dates" than "12 March 2026".
+  /// A month name completed properly, not merely started.
+  ///
+  /// `mar[a-z]*` — which this used to be — matches the "Mar" in "Marlowe", so
+  /// the address "14 Marlowe Street" was reported as a date. Spelling out the
+  /// legal completions and closing with `\b` means a month has to *end* where a
+  /// month ends: "Mar" and "March" match, "Marlowe" does not.
+  static const String _month =
+      r'(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?'
+      r'|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?'
+      r'|dec(?:ember)?)';
+
   static final RegExp _writtenDate = RegExp(
-    r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}'
+    '\\b$_month'
+    r'\.?\s+\d{1,2}'
     r'(?:,?\s+\d{4})?\b'
-    r'|\b\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*'
-    r'(?:,?\s+\d{4})?\b',
+    '|\\b\\d{1,2}\\s+$_month'
+    r'\b(?:,?\s+\d{4})?',
     caseSensitive: false,
   );
 
@@ -731,7 +823,13 @@ abstract final class PassageSignals {
   );
 
   /// Two or more capitalised words in a row — how a name reads on a page.
-  static final RegExp _properName = RegExp(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b');
+  ///
+  /// Spaces and tabs only, never a line break. With `\s+` the last word of one
+  /// line and the first of the next were read as a pair, so a report whose
+  /// heading ended "…Report" above a line beginning "Prepared by" reported
+  /// "Report Prepared" as a person. Nobody wrote that phrase; the line ending
+  /// did.
+  static final RegExp _properName = RegExp(r'\b[A-Z][a-z]+[ \t]+[A-Z][a-z]+\b');
 
   /// A street address, and nothing looser.
   ///

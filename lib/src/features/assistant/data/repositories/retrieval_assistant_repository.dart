@@ -14,6 +14,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/repositories/assistant_repository.dart';
 import '../../domain/usecases/suggest_questions.dart';
+import '../datasources/answer_phrasing.dart';
 import '../datasources/chat_history_local_data_source.dart';
 import '../datasources/document_topics.dart';
 import '../datasources/passage_extractor.dart';
@@ -513,7 +514,11 @@ class RetrievalAssistantRepository implements AssistantRepository {
       return _onOneDocument(documentId, _explainDocument);
     }
 
-    final lines = <String>['This passage says:', '“${_flatten(passage)}”'];
+    // The selection itself, and nothing announcing it. It used to open "This
+    // passage says:" above the user's own selection, which is the assistant
+    // reading back what the user had just highlighted — a sentence that told
+    // them nothing they did not already know.
+    final lines = <String>['“${_flatten(passage)}”'];
 
     // What it contains, by shape. These are facts about the characters on the
     // page rather than an interpretation of them.
@@ -529,13 +534,16 @@ class RetrievalAssistantRepository implements AssistantRepository {
       if (values.isEmpty) continue;
 
       final label = ShapeFinder.labelFor(intent, plural: values.length != 1);
-      found.add('• $label: ${values.take(6).join(', ')}');
+      found.add(
+        '• ${AnswerPhrasing.capitalise(label)}: '
+        '${values.take(6).join(', ')}',
+      );
     }
 
     if (found.isNotEmpty) {
       lines
         ..add('')
-        ..add('It contains:')
+        ..add('What it records:')
         ..addAll(found);
     }
 
@@ -547,8 +555,9 @@ class RetrievalAssistantRepository implements AssistantRepository {
         ..add('')
         ..add(
           related.length == 1
-              ? 'One other place mentions the same terms:'
-              : '${related.length} other places mention the same terms:',
+              ? 'The same wording appears in one other place:'
+              : 'The same wording appears in '
+                    '${AnswerPhrasing.count(related.length, 'other place', 'other places')}:',
         )
         ..addAll(
           related.map(
@@ -632,9 +641,9 @@ class RetrievalAssistantRepository implements AssistantRepository {
   /// "what is this?", and unlike a paraphrase it cannot be wrong.
   Future<AssistantAnswer> _explainDocument(Document document) async {
     final passages = PassageExtractor.extract(document);
-    final topics = DocumentTopics.of(document);
+    final outline = DocumentTopics.of(document);
 
-    if (topics.isEmpty) {
+    if (outline.isEmpty) {
       return const AssistantAnswer(
         text: cannotExplainMessage,
         kind: AnswerKind.noMatch,
@@ -642,33 +651,53 @@ class RetrievalAssistantRepository implements AssistantRepository {
       );
     }
 
-    final readable = document.pages.where((page) => page.hasText).length;
+    final topics = outline.topics;
+    final lines = <String>[];
 
-    final lines = <String>[
-      'This document is called “${document.title}”. '
-          'It has $readable readable ${readable == 1 ? 'page' : 'pages'}.',
-      '',
-      'What it covers:',
-      for (final topic in topics) '• ${topic.text}',
-    ];
-
-    final carries = <String>[];
-    for (final intent in _digestIntents) {
-      final findings = ShapeFinder.find(intent, passages, maxFindings: 4);
-      if (findings.isEmpty) continue;
-
-      final label = ShapeFinder.labelFor(intent, plural: findings.length != 1);
-      carries.add(
-        '• ${_capitalise(label)}: '
-        '${findings.map((finding) => finding.value).join(', ')}',
+    if (outline.fromHeadings) {
+      // A document that divided itself into sections has already answered the
+      // question. Listing those sections in one sentence is the closest an
+      // extractive assistant honestly gets to describing a document — and every
+      // word of it was typed by whoever wrote the thing.
+      lines.add(
+        'This document covers '
+        '${AnswerPhrasing.list(topics.map((topic) => topic.text))}.',
       );
+    } else {
+      // No headings — a scan, almost always. The opening line is quoted rather
+      // than paraphrased, because paraphrasing it would mean inventing the
+      // paraphrase.
+      lines.add(
+        'This document is about '
+        '“${AnswerPhrasing.withoutTrailingStop(topics.first.text)}”.',
+      );
+
+      if (topics.length > 1) {
+        lines
+          ..add('')
+          ..add('It also covers:')
+          ..addAll(topics.skip(1).map((topic) => '• ${topic.text}'));
+      }
     }
+
+    // What kinds of fact it carries, counted rather than reprinted. Listing
+    // them is what "Find important information" is for; an explanation that
+    // repeated every figure on the page would be the page again.
+    final carries = <String>[
+      for (final intent in _digestIntents)
+        if (ShapeFinder.find(intent, passages, maxFindings: 20) case final found
+            when found.isNotEmpty)
+          AnswerPhrasing.count(
+            found.length,
+            ShapeFinder.labelFor(intent, plural: false),
+            ShapeFinder.labelFor(intent, plural: true),
+          ),
+    ];
 
     if (carries.isNotEmpty) {
       lines
         ..add('')
-        ..add('It also contains:')
-        ..addAll(carries);
+        ..add('It records ${AnswerPhrasing.list(carries)}.');
     }
 
     // One citation per page a topic came from, so the explanation can be
@@ -963,9 +992,14 @@ class RetrievalAssistantRepository implements AssistantRepository {
       // Bulleted rather than run together: these are separate statements
       // pulled from separate places, and joining them into a paragraph would
       // imply a connecting argument nobody wrote.
-      text: sentences
-          .map((sentence) => '• ${_flatten(sentence.passage.text)}')
-          .join('\n'),
+      //
+      // The line above them says what they are. A reply that opens straight
+      // into a bullet reads like a fragment of something rather than an answer
+      // to what was asked.
+      text:
+          '${brief ? '“${document.title}” in short:' : 'The main points of '
+                    '“${document.title}”:'}\n\n'
+          '${sentences.map((sentence) => '• ${_flatten(sentence.passage.text)}').join('\n')}',
       kind: AnswerKind.summary,
       documentsSearched: 1,
       citations: _citationsByPage(<_Cited>[
@@ -1000,11 +1034,11 @@ class RetrievalAssistantRepository implements AssistantRepository {
       );
     }
 
-    final label = ShapeFinder.labelFor(intent, plural: findings.length != 1);
-
     return AssistantAnswer(
       text:
-          'Found ${findings.length} $label:\n'
+          'I found '
+          '${AnswerPhrasing.count(findings.length, ShapeFinder.labelFor(intent, plural: false), ShapeFinder.labelFor(intent, plural: true))} '
+          'in $scope:\n'
           '${findings.map((finding) => '• ${finding.value}').join('\n')}',
       kind: AnswerKind.extraction,
       // A currency symbol beside a number is a fact about the page; two

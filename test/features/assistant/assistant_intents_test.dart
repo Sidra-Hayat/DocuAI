@@ -172,8 +172,9 @@ void main() {
       final answer = await run(const ExplainDocument(), documentId: 'report');
 
       expect(answer.kind, AnswerKind.explanation);
-      expect(answer.text, contains('Flutter Project Report'));
-      expect(answer.text, contains('What it covers:'));
+      // One sentence naming what the document divided itself into. The title
+      // is not repeated in it — the source line underneath already carries it.
+      expect(answer.text, contains('This document covers'));
 
       for (final heading in <String>[
         'Project setup',
@@ -191,18 +192,14 @@ void main() {
 
       final answer = await run(const ExplainDocument(), documentId: 'report');
 
-      final topics = answer.text
-          .split('\n')
-          .where((line) => line.startsWith('• '))
-          .map((line) => line.substring(2))
-          .toList();
-
       expect(
-        topics,
+        answer.text,
         isNot(contains('Flutter Project Report')),
-        reason: 'it is called X, and then covers X — said twice',
+        reason:
+            'the H1 repeats the file name; covering it says the same '
+            'thing twice',
       );
-      expect(topics, contains('Project setup'));
+      expect(answer.text, contains('Project setup'));
     });
 
     test('reports the facts the document carries', () async {
@@ -210,8 +207,16 @@ void main() {
 
       final answer = await run(const ExplainDocument(), documentId: 'report');
 
-      expect(answer.text, contains('It also contains:'));
-      expect(answer.text, contains('12/03/2026'));
+      // Counted, not reprinted. Listing every value is what "Find important
+      // information" is for; an explanation that repeated the whole page would
+      // be the page again.
+      expect(answer.text, contains('It records one date'));
+      expect(
+        answer.text,
+        isNot(contains('12/03/2026')),
+        reason:
+            'an explanation says what kinds of fact are there, not each one',
+      );
     });
 
     test('works on a scan, which has no headings to read', () async {
@@ -220,8 +225,15 @@ void main() {
       final answer = await run(const ExplainDocument(), documentId: 'bill');
 
       expect(answer.kind, AnswerKind.explanation);
-      expect(answer.text, contains('Electricity bill'));
-      expect(answer.text, contains('What it covers:'));
+      // A scan has no headings, so the opening line is quoted rather than
+      // listed — and quoted rather than paraphrased, because paraphrasing it
+      // would mean inventing the paraphrase.
+      expect(answer.text, startsWith('This document is about “'));
+      expect(
+        bill().extractedText,
+        contains(answer.text.split('“')[1].split('”')[0]),
+        reason: 'the opening line must be the document’s own',
+      );
       expect(answer.citations, isNotEmpty);
     });
 
@@ -476,7 +488,7 @@ void main() {
       final answer = await ask('Explain this document', documentId: 'report');
 
       expect(answer.kind, AnswerKind.explanation);
-      expect(answer.text, contains('What it covers:'));
+      expect(answer.text, contains('This document covers'));
       expectDoesNotEchoTheQuestion(answer, 'this document');
     });
 
@@ -555,7 +567,7 @@ void main() {
       );
 
       expect(answer.kind, AnswerKind.explanation);
-      expect(answer.text, startsWith('This passage says:'));
+      expect(answer.text, startsWith('“'));
       expect(answer.text, contains('248.60'));
     });
 
@@ -569,7 +581,7 @@ void main() {
           documentId: 'report',
         );
 
-        expect(answer.text, contains('What it covers:'));
+        expect(answer.text, contains('This document covers'));
         expectDoesNotEchoTheQuestion(answer, 'this document');
       },
     );
@@ -604,7 +616,7 @@ void main() {
             'record of anything',
       );
       expect(turns.last.isFromUser, isFalse);
-      expect(turns.last.text, contains('What it covers:'));
+      expect(turns.last.text, contains('This document covers'));
       expect(turns.last.citations, isNotEmpty);
     });
 

@@ -138,7 +138,7 @@ void main() {
       expect(answer.kind, AnswerKind.explanation);
       expect(answer.text, contains('05/04/2026'));
       expect(answer.text, contains('248.60'));
-      expect(answer.text, contains('It contains:'));
+      expect(answer.text, contains('What it records:'));
     });
 
     test('invents nothing — every word comes from the passage or a page', () async {

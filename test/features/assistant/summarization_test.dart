@@ -447,7 +447,7 @@ Payment may be made by direct debit or bank transfer.
 
       expect(answer.kind, AnswerKind.extraction);
       expect(bulletsOf(answer), <String>['12/03/2026', '05/04/2026']);
-      expect(answer.text, startsWith('Found 2 dates'));
+      expect(answer.text, startsWith('I found two dates'));
     });
 
     test('every amount, whole', () async {
