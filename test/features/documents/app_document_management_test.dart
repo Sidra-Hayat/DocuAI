@@ -10,13 +10,14 @@ import 'package:docuai/src/features/documents/data/datasources/documents_box.dar
 import 'package:docuai/src/features/documents/data/models/document_model.dart';
 import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_actions.dart';
 import 'package:docuai/src/features/search/data/datasources/search_index_local_data_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
+
+import '../../helpers/ui.dart';
 
 /// The whole app — real router, real `StatefulShellRoute`, real Hive — driven
 /// through the UI a user actually touches.
@@ -113,10 +114,7 @@ void main() {
 
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const DocuAiApp(),
-      ),
+      UncontrolledProviderScope(container: container, child: const DocuAiApp()),
     );
     await tester.pumpAndSettle();
   }
@@ -134,10 +132,7 @@ void main() {
     expect(find.text('Rental agreement'), findsOneWidget);
 
     // Newest first, so "Rental agreement" is the first row.
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
@@ -161,10 +156,7 @@ void main() {
     await pumpApp(tester);
     expect(find.text('Only one'), findsOneWidget);
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
@@ -181,11 +173,8 @@ void main() {
 
     await pumpApp(tester);
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'After');
+    await tapDocumentAction(tester, 'Rename');
+    await enterDialogText(tester, 'After');
     await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 
@@ -214,10 +203,7 @@ void main() {
     await settle(tester);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
@@ -239,11 +225,8 @@ void main() {
     await settle(tester);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'After');
+    await tapDocumentAction(tester, 'Rename');
+    await enterDialogText(tester, 'After');
     await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 

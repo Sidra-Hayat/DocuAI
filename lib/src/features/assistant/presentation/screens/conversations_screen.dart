@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/router/app_routes.dart';
-import '../../../../core/widgets/app_empty_state.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/conversation.dart';
 import '../providers/assistant_providers.dart';
 
@@ -24,19 +25,11 @@ class ConversationsScreen extends ConsumerWidget {
     final conversations = ref.watch(conversationsProvider(null));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assistant'),
-        actions: [
-          IconButton(
-            tooltip: 'New conversation',
-            onPressed: () => openNewConversation(context),
-            icon: const Icon(Icons.add_comment_outlined),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Assistant')),
       body: conversations.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => const AppEmptyState(
+        loading: () =>
+            const AppStateView.busy(title: 'Opening your conversations…'),
+        error: (error, stackTrace) => const AppStateView.problem(
           icon: Icons.error_outline,
           title: 'Your conversations could not be loaded',
         ),
@@ -44,6 +37,16 @@ class ConversationsScreen extends ConsumerWidget {
             ? _NoConversations(onStart: () => openNewConversation(context))
             : _ConversationList(conversations: threads),
       ),
+      // A conversation, not a document. The library's creation button used to
+      // float here too, offering to scan something on the screen whose only
+      // creatable thing is a thread.
+      floatingActionButton: conversations.value == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => openNewConversation(context),
+              icon: const Icon(Icons.add_comment_outlined),
+              label: const Text('New conversation'),
+            ),
     );
   }
 }
@@ -59,10 +62,11 @@ Future<void> openNewConversation(
   String? documentTitle,
   String? ask,
 }) {
-  final query = <String, String>{};
-  if (documentId != null) query['document'] = documentId;
-  if (documentTitle != null) query['title'] = documentTitle;
-  if (ask != null) query['ask'] = ask;
+  final query = <String, String>{
+    'document': ?documentId,
+    'title': ?documentTitle,
+    'ask': ?ask,
+  };
 
   return context.pushNamed<void>(
     AppRoutes.conversationName,
@@ -79,9 +83,13 @@ class _ConversationList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView.separated(
-      padding: const EdgeInsets.only(top: 8, bottom: 88),
+      padding: const EdgeInsets.only(
+        top: AppSpacing.sm,
+        bottom: AppSpacing.fabClearance,
+      ),
       itemCount: conversations.length,
-      separatorBuilder: (context, index) => const Divider(height: 1, indent: 72),
+      separatorBuilder: (context, index) =>
+          const Divider(height: 1, indent: 72),
       itemBuilder: (context, index) =>
           _ConversationTile(conversation: conversations[index]),
     );
@@ -185,14 +193,13 @@ class _NoConversations extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppEmptyState(
+    return AppStateView(
       icon: Icons.auto_awesome_outlined,
-      title: 'No conversations yet',
+      title: 'Ask anything about your documents',
       message:
-          'Ask about your documents and the answers are quoted from the pages '
-          'themselves — nothing is sent anywhere, and nothing is made up.\n\n'
-          'Looking for a document rather than an answer? The Search tab finds '
-          'them by name, tag or text.',
+          'How much was the electricity bill? What are the important dates? '
+          'Every answer comes from your own pages, and shows you where it came '
+          'from.',
       action: FilledButton.icon(
         onPressed: onStart,
         icon: const Icon(Icons.add_comment_outlined),

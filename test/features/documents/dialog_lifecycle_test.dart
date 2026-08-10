@@ -8,8 +8,6 @@ import 'package:docuai/src/features/documents/presentation/providers/document_pr
 import 'package:docuai/src/features/documents/presentation/screens/document_detail_screen.dart';
 import 'package:docuai/src/features/documents/presentation/screens/documents_screen.dart';
 import 'package:docuai/src/features/documents/presentation/screens/manage_pages_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_actions.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/page_edit_actions.dart';
 import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/ui.dart';
 
 /// `_dependents.isEmpty is not true`, and the family of mistakes behind it.
 ///
@@ -81,16 +80,13 @@ void main() {
       await tester.pumpWidget(wrap(const DocumentsScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Rename'));
-      await tester.pumpAndSettle();
+      await tapDocumentAction(tester, 'Rename');
     }
 
     testWidgets('confirming a rename throws nothing', (tester) async {
       await openRename(tester);
 
-      await tester.enterText(find.byType(TextField), 'Electricity bill');
+      await enterDialogText(tester, 'Electricity bill');
       await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
       // Pumped past the dismiss animation on purpose: the controller was
       // disposed at its start, and the frames after it are where the
@@ -104,7 +100,7 @@ void main() {
     testWidgets('cancelling a rename throws nothing', (tester) async {
       await openRename(tester);
 
-      await tester.enterText(find.byType(TextField), 'Discarded');
+      await enterDialogText(tester, 'Discarded');
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
 
@@ -115,7 +111,7 @@ void main() {
     testWidgets('submitting from the keyboard throws nothing', (tester) async {
       await openRename(tester);
 
-      await tester.enterText(find.byType(TextField), 'From the keyboard');
+      await enterDialogText(tester, 'From the keyboard');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
@@ -127,17 +123,14 @@ void main() {
       // The second dialog builds while the first is still animating out, which
       // is the window a controller disposed too early lives in.
       await openRename(tester);
-      await tester.enterText(find.byType(TextField), 'First');
+      await enterDialogText(tester, 'First');
       await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
       await tester.pump();
 
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Rename'));
-      await tester.pumpAndSettle();
+      await tapDocumentAction(tester, 'Rename');
 
-      await tester.enterText(find.byType(TextField), 'Second');
+      await enterDialogText(tester, 'Second');
       await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
       await tester.pumpAndSettle();
 
@@ -152,10 +145,7 @@ void main() {
       await tester.pumpWidget(wrap(const DocumentsScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await tapDocumentAction(tester, 'Delete');
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
@@ -168,13 +158,12 @@ void main() {
       // The hard one: the confirmation is dismissed, the document disappears,
       // and the screen that ran the delete is torn down by the same emission.
       documents.seed(billWith());
-      await tester.pumpWidget(wrap(const DocumentDetailScreen(documentId: 'doc')));
+      await tester.pumpWidget(
+        wrap(const DocumentDetailScreen(documentId: 'doc')),
+      );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await tapDocumentAction(tester, 'Delete');
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
@@ -189,10 +178,7 @@ void main() {
       await tester.pumpWidget(wrap(const DocumentsScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await tapDocumentAction(tester, 'Delete');
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
 
@@ -207,10 +193,8 @@ void main() {
       await tester.pumpWidget(wrap(const ManagePagesScreen(documentId: 'doc')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<PageAction>).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete this page'));
-      await tester.pumpAndSettle();
+      await openPageActions(tester);
+      await tapSheetAction(tester, 'Delete this page');
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
@@ -235,18 +219,17 @@ void main() {
       await tester.pumpWidget(wrap(const ManagePagesScreen(documentId: 'doc')));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(PopupMenuButton<PageAction>).last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete this page'));
-      await tester.pumpAndSettle();
+      // The last row, whose subtree the delete destroys.
+      await openPageActions(tester, index: 2);
+      await tapSheetAction(tester, 'Delete this page');
       await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(
-        documents.store['doc']!.pages.map((page) => page.id),
-        <String>['p0', 'p1'],
-      );
+      expect(documents.store['doc']!.pages.map((page) => page.id), <String>[
+        'p0',
+        'p1',
+      ]);
     });
   });
 
@@ -292,7 +275,7 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'Write one'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Meeting notes');
+      await enterDialogText(tester, 'Meeting notes');
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
 
@@ -300,7 +283,7 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'Write one'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Meeting notes');
+      await enterDialogText(tester, 'Meeting notes');
       await tester.tap(find.widgetWithText(FilledButton, 'Create'));
       await tester.pumpAndSettle();
 

@@ -1,95 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../export/presentation/providers/export_controller.dart';
+import '../../../../core/widgets/app_action_sheet.dart';
+import '../../../export/presentation/widgets/share_sheet.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../providers/document_providers.dart';
 import 'edit_tags_sheet.dart';
 
-/// The rename / share / favourite / delete menu, shared by the library list and
-/// the detail screen so both offer exactly the same actions.
-enum DocumentAction { rename, editTags, sharePdf, toggleFavorite, delete }
-
-class DocumentActionsMenu extends ConsumerWidget {
-  const DocumentActionsMenu({required this.document, super.key});
+/// The rename / tags / favourite / share / delete button, shared by the library
+/// and the detail screen so both offer exactly the same actions.
+///
+/// A sheet rather than the popup menu this used to be. The actions here include
+/// one that permanently removes files from the device, and a popup puts that
+/// row in a small rectangle at the top of the screen, one line tall, next to
+/// the four rows that do not.
+class DocumentActionsButton extends ConsumerWidget {
+  const DocumentActionsButton({required this.document, super.key});
 
   final Document document;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return PopupMenuButton<DocumentAction>(
-      tooltip: 'Document actions',
-      onSelected: (action) => _run(context, ref, action),
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: DocumentAction.rename,
-          child: ListTile(
-            leading: Icon(Icons.drive_file_rename_outline),
-            title: Text('Rename'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const PopupMenuItem(
-          value: DocumentAction.editTags,
-          child: ListTile(
-            leading: Icon(Icons.sell_outlined),
-            title: Text('Edit tags'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        PopupMenuItem(
-          value: DocumentAction.sharePdf,
-          enabled: document.hasPages,
-          child: const ListTile(
-            leading: Icon(Icons.picture_as_pdf_outlined),
-            title: Text('Share as PDF'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        PopupMenuItem(
-          value: DocumentAction.toggleFavorite,
-          child: ListTile(
-            leading: Icon(
-              document.isFavorite ? Icons.star : Icons.star_border_outlined,
-            ),
-            title: Text(
-              document.isFavorite ? 'Remove favourite' : 'Add to favourites',
-            ),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: DocumentAction.delete,
-          child: ListTile(
-            leading: Icon(Icons.delete_outline),
-            title: Text('Delete'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-      ],
+    return IconButton(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert),
+      onPressed: () => showDocumentActionsSheet(context, ref, document),
     );
   }
+}
 
-  Future<void> _run(
-    BuildContext context,
-    WidgetRef ref,
-    DocumentAction action,
-  ) async {
-    switch (action) {
-      case DocumentAction.rename:
-        await showRenameDocumentDialog(context, ref, document);
-      case DocumentAction.editTags:
-        await showEditTagsSheet(context, ref, document);
-      case DocumentAction.sharePdf:
-        await shareDocumentAsPdf(context, ref, document);
-      case DocumentAction.toggleFavorite:
-        await toggleDocumentFavorite(context, ref, document);
-      case DocumentAction.delete:
-        await confirmDeleteDocument(context, ref, document);
-    }
-  }
+/// The same actions, opened from wherever the caller wants them.
+Future<void> showDocumentActionsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  Document document,
+) {
+  return showAppActionSheet(
+    context,
+    title: document.title,
+    actions: <AppSheetAction>[
+      AppSheetAction(
+        icon: Icons.drive_file_rename_outline,
+        label: 'Rename',
+        onSelected: () => showRenameDocumentDialog(context, ref, document),
+      ),
+      AppSheetAction(
+        icon: Icons.sell_outlined,
+        label: document.tags.isEmpty ? 'Add tags' : 'Edit tags',
+        description: 'Tags make a document easier to find later',
+        onSelected: () => showEditTagsSheet(context, ref, document),
+      ),
+      AppSheetAction(
+        icon: document.isFavorite ? Icons.star : Icons.star_border_outlined,
+        label: document.isFavorite
+            ? 'Remove from favourites'
+            : 'Add to favourites',
+        onSelected: () => toggleDocumentFavorite(context, ref, document),
+      ),
+      AppSheetAction(
+        icon: Icons.ios_share,
+        label: 'Share',
+        description: 'Send a PDF or a Word file',
+        enabled: document.hasPages,
+        onSelected: () => showShareSheet(context, ref, document),
+      ),
+      AppSheetAction(
+        icon: Icons.delete_outline,
+        label: 'Delete',
+        isDestructive: true,
+        onSelected: () => confirmDeleteDocument(context, ref, document),
+      ),
+    ],
+  );
 }
 
 /// Prompts for a new title and applies it.
@@ -187,23 +170,6 @@ class _RenameDialogState extends State<_RenameDialog> {
         FilledButton(onPressed: _submit, child: const Text('Rename')),
       ],
     );
-  }
-}
-
-/// Shares the document as a PDF from a menu, where there is no button to carry
-/// progress — so the outcome is reported afterwards instead.
-Future<void> shareDocumentAsPdf(
-  BuildContext context,
-  WidgetRef ref,
-  Document document,
-) async {
-  final messenger = ScaffoldMessenger.of(context);
-
-  await ref.read(exportControllerProvider.notifier).shareAsPdf(document);
-
-  final state = ref.read(exportControllerProvider);
-  if (state is ExportFailedState && state.documentId == document.id) {
-    messenger.showSnackBar(SnackBar(content: Text(state.message)));
   }
 }
 

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/widgets/app_empty_state.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
+import '../widgets/document_edit_sheet.dart';
 import '../widgets/document_thumbnail.dart';
 import '../widgets/page_edit_actions.dart';
-
-/// Where a new page comes from.
-enum _AddPage { scan, import, text }
 
 /// Reorder, delete, rescan and add pages.
 ///
@@ -27,62 +26,26 @@ class ManagePagesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage pages'),
-        actions: [
+        // Not "Manage pages". Managing is what an administrator does to a
+        // resource; what happens here is editing a document.
+        title: const Text('Edit pages'),
+        actions: <Widget>[
           if (document.value != null)
-            PopupMenuButton<_AddPage>(
+            IconButton(
               tooltip: 'Add a page',
               icon: const Icon(Icons.add),
-              onSelected: (choice) => switch (choice) {
-                _AddPage.scan => addPagesToDocument(context, ref, documentId),
-                _AddPage.import => importPagesIntoDocument(
-                  context,
-                  ref,
-                  documentId,
-                ),
-                _AddPage.text => addTextPageToDocument(
-                  context,
-                  ref,
-                  documentId,
-                ),
-              },
-              itemBuilder: (context) => const <PopupMenuEntry<_AddPage>>[
-                PopupMenuItem(
-                  value: _AddPage.scan,
-                  child: ListTile(
-                    leading: Icon(Icons.document_scanner_outlined),
-                    title: Text('Scan pages'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _AddPage.import,
-                  child: ListTile(
-                    leading: Icon(Icons.photo_library_outlined),
-                    title: Text('Import photos'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _AddPage.text,
-                  child: ListTile(
-                    leading: Icon(Icons.edit_note_outlined),
-                    title: Text('Add a text page'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ],
+              onPressed: () => showAddPageSheet(context, ref, documentId),
             ),
         ],
       ),
       body: document.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => const AppEmptyState(
+        loading: () => const AppStateView.busy(title: 'Opening this document…'),
+        error: (error, stackTrace) => const AppStateView.problem(
           icon: Icons.error_outline,
           title: 'Could not open this document',
         ),
         data: (value) => value == null
-            ? const AppEmptyState(
+            ? const AppStateView(
                 icon: Icons.delete_outline,
                 title: 'This document is no longer here',
               )
@@ -104,7 +67,12 @@ class _PageList extends ConsumerWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.xs,
+          ),
           child: Text(
             'Drag to reorder. Page numbers follow the order here.',
             style: theme.textTheme.bodySmall?.copyWith(

@@ -57,7 +57,7 @@ void main() {
   testWidgets('invites a search before anything is typed', (tester) async {
     await pumpSearch(tester);
 
-    expect(find.text('Find documents'), findsOneWidget);
+    expect(find.text('Search your documents'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byType(SearchResultTile), findsNothing);
   });
@@ -103,11 +103,12 @@ void main() {
       ),
     );
 
-    expect(find.text('No matches for "helicopter"'), findsOneWidget);
+    expect(find.text('Nothing found for "helicopter"'), findsOneWidget);
     expect(
       find.textContaining('Names and tags are always searchable'),
       findsOneWidget,
-      reason: 'the screen has to say which parts of a document are searchable '
+      reason:
+          'the screen has to say which parts of a document are searchable '
           'before its text has been read',
     );
   });
@@ -153,7 +154,9 @@ void main() {
   // Split rather than pumped twice in one body: re-pumping with different
   // overrides keeps the notifier Riverpod already built for the first scope,
   // so the second state never reaches the widget.
-  testWidgets('offers no clear button before anything is typed', (tester) async {
+  testWidgets('offers no clear button before anything is typed', (
+    tester,
+  ) async {
     await pumpSearch(tester);
 
     expect(find.byIcon(Icons.close), findsNothing);

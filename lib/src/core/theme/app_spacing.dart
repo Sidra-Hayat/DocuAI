@@ -40,10 +40,12 @@ abstract final class AppSpacing {
   static const Widget gapMd = SizedBox(height: md);
   static const Widget gapLg = SizedBox(height: lg);
   static const Widget gapXl = SizedBox(height: xl);
+  static const Widget gapXxl = SizedBox(height: xxl);
 
   static const Widget gapHorizontalXs = SizedBox(width: xs);
   static const Widget gapHorizontalSm = SizedBox(width: sm);
   static const Widget gapHorizontalMd = SizedBox(width: md);
+  static const Widget gapHorizontalLg = SizedBox(width: lg);
 }
 
 /// Corner radii.
@@ -75,9 +77,8 @@ abstract final class AppRadius {
   static BorderRadius get small => BorderRadius.circular(sm);
   static BorderRadius get card => BorderRadius.circular(md);
   static BorderRadius get surface => BorderRadius.circular(lg);
-  static BorderRadius get sheet => const BorderRadius.vertical(
-    top: Radius.circular(xxl),
-  );
+  static BorderRadius get sheet =>
+      const BorderRadius.vertical(top: Radius.circular(xxl));
 }
 
 /// Sizes that exist for reach and legibility rather than for looks.

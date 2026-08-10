@@ -20,7 +20,9 @@ void main() {
   }) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light(),
+        theme: brightness == Brightness.dark
+            ? AppTheme.dark()
+            : AppTheme.light(),
         home: Scaffold(body: child),
       ),
     );
@@ -42,17 +44,14 @@ void main() {
     });
 
     test('the scale ascends', () {
-      expect(
-        <double>[
-          AppSpacing.xs,
-          AppSpacing.sm,
-          AppSpacing.md,
-          AppSpacing.lg,
-          AppSpacing.xl,
-          AppSpacing.xxl,
-        ],
-        orderedEquals(<double>[4, 8, 12, 16, 24, 32]),
-      );
+      expect(<double>[
+        AppSpacing.xs,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xxl,
+      ], orderedEquals(<double>[4, 8, 12, 16, 24, 32]));
     });
 
     test('radii ascend and stop where Material says', () {
@@ -112,6 +111,47 @@ void main() {
           greaterThanOrEqualTo(4.5),
           reason: 'body text on a card',
         );
+      }
+    });
+
+    test('the brand gold is legible on its own ground', () {
+      // Gold is an accent, and an accent nobody can read is decoration. It is
+      // deliberately two different colours: the one that reads as premium on
+      // charcoal is washed out on paper, so light mode gets a far deeper gold
+      // rather than the same hex used twice.
+      double ratio(Color a, Color b) {
+        final la = a.computeLuminance();
+        final lb = b.computeLuminance();
+        final lighter = la > lb ? la : lb;
+        final darker = la > lb ? lb : la;
+        return (lighter + 0.05) / (darker + 0.05);
+      }
+
+      for (final scheme in <ColorScheme>[
+        AppTheme.light().colorScheme,
+        AppTheme.dark().colorScheme,
+      ]) {
+        expect(
+          ratio(scheme.tertiary, scheme.surface),
+          greaterThanOrEqualTo(4.5),
+          reason: 'the gold accent on the page background',
+        );
+        expect(
+          ratio(scheme.onTertiaryContainer, scheme.tertiaryContainer),
+          greaterThanOrEqualTo(4.5),
+          reason: 'text on a gold container',
+        );
+      }
+    });
+
+    test('gold is an accent, never an action', () {
+      // The one rule that keeps it from becoming a second button colour: the
+      // primary action stays indigo in both brightnesses.
+      for (final scheme in <ColorScheme>[
+        AppTheme.light().colorScheme,
+        AppTheme.dark().colorScheme,
+      ]) {
+        expect(scheme.primary, isNot(scheme.tertiary));
       }
     });
 
@@ -195,7 +235,10 @@ void main() {
         AppStateView.problem(
           icon: Icons.error_outline,
           title: 'Could not read this page',
-          action: FilledButton(onPressed: () {}, child: const Text('Try again')),
+          action: FilledButton(
+            onPressed: () {},
+            child: const Text('Try again'),
+          ),
         ),
       );
 

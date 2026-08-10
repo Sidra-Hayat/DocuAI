@@ -77,7 +77,10 @@ void main() {
 
     expect(find.text('DocuAI'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.widgetWithText(FloatingActionButton, 'New'), findsOneWidget);
+    expect(
+      find.widgetWithText(FloatingActionButton, 'New document'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('navigates between all three shell branches', (tester) async {
@@ -85,12 +88,12 @@ void main() {
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Search'));
     await tester.pumpAndSettle();
-    expect(find.text('Find documents'), findsOneWidget);
+    expect(find.text('Search your documents'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Assistant'));
     await tester.pumpAndSettle();
     // The Assistant tab lands on the list of threads, not in one of them.
-    expect(find.text('No conversations yet'), findsOneWidget);
+    expect(find.text('Ask anything about your documents'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Documents'));
     await tester.pumpAndSettle();
@@ -102,11 +105,11 @@ void main() {
 
     // Scanning is now one of two ways to start a document, so it is reached
     // through the sheet rather than straight off the button.
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'New'));
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New document'));
     await tester.pumpAndSettle();
     // Disambiguated from the empty library's own button, which offers the
     // same thing on the screen behind the sheet.
-    await tester.tap(find.widgetWithText(ListTile, 'Scan a document'));
+    await tester.tap(find.widgetWithText(ListTile, 'Scan'));
     await tester.pumpAndSettle();
 
     expect(find.text('Scan document'), findsOneWidget);
@@ -114,17 +117,19 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
   });
 
-  testWidgets('offers both ways to start a document', (tester) async {
+  testWidgets('offers every way to start a document', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'New'));
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'New document'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(ListTile, 'Scan a document'), findsOneWidget);
-    expect(
-      find.widgetWithText(ListTile, 'Write a text document'),
-      findsOneWidget,
-    );
+    // Named for what the user is doing rather than for the machinery, and all
+    // four in one place — the library is the only screen that offers any of
+    // them.
+    expect(find.widgetWithText(ListTile, 'Scan'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Import photos'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Import a file'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Create'), findsOneWidget);
   });
 
   testWidgets('opens settings and defaults the theme to System', (

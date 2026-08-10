@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../features/documents/presentation/widgets/new_document_sheet.dart';
-
 /// Persistent chrome around the three primary destinations.
 ///
 /// Receives the [StatefulNavigationShell] built by [StatefulShellRoute] and is
 /// responsible only for presentation — the shell owns branch state.
+///
+/// Deliberately carries no floating action button. It used to hold one reading
+/// "New", and a button in the shell is a button on every screen inside it:
+/// creating a document was offered on Search, on the assistant's conversation
+/// list, and — because the document routes are nested in the library's branch —
+/// on top of the page the user was writing. Creation belongs to the library,
+/// which is the only screen that has anywhere to put the result.
 class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key});
 
@@ -26,15 +31,6 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      // One button for "add a document", because scanning and writing are two
-      // methods of one intention. A second floating button would have to sit
-      // somewhere permanently, and neither method deserves that over the other.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showNewDocumentSheet(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New'),
-        tooltip: 'Scan or write a new document',
-      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _onDestinationSelected,

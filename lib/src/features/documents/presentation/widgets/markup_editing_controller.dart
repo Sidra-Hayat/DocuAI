@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/text/markup.dart';
 import '../../../../core/text/markup_editing.dart';
 
+/// A formatting the toolbar can switch on or off.
+///
+/// Named for the button rather than for the syntax: the toolbar's whole purpose
+/// is that nobody has to know the text says `**` or `> `.
+enum MarkupFormat { bold, italic, heading, bullet, numbered, quote }
+
 /// A text controller that styles markup as it is typed.
 ///
 /// The markers stay on screen — this is not WYSIWYG, and pretending otherwise
@@ -86,6 +92,45 @@ class MarkupEditingController extends TextEditingController {
       fontWeight: token.bold ? FontWeight.w700 : block.fontWeight,
       fontStyle: token.italic ? FontStyle.italic : block.fontStyle,
     );
+  }
+
+  /// The formats in force where the caret is.
+  ///
+  /// Read from the same tokeniser that draws the field, so the lit buttons and
+  /// the styled text can never disagree — a toolbar that says "bold" while the
+  /// word under the caret is plain is worse than a toolbar with no state at
+  /// all, because it is confidently wrong.
+  Set<MarkupFormat> get activeFormats {
+    if (text.isEmpty) return const <MarkupFormat>{};
+
+    final offset = selection.isValid
+        ? selection.start.clamp(0, text.length)
+        : text.length;
+
+    final tokens = Markup.tokenize(text);
+    if (tokens.isEmpty) return const <MarkupFormat>{};
+
+    // A caret sitting exactly on a boundary belongs to both neighbours. The
+    // content run wins over the marker, because the marker is the thing the
+    // user is not supposed to be thinking about.
+    MarkupToken? best;
+    for (final token in tokens) {
+      if (offset < token.start || offset > token.end) continue;
+      if (best == null || (best.isMarker && !token.isMarker)) best = token;
+    }
+    if (best == null) return const <MarkupFormat>{};
+
+    return <MarkupFormat>{
+      if (best.bold) MarkupFormat.bold,
+      if (best.italic) MarkupFormat.italic,
+      if (best.block == MarkupBlockKind.heading1 ||
+          best.block == MarkupBlockKind.heading2 ||
+          best.block == MarkupBlockKind.heading3)
+        MarkupFormat.heading,
+      if (best.block == MarkupBlockKind.bullet) MarkupFormat.bullet,
+      if (best.block == MarkupBlockKind.numbered) MarkupFormat.numbered,
+      if (best.block == MarkupBlockKind.quote) MarkupFormat.quote,
+    };
   }
 
   /// Applies a toolbar operation, keeping the selection on the text it was on.

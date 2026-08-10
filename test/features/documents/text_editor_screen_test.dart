@@ -58,36 +58,37 @@ void main() {
     expect(find.text('Tenancy notes'), findsOneWidget);
   });
 
-  testWidgets('the save action is inert until something is typed', (
-    tester,
-  ) async {
+  testWidgets('saves itself once the typing stops', (tester) async {
     documents.seed(noteWith('Already written.'));
     await pumpEditor(tester);
 
-    expect(find.text('Saved'), findsOneWidget);
     expect(
-      tester.widget<TextButton>(find.byType(TextButton)).onPressed,
-      isNull,
-      reason: 'nothing has changed, so there is nothing to save',
+      find.text('Saved'),
+      findsOneWidget,
+      reason: 'the editor says whether the work is safe, always',
     );
 
     await tester.enterText(find.byType(TextField), 'Now edited.');
     await tester.pump();
+    expect(find.text('Unsaved'), findsOneWidget);
 
-    expect(find.text('Save'), findsOneWidget);
-    expect(
-      tester.widget<TextButton>(find.byType(TextButton)).onPressed,
-      isNotNull,
-    );
+    // A second of stillness commits it. No button was pressed: an editor that
+    // loses a note because nobody found the save button has failed at the one
+    // thing it is for.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved'), findsOneWidget);
+    expect(documents.store['note']!.pages.single.text, 'Now edited.');
   });
 
-  testWidgets('saving stores the text and re-indexes it', (tester) async {
+  testWidgets('Done stores the text and re-indexes it', (tester) async {
     documents.seed(noteWith(''));
     await pumpEditor(tester);
 
     await tester.enterText(find.byType(TextField), 'The boiler is serviced.');
     await tester.pump();
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Done'));
     await tester.pumpAndSettle();
 
     expect(
@@ -177,11 +178,11 @@ void main() {
     await tester.pump();
 
     documents.saveFailure = const StorageFailure('The disk is full.');
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Done'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TextEditorScreen), findsOneWidget);
-    expect(find.text('Save'), findsOneWidget, reason: 'still unsaved');
+    expect(find.text('Unsaved'), findsOneWidget, reason: 'still unsaved');
   });
 
   testWidgets('a deleted page says so instead of rendering an editor', (

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
+import '../../../../core/widgets/app_state_view.dart';
 import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../export/presentation/providers/export_controller.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -80,11 +81,12 @@ class _ExtractedTextScreenState extends ConsumerState<ExtractedTextScreen> {
     final document = ref.watch(documentProvider(widget.documentId));
 
     return document.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () => const Scaffold(
+        body: AppStateView.busy(title: 'Opening this document…'),
+      ),
       error: (error, stackTrace) => Scaffold(
         appBar: AppBar(),
-        body: const AppEmptyState(
+        body: const AppStateView.problem(
           icon: Icons.error_outline,
           title: 'Could not open this document',
         ),
@@ -92,7 +94,7 @@ class _ExtractedTextScreenState extends ConsumerState<ExtractedTextScreen> {
       data: (value) => value == null
           ? Scaffold(
               appBar: AppBar(),
-              body: const AppEmptyState(
+              body: const AppStateView(
                 icon: Icons.delete_outline,
                 title: 'This document is no longer here',
               ),
@@ -150,7 +152,9 @@ class _Reader extends ConsumerWidget {
                   border: InputBorder.none,
                 ),
               )
-            : const Text('Extracted text'),
+            // Not "Extracted text". Extraction is what the app did; what the
+            // user opened is the document's text.
+            : const Text('Document text'),
         actions: [
           if (hasText)
             IconButton(
@@ -176,11 +180,7 @@ class _Reader extends ConsumerWidget {
       body: running
           ? _Recognising(state: ocr)
           : hasText
-          ? _Body(
-              document: document,
-              query: query.text,
-              scroll: scroll,
-            )
+          ? _Body(document: document, query: query.text, scroll: scroll)
           : _NothingToRead(document: document),
     );
   }
@@ -208,7 +208,8 @@ class _Body extends ConsumerWidget {
       return AppEmptyState(
         icon: Icons.search_off_outlined,
         title: 'No matches for "$trimmed"',
-        message: 'Try a shorter word, or check the spelling as it appears on '
+        message:
+            'Try a shorter word, or check the spelling as it appears on '
             'the page.',
       );
     }
@@ -231,7 +232,8 @@ class _Body extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final block = blocks[index];
                 final showPage =
-                    index == 0 || blocks[index - 1].pageIndex != block.pageIndex;
+                    index == 0 ||
+                    blocks[index - 1].pageIndex != block.pageIndex;
                 final page = document.pages.firstWhere(
                   (page) => page.index == block.pageIndex,
                 );
@@ -484,9 +486,7 @@ class _PageLabel extends StatelessWidget {
               ),
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Edit'),
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
             ),
         ],
       ),
@@ -509,8 +509,8 @@ class _MatchBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       color: theme.colorScheme.surfaceContainerHighest,
       child: Text(
-        '$matches ${matches == 1 ? 'match' : 'matches'} in $paragraphs '
-        '${paragraphs == 1 ? 'paragraph' : 'paragraphs'}',
+        '$matches ${matches == 1 ? 'result' : 'results'} in $paragraphs '
+        '${paragraphs == 1 ? 'place' : 'places'}',
         style: theme.textTheme.labelMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -583,10 +583,7 @@ class _NoTextActions extends StatelessWidget {
       runSpacing: 12,
       alignment: WrapAlignment.center,
       children: [
-        FilledButton.tonal(
-          onPressed: onReadAgain,
-          child: Text(readAgainLabel),
-        ),
+        FilledButton.tonal(onPressed: onReadAgain, child: Text(readAgainLabel)),
         if (page != null)
           TextButton.icon(
             onPressed: () => context.pushNamed(
@@ -642,9 +639,8 @@ class _NothingToRead extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    void run({bool force = false}) => ref
-        .read(ocrControllerProvider.notifier)
-        .run(document.id, force: force);
+    void run({bool force = false}) =>
+        ref.read(ocrControllerProvider.notifier).run(document.id, force: force);
 
     return switch (document.ocrStatus) {
       // Recognition ran and genuinely found nothing — a photograph of a
@@ -680,7 +676,7 @@ class _NothingToRead extends ConsumerWidget {
             'assistant answer questions about it.',
         action: FilledButton(
           onPressed: run,
-          child: const Text('Recognise text'),
+          child: const Text('Read the text'),
         ),
       ),
     };

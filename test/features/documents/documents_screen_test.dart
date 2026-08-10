@@ -6,7 +6,7 @@ import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/documents/presentation/screens/documents_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_tile.dart';
+import 'package:docuai/src/features/documents/presentation/widgets/document_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,8 +52,11 @@ void main() {
     await pumpLibrary(tester, documents: Stream.value(const <Document>[]));
 
     expect(find.text('No documents yet'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Scan a document'), findsOneWidget);
-    expect(find.byType(DocumentTile), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, 'Scan a document'),
+      findsOneWidget,
+    );
+    expect(find.byType(DocumentCard), findsNothing);
   });
 
   testWidgets('renders a row per document', (tester) async {
@@ -65,7 +68,7 @@ void main() {
       ]),
     );
 
-    expect(find.byType(DocumentTile), findsNWidgets(2));
+    expect(find.byType(DocumentCard), findsNWidgets(2));
     expect(find.text('Electricity bill'), findsOneWidget);
     expect(find.text('Rental agreement'), findsOneWidget);
     expect(find.text('No documents yet'), findsNothing);
@@ -85,7 +88,7 @@ void main() {
     );
 
     expect(find.textContaining('2 pages'), findsOneWidget);
-    expect(find.textContaining('Text pending'), findsOneWidget);
+    expect(find.textContaining('Text not read yet'), findsOneWidget);
   });
 
   testWidgets('drops the OCR note once every page is recognised', (
@@ -108,7 +111,7 @@ void main() {
     );
 
     expect(find.textContaining('1 page'), findsOneWidget);
-    expect(find.textContaining('Text pending'), findsNothing);
+    expect(find.textContaining('Text not read yet'), findsNothing);
   });
 
   testWidgets('marks favourites', (tester) async {
@@ -156,6 +159,6 @@ void main() {
     );
 
     expect(find.text('Could not open your library'), findsOneWidget);
-    expect(find.byType(DocumentTile), findsNothing);
+    expect(find.byType(DocumentCard), findsNothing);
   });
 }

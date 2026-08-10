@@ -4,13 +4,13 @@ import 'package:docuai/src/core/storage/storage_paths.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/documents/presentation/screens/document_detail_screen.dart';
 import 'package:docuai/src/features/documents/presentation/screens/documents_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_actions.dart';
 import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/ui.dart';
 
 /// Deleting the document you are currently looking at.
 ///
@@ -69,10 +69,7 @@ void main() {
     await pumpDetail(tester);
     expect(find.byType(DocumentDetailScreen), findsOneWidget);
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 

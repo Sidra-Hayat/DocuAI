@@ -6,7 +6,6 @@ import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/documents/presentation/screens/page_viewer_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/page_edit_actions.dart';
 import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -196,7 +195,7 @@ void main() {
       await pumpViewer(tester);
       expect(find.text('The deposit is 500.00 EUR.'), findsOneWidget);
 
-      await tester.tap(find.text('Edit this page'));
+      await tester.tap(find.widgetWithText(TextButton, 'Edit'));
       await tester.pumpAndSettle();
 
       expect(editedPageId, 't0');
@@ -230,11 +229,8 @@ void main() {
       );
 
       await pumpViewer(tester);
-      await tester.tap(find.byTooltip('Page actions'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Rescan this page'), findsNothing);
-      expect(find.text('Delete this page'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Rescan'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Delete'), findsOneWidget);
     });
 
     testWidgets('rescanning is offered for a photographed one', (tester) async {
@@ -246,10 +242,7 @@ void main() {
       );
 
       await pumpViewer(tester);
-      await tester.tap(find.byTooltip('Page actions'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Rescan this page'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Rescan'), findsOneWidget);
     });
   });
 
@@ -263,9 +256,9 @@ void main() {
       );
 
       await pumpViewer(tester);
-      await tester.tap(find.byTooltip('Page actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete this page'));
+      // The viewer's own bottom bar, rather than a `⋮` menu titled after
+      // itself.
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
       await tester.pumpAndSettle();
 
       expect(find.text('Delete page 1?'), findsOneWidget);
@@ -284,20 +277,13 @@ void main() {
       documents.seed(docWith(<DocumentPage>[buildPage(id: 'p0', index: 0)]));
 
       await pumpViewer(tester);
-      await tester.tap(find.byTooltip('Page actions'));
-      await tester.pumpAndSettle();
 
-      final item = tester.widget<PopupMenuItem<PageAction>>(
-        find
-            .ancestor(
-              of: find.text('Delete this page'),
-              matching: find.byType(PopupMenuItem<PageAction>),
-            )
-            .first,
+      final delete = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Delete'),
       );
       expect(
-        item.enabled,
-        isFalse,
+        delete.onPressed,
+        isNull,
         reason: 'a document with no pages is not a document',
       );
     });

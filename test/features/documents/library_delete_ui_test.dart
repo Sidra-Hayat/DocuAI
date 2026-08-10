@@ -4,14 +4,14 @@ import 'package:docuai/src/core/error/failure.dart';
 import 'package:docuai/src/core/storage/storage_paths.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/documents/presentation/screens/documents_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_actions.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_tile.dart';
+import 'package:docuai/src/features/documents/presentation/widgets/document_card.dart';
 import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/ui.dart';
 
 /// Drives a delete the way a user does — overflow menu, confirmation dialog —
 /// and checks the library reacts without anything asking it to.
@@ -50,10 +50,7 @@ void main() {
   }
 
   Future<void> deleteFirstTile(WidgetTester tester) async {
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
   }
@@ -93,24 +90,21 @@ void main() {
         ),
       );
     await pumpLibrary(tester);
-    expect(find.byType(DocumentTile), findsNWidgets(2));
+    expect(find.byType(DocumentCard), findsNWidgets(2));
 
     // Newest first, so "Remove me" is the first tile.
     await deleteFirstTile(tester);
 
     expect(find.text('Remove me'), findsNothing);
     expect(find.text('Keep me'), findsOneWidget);
-    expect(find.byType(DocumentTile), findsOneWidget);
+    expect(find.byType(DocumentCard), findsOneWidget);
   });
 
   testWidgets('cancelling the confirmation deletes nothing', (tester) async {
     documents.seed(buildDocument(id: 'a', title: 'Water bill'));
     await pumpLibrary(tester);
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Delete');
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
 
@@ -124,11 +118,8 @@ void main() {
     documents.seed(buildDocument(id: 'a', title: 'Before'));
     await pumpLibrary(tester);
 
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'After');
+    await tapDocumentAction(tester, 'Rename');
+    await enterDialogText(tester, 'After');
     await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await tester.pumpAndSettle();
 

@@ -58,7 +58,8 @@ void main() {
         id: 'p0',
         index: 0,
         ocrStatus: OcrStatus.completed,
-        text: 'The tenant shall maintain the property.\n\n'
+        text:
+            'The tenant shall maintain the property.\n\n'
             'The deposit is 1,200.00 EUR payable on signing.',
       ),
       buildPage(
@@ -145,7 +146,7 @@ void main() {
       await searchFor(tester, 'deposit');
 
       expect(find.byType(ReaderParagraph), findsOneWidget);
-      expect(find.textContaining('1 match in 1 paragraph'), findsOneWidget);
+      expect(find.textContaining('1 result in 1 place'), findsOneWidget);
       expect(
         find.text('The tenant shall maintain the property.'),
         findsNothing,
@@ -165,8 +166,8 @@ void main() {
 
       await searchFor(tester, 'the');
 
-      expect(find.textContaining('matches in'), findsOneWidget);
-      expect(find.textContaining('paragraphs'), findsOneWidget);
+      expect(find.textContaining('results in'), findsOneWidget);
+      expect(find.textContaining('places'), findsOneWidget);
     });
 
     testWidgets('says so when nothing matches', (tester) async {
@@ -267,7 +268,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(export.sharedText, hasLength(1));
-      expect(export.sharedText.single, contains('Notice is one calendar month.'));
+      expect(
+        export.sharedText.single,
+        contains('Notice is one calendar month.'),
+      );
       expect(export.lastSubject, 'Rental agreement');
     });
 
@@ -297,10 +301,7 @@ void main() {
     ) async {
       await pumpReader(tester, readable());
 
-      expect(
-        renderedScale(tester),
-        ReaderTextScaleController.defaultScale,
-      );
+      expect(renderedScale(tester), ReaderTextScaleController.defaultScale);
     });
 
     testWidgets('renders at the stored size', (tester) async {
@@ -440,7 +441,7 @@ void main() {
 
       expect(find.text('Not read yet'), findsOneWidget);
       expect(
-        find.widgetWithText(FilledButton, 'Recognise text'),
+        find.widgetWithText(FilledButton, 'Read the text'),
         findsOneWidget,
       );
       expect(find.byIcon(Icons.search), findsNothing);

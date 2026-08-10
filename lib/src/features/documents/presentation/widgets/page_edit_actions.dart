@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/error/failure.dart';
+import '../../../../core/router/app_routes.dart';
+import '../../../../core/widgets/app_action_sheet.dart';
 import '../../../import/presentation/providers/import_providers.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 
-enum PageAction { replace, delete }
-
-/// Replace or delete the page currently being looked at.
+/// Replace or delete one page.
 ///
-/// Shared by the viewer and the page manager so both offer the same actions
-/// with the same confirmations — a page deleted from one place should not be
-/// easier to lose than from the other.
+/// Shared by the viewer and the page list so both offer the same actions with
+/// the same confirmations — a page deleted from one place should not be easier
+/// to lose than from the other.
 class PageEditActions extends ConsumerWidget {
   const PageEditActions({
     required this.document,
@@ -26,56 +27,69 @@ class PageEditActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final page = document.pages[pageIndex];
-    final isLastPage = document.pageCount <= 1;
+    return IconButton(
+      tooltip: 'More',
+      icon: const Icon(Icons.more_vert),
+      onPressed: () => showPageActionsSheet(context, ref, document, pageIndex),
+    );
+  }
+}
 
-    return PopupMenuButton<PageAction>(
-      tooltip: 'Page actions',
-      onSelected: (action) => switch (action) {
-        PageAction.replace => replaceDocumentPage(
-          context,
-          ref,
-          documentId: document.id,
-          page: page,
+/// The actions for one page, as a sheet.
+Future<void> showPageActionsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  Document document,
+  int pageIndex,
+) {
+  final page = document.pages[pageIndex.clamp(0, document.pageCount - 1)];
+  final isLastPage = document.pageCount <= 1;
+
+  return showAppActionSheet(
+    context,
+    title: page.displayLabel,
+    actions: <AppSheetAction>[
+      AppSheetAction(
+        icon: Icons.edit_note_outlined,
+        label: page.hasImage ? 'Edit the text on this page' : 'Edit this page',
+        onSelected: () => context.pushNamed(
+          AppRoutes.editPageName,
+          pathParameters: <String, String>{'id': document.id, 'page': page.id},
         ),
-        PageAction.delete => confirmDeletePage(
+      ),
+      // Rescanning swaps the image for a new capture. A written page has no
+      // image to swap, and offering it would mean replacing authored content
+      // with a photograph.
+      if (page.hasImage)
+        AppSheetAction(
+          icon: Icons.document_scanner_outlined,
+          label: 'Scan this page again',
+          description: 'Replaces the picture and reads it again',
+          onSelected: () => replaceDocumentPage(
+            context,
+            ref,
+            documentId: document.id,
+            page: page,
+          ),
+        ),
+      AppSheetAction(
+        icon: Icons.delete_outline,
+        label: 'Delete this page',
+        // A document with no pages is not a document. Removing the last one is
+        // a document delete, which is a different, separately confirmed action
+        // rather than something to arrive at by deleting pages.
+        enabled: !isLastPage,
+        description: isLastPage ? 'A document needs at least one page' : null,
+        isDestructive: true,
+        onSelected: () => confirmDeletePage(
           context,
           ref,
           document: document,
           pageId: page.id,
         ),
-      },
-      itemBuilder: (context) => <PopupMenuEntry<PageAction>>[
-        // Rescanning swaps the image for a new capture. A written page has no
-        // image to swap, and offering it would mean replacing authored content
-        // with a photograph.
-        if (page.hasImage)
-          const PopupMenuItem(
-            value: PageAction.replace,
-            child: ListTile(
-              leading: Icon(Icons.document_scanner_outlined),
-              title: Text('Rescan this page'),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        PopupMenuItem(
-          value: PageAction.delete,
-          // A document with no pages is not a document. Removing the last one
-          // is a document delete, which is a different, separately confirmed
-          // action rather than something to arrive at by deleting pages.
-          enabled: !isLastPage,
-          child: ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Delete this page'),
-            subtitle: isLastPage
-                ? const Text('A document needs at least one page')
-                : null,
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 }
 
 /// Re-captures a page in place, keeping its position.
@@ -216,7 +230,12 @@ Future<void> importPagesIntoDocument(
   );
 }
 
-/// Appends an empty page to write on.
+/// Appends an empty page and opens it for writing.
+///
+/// It used to add the page and say so in a snackbar, which left the user
+/// holding a blank page they had to go and find before they could write on it —
+/// and nothing on the screen said where. Asking for a page to write on and
+/// being given a place to write is one action, not two.
 Future<void> addTextPageToDocument(
   BuildContext context,
   WidgetRef ref,
@@ -224,12 +243,19 @@ Future<void> addTextPageToDocument(
 ) async {
   final add = ref.read(addTextPageProvider);
   final messenger = ScaffoldMessenger.of(context);
+  final router = GoRouter.of(context);
 
   final result = await add(documentId);
 
   result.fold(
-    onSuccess: (_) => messenger.showSnackBar(
-      const SnackBar(content: Text('A blank page was added at the end.')),
+    // The page just appended is the last one; the use case returns the document
+    // it created rather than leaving the caller to re-read the store and hope.
+    onSuccess: (document) => router.pushNamed<void>(
+      AppRoutes.editPageName,
+      pathParameters: <String, String>{
+        'id': document.id,
+        'page': document.pages.last.id,
+      },
     ),
     onFailure: (failure) =>
         messenger.showSnackBar(SnackBar(content: Text(failure.message))),

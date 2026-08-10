@@ -59,13 +59,6 @@ class _PageViewerScreenState extends ConsumerState<PageViewerScreen> {
           title: document.value == null
               ? null
               : Text(document.value!.title, overflow: TextOverflow.ellipsis),
-          actions: [
-            if (document.value != null && document.value!.hasPages)
-              PageEditActions(
-                document: document.value!,
-                pageIndex: _current.clamp(0, document.value!.pageCount - 1),
-              ),
-          ],
         ),
         body: document.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -86,9 +79,9 @@ class _PageViewerScreenState extends ConsumerState<PageViewerScreen> {
         ),
         bottomNavigationBar: document.value == null || !document.value!.hasPages
             ? null
-            : _PageNavigator(
+            : _BottomBar(
+                document: document.value!,
                 current: _current.clamp(0, document.value!.pageCount - 1),
-                total: document.value!.pageCount,
                 onGo: _goToPage,
               ),
       ),
@@ -107,53 +100,130 @@ class _PageViewerScreenState extends ConsumerState<PageViewerScreen> {
   }
 }
 
-/// Previous, next, and where you are.
+/// What you can do to the page you are looking at, and where you are in the
+/// document.
 ///
-/// Swiping already works and is what most people will use. These exist because
-/// swiping a page that is zoomed in does not — the gesture pans the image
-/// instead — and because a document of thirty pages needs something that says
-/// how far through it you are.
-class _PageNavigator extends StatelessWidget {
-  const _PageNavigator({
+/// The actions used to be a `⋮` in the corner labelled "Page actions" — a menu
+/// whose name described the menu rather than anything in it. Named buttons in
+/// reach of a thumb cost one row of a screen that has room for it.
+class _BottomBar extends ConsumerWidget {
+  const _BottomBar({
+    required this.document,
     required this.current,
-    required this.total,
     required this.onGo,
   });
 
+  final Document document;
   final int current;
-  final int total;
   final ValueChanged<int> onGo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final page = document.pages[current];
+    final isLastPage = document.pageCount <= 1;
 
     return ColoredBox(
-      color: Colors.black.withValues(alpha: .55),
+      color: Colors.black.withValues(alpha: .62),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                tooltip: 'Previous page',
-                onPressed: current > 0 ? () => onGo(current - 1) : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Text(
-                'Page ${current + 1} of $total',
-                style: theme.textTheme.labelLarge,
-              ),
-              IconButton(
-                tooltip: 'Next page',
-                onPressed: current < total - 1 ? () => onGo(current + 1) : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: <Widget>[
+                _ViewerAction(
+                  icon: Icons.edit_note_outlined,
+                  label: page.hasImage ? 'Edit text' : 'Edit',
+                  onPressed: () => context.pushNamed(
+                    AppRoutes.editPageName,
+                    pathParameters: <String, String>{
+                      'id': document.id,
+                      'page': page.id,
+                    },
+                  ),
+                ),
+                if (page.hasImage)
+                  _ViewerAction(
+                    icon: Icons.document_scanner_outlined,
+                    label: 'Rescan',
+                    onPressed: () => replaceDocumentPage(
+                      context,
+                      ref,
+                      documentId: document.id,
+                      page: page,
+                    ),
+                  ),
+                _ViewerAction(
+                  icon: Icons.delete_outline,
+                  label: 'Delete',
+                  // Removing the last page would leave a document with nothing
+                  // in it, which is a document delete — a different action,
+                  // confirmed separately, on the screen that owns it.
+                  onPressed: isLastPage
+                      ? null
+                      : () => confirmDeletePage(
+                          context,
+                          ref,
+                          document: document,
+                          pageId: page.id,
+                        ),
+                ),
+              ],
+            ),
+            // Swiping already works and is what most people will use. These
+            // exist because swiping a page that is zoomed in does not — the
+            // gesture pans the image instead — and because a document of thirty
+            // pages needs something that says how far through it you are.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: <Widget>[
+                IconButton(
+                  tooltip: 'Previous page',
+                  onPressed: current > 0 ? () => onGo(current - 1) : null,
+                  icon: const Icon(Icons.chevron_left),
+                ),
+                Text(
+                  'Page ${current + 1} of ${document.pageCount}',
+                  style: theme.textTheme.labelLarge,
+                ),
+                IconButton(
+                  tooltip: 'Next page',
+                  onPressed: current < document.pageCount - 1
+                      ? () => onGo(current + 1)
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                ),
+              ],
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _ViewerAction extends StatelessWidget {
+  const _ViewerAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white38,
       ),
     );
   }
@@ -243,33 +313,17 @@ class _WrittenPage extends StatelessWidget {
       );
     }
 
+    // No edit button of its own: the bar at the bottom of the viewer carries
+    // one, and two Edits on one screen is two answers to the same question.
     return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: SelectionArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 88, 24, 24),
-                child: Text(
-                  page.text,
-                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
-                ),
-              ),
-            ),
+      child: SelectionArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 88, 24, 24),
+          child: Text(
+            page.text,
+            style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 88),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _edit(context),
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit this page'),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

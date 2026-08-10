@@ -13,7 +13,6 @@ import 'package:docuai/src/features/documents/domain/repositories/document_repos
 import 'package:docuai/src/features/documents/domain/usecases/update_document_tags.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/documents/presentation/screens/document_detail_screen.dart';
-import 'package:docuai/src/features/documents/presentation/widgets/document_actions.dart';
 import 'package:docuai/src/features/search/data/datasources/search_index_local_data_source.dart';
 import 'package:docuai/src/features/search/data/repositories/bm25_search_repository.dart';
 import 'package:docuai/src/features/search/presentation/providers/search_providers.dart';
@@ -24,6 +23,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
 
 import '../../helpers/fakes.dart';
+import '../../helpers/ui.dart';
 
 /// Tagging a document, end to end.
 ///
@@ -162,7 +162,9 @@ void main() {
       await setTags(<String>['utilities']);
 
       expect(
-        (await search.search('utilities')).valueOrNull?.map((h) => h.document.id),
+        (await search.search(
+          'utilities',
+        )).valueOrNull?.map((h) => h.document.id),
         contains('bill'),
       );
     });
@@ -427,10 +429,9 @@ void main() {
     });
 
     testWidgets('the action menu offers tag editing', (tester) async {
-      await pumpDetail(tester);
+      await pumpDetail(tester, tags: <String>['utilities']);
 
-      await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-      await tester.pumpAndSettle();
+      await openDocumentActions(tester);
 
       expect(find.text('Edit tags'), findsWidgets);
     });

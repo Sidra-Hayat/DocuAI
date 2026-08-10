@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/error/result.dart';
+import '../../../documents/domain/entities/document.dart';
 import '../../../documents/presentation/providers/document_providers.dart';
 import '../../data/datasources/search_index_local_data_source.dart';
 import '../../data/repositories/bm25_search_repository.dart';
@@ -56,6 +57,54 @@ final searchIndexReadyProvider = FutureProvider<void>((ref) async {
   }
 });
 
+// ---- Things to search for --------------------------------------------------
+
+/// Every tag in the library, in alphabetical order.
+///
+/// Derived from the documents rather than stored: tags live on the documents
+/// that carry them, and a second list would be one more thing to keep in step
+/// with a rename or a delete. Offered on the search screen because a tag is the
+/// one search term the user is guaranteed to have written themselves.
+final libraryTagsProvider = Provider<List<String>>((ref) {
+  final documents = ref.watch(documentsProvider).value ?? const <Document>[];
+
+  final tags = <String>{for (final document in documents) ...document.tags};
+  return tags.toList(growable: false)..sort();
+});
+
+/// What was searched for earlier in this session, newest first.
+///
+/// Deliberately not persisted. A search history is a record of what someone
+/// was looking for, which on an offline document app is exactly the sort of
+/// thing that should not outlive the reason for it — and nothing here is worth
+/// a migration or a Hive box.
+class RecentSearches extends Notifier<List<String>> {
+  static const int max = 5;
+
+  @override
+  List<String> build() => const <String>[];
+
+  /// Recorded when the user *commits* to a query — submits it, or opens
+  /// something it found. Recording every keystroke would fill the list with
+  /// the prefixes of one word.
+  void remember(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    final next = <String>[
+      trimmed,
+      for (final earlier in state)
+        if (earlier.toLowerCase() != trimmed.toLowerCase()) earlier,
+    ];
+
+    state = List<String>.unmodifiable(next.take(max));
+  }
+}
+
+final recentSearchesProvider = NotifierProvider<RecentSearches, List<String>>(
+  RecentSearches.new,
+);
+
 // ---- Screen state ----------------------------------------------------------
 
 class SearchState {
@@ -71,10 +120,7 @@ class SearchState {
   bool get hasQuery => query.trim().length >= SearchDocuments.minQueryLength;
 
   SearchState copyWith({String? query, AsyncValue<List<SearchHit>>? results}) =>
-      SearchState(
-        query: query ?? this.query,
-        results: results ?? this.results,
-      );
+      SearchState(query: query ?? this.query, results: results ?? this.results);
 }
 
 class SearchQueryController extends Notifier<SearchState> {
@@ -122,14 +168,14 @@ class SearchQueryController extends Notifier<SearchState> {
     state = state.copyWith(
       results: result.fold(
         onSuccess: AsyncData<List<SearchHit>>.new,
-        onFailure: (failure) => AsyncError<List<SearchHit>>(
-          failure,
-          StackTrace.current,
-        ),
+        onFailure: (failure) =>
+            AsyncError<List<SearchHit>>(failure, StackTrace.current),
       ),
     );
   }
 }
 
 final searchQueryControllerProvider =
-    NotifierProvider<SearchQueryController, SearchState>(SearchQueryController.new);
+    NotifierProvider<SearchQueryController, SearchState>(
+      SearchQueryController.new,
+    );

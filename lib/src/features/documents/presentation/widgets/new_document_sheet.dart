@@ -5,73 +5,52 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/router/app_routes.dart';
+import '../../../../core/widgets/app_action_sheet.dart';
 import '../../../import/presentation/providers/import_providers.dart';
 import '../../domain/usecases/create_text_document.dart';
 import '../providers/document_providers.dart';
 
-/// The two ways a document starts.
+/// The ways a document starts.
 ///
-/// A sheet rather than a second floating button: creating is one intention with
-/// two methods, and the choice belongs at the moment of asking rather than
+/// A sheet rather than three floating buttons: creating is one intention with
+/// several methods, and the choice belongs at the moment of asking rather than
 /// permanently on top of the library.
-Future<void> showNewDocumentSheet(BuildContext context) => showModalBottomSheet(
-  context: context,
-  showDragHandle: true,
-  builder: (context) => const _NewDocumentSheet(),
-);
-
-class _NewDocumentSheet extends StatelessWidget {
-  const _NewDocumentSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(
-              Icons.document_scanner_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            title: const Text('Scan a document'),
-            subtitle: const Text('Use the camera, then read the text on it'),
-            onTap: () {
-              Navigator.of(context).pop();
-              context.pushNamed(AppRoutes.scanName);
-            },
-          ),
-          ListTile(
-            leading: Icon(
-              Icons.photo_library_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            title: const Text('Import photos'),
-            subtitle: const Text('Use pictures already on this device'),
-            onTap: () async {
-              Navigator.of(context).pop();
-              await importPhotosAsDocument(context);
-            },
-          ),
-          ListTile(
-            leading: Icon(
-              Icons.edit_note_outlined,
-              color: theme.colorScheme.primary,
-            ),
-            title: const Text('Write a text document'),
-            subtitle: const Text('Type a note — searchable like any other'),
-            onTap: () async {
-              Navigator.of(context).pop();
-              await createAndOpenTextDocument(context);
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
+///
+/// Named for what the user is doing, not for the machinery — Scan, Import,
+/// Create. Each carries one line saying what it actually does, because "Import"
+/// alone does not tell anyone whether it means their camera roll or their
+/// downloads folder.
+Future<void> showNewDocumentSheet(BuildContext context) {
+  return showAppActionSheet(
+    context,
+    title: 'Add to your library',
+    actions: <AppSheetAction>[
+      AppSheetAction(
+        icon: Icons.document_scanner_outlined,
+        label: 'Scan',
+        description: 'Use the camera, then read the text on it',
+        onSelected: () => context.pushNamed(AppRoutes.scanName),
       ),
-    );
-  }
+      AppSheetAction(
+        icon: Icons.photo_library_outlined,
+        label: 'Import photos',
+        description: 'Pictures already on this device',
+        onSelected: () => importPhotosAsDocument(context),
+      ),
+      AppSheetAction(
+        icon: Icons.folder_open_outlined,
+        label: 'Import a file',
+        description: 'A PDF, a Word file, or a text file',
+        onSelected: () => importFileAsDocument(context),
+      ),
+      AppSheetAction(
+        icon: Icons.edit_note_outlined,
+        label: 'Create',
+        description: 'Write a document yourself',
+        onSelected: () => createAndOpenTextDocument(context),
+      ),
+    ],
+  );
 }
 
 /// Asks for a title, creates the document, and opens it for writing.
@@ -143,6 +122,35 @@ Future<void> importPhotosAsDocument(BuildContext context) async {
         pathParameters: <String, String>{'id': value.document.id},
       );
     case Failed(:final failure):
+      if (failure is ImportFailure && failure.cancelled) return;
+      messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Builds a document from a PDF, a Word file, a text file or a picture.
+///
+/// A PDF becomes pages and is read like a scan; a Word or text file becomes a
+/// document you can edit. Either way what lands in the library is an ordinary
+/// document — the point of importing rather than merely opening.
+///
+/// Every dependency is resolved *before* the picker is awaited, for the same
+/// reason the photo import does it: the picker is a platform round trip long
+/// enough for the sheet that started it to be gone by the time it returns.
+Future<void> importFileAsDocument(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final messenger = ScaffoldMessenger.of(context);
+  final router = GoRouter.of(context);
+
+  final result = await container.read(importFileAsDocumentProvider)();
+
+  switch (result) {
+    case Success(:final value):
+      await router.pushNamed<void>(
+        AppRoutes.documentDetailName,
+        pathParameters: <String, String>{'id': value.document.id},
+      );
+    case Failed(:final failure):
+      // Backing out of the picker is not a failure worth reporting.
       if (failure is ImportFailure && failure.cancelled) return;
       messenger.showSnackBar(SnackBar(content: Text(failure.message)));
   }

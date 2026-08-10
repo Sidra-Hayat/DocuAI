@@ -60,10 +60,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) => DocumentDetailScreen(
                       documentId: state.pathParameters['id']!,
                     ),
+                    // Everything below opens *above* the shell.
+                    //
+                    // These are the screens that are one document and nothing
+                    // else: a page filling the display, a page being written,
+                    // the text being read. Nested inside the branch they kept
+                    // the navigation bar and the shell's floating button, so
+                    // the "full screen" page viewer drew its own black chrome
+                    // and then had a tab bar rendered on top of it.
+                    //
+                    // Only the navigator changes. The paths, names and helpers
+                    // in [AppRoutes] are untouched, so every existing link and
+                    // deep link still resolves — and Back still lands on the
+                    // document, because that is what sits underneath.
                     routes: [
                       GoRoute(
                         path: AppRoutes.extractedText,
                         name: AppRoutes.extractedTextName,
+                        parentNavigatorKey: _rootNavigatorKey,
                         builder: (context, state) => ExtractedTextScreen(
                           documentId: state.pathParameters['id']!,
                         ),
@@ -71,6 +85,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: AppRoutes.pageViewer,
                         name: AppRoutes.pageViewerName,
+                        parentNavigatorKey: _rootNavigatorKey,
                         builder: (context, state) => PageViewerScreen(
                           documentId: state.pathParameters['id']!,
                           // A malformed page number opens the first page
@@ -85,6 +100,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: AppRoutes.managePages,
                         name: AppRoutes.managePagesName,
+                        parentNavigatorKey: _rootNavigatorKey,
                         builder: (context, state) => ManagePagesScreen(
                           documentId: state.pathParameters['id']!,
                         ),
@@ -92,6 +108,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       GoRoute(
                         path: AppRoutes.editPage,
                         name: AppRoutes.editPageName,
+                        parentNavigatorKey: _rootNavigatorKey,
                         builder: (context, state) => TextEditorScreen(
                           documentId: state.pathParameters['id']!,
                           pageId: state.pathParameters['page']!,
@@ -126,6 +143,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: AppRoutes.conversation,
                     name: AppRoutes.conversationName,
+                    // Above the shell, like the document screens: a
+                    // conversation is a composer, a keyboard and a transcript,
+                    // and a navigation bar between the composer and the bottom
+                    // of the screen is chrome nobody reaches for mid-question.
+                    parentNavigatorKey: _rootNavigatorKey,
                     builder: (context, state) => AssistantScreen(
                       conversationId: state.pathParameters['conversation']!,
                       documentId: state.uri.queryParameters['document'],

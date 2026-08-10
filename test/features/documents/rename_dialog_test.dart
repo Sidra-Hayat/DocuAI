@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
+import '../../helpers/ui.dart';
 
 void main() {
   late FakeDocumentRepository documents;
@@ -18,13 +19,11 @@ void main() {
   Future<void> pumpMenu(WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          documentRepositoryProvider.overrideWithValue(documents),
-        ],
+        overrides: [documentRepositoryProvider.overrideWithValue(documents)],
         child: MaterialApp(
           home: Scaffold(
             appBar: AppBar(
-              actions: [DocumentActionsMenu(document: buildDocument())],
+              actions: [DocumentActionsButton(document: buildDocument())],
             ),
           ),
         ),
@@ -34,10 +33,7 @@ void main() {
   }
 
   Future<void> openRenameDialog(WidgetTester tester) async {
-    await tester.tap(find.byType(PopupMenuButton<DocumentAction>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
+    await tapDocumentAction(tester, 'Rename');
   }
 
   testWidgets('renaming from the menu does not throw', (tester) async {

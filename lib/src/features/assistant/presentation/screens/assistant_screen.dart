@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/widgets/app_empty_state.dart';
-import '../../domain/entities/assistant_answer.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../providers/assistant_providers.dart';
-import '../widgets/chat_bubble.dart';
+import '../widgets/answer_view.dart';
+import '../widgets/assistant_quick_actions.dart';
 import '../widgets/question_chips.dart';
 import '../widgets/thinking_indicator.dart';
 
 /// Offline question answering over the user's own documents.
 ///
-/// Answers are quoted from recognised text, never composed, so every reply can
-/// be traced back to a page. The screen makes that visible: each answer carries
-/// citation chips that open the document it came from.
+/// Answers are quoted from the pages, never composed, so every reply can be
+/// traced back to where it came from. The screen keeps that property and stops
+/// performing it: an answer arrives as an answer, with one line naming its
+/// source underneath, and the excerpt is there for anyone who taps to check.
+///
+/// What it no longer shows by default is the shape of the search that produced
+/// it — the match-strength chip, the count of documents read, the list of words
+/// that matched. Those describe the retrieval, and a person asking how much
+/// their electricity bill was is not asking about retrieval.
 class AssistantScreen extends ConsumerStatefulWidget {
   const AssistantScreen({
     required this.conversationId,
@@ -54,6 +61,7 @@ class AssistantScreen extends ConsumerStatefulWidget {
 class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scroll = ScrollController();
+  final FocusNode _composerFocus = FocusNode();
 
   @override
   void initState() {
@@ -73,6 +81,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   void dispose() {
     _composer.dispose();
     _scroll.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -80,8 +89,21 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
     final question = _composer.text;
     if (question.trim().isEmpty) return;
 
-    final messenger = ScaffoldMessenger.of(context);
     _composer.clear();
+    await _ask(question);
+  }
+
+  /// Asks a question the user picked rather than typed.
+  ///
+  /// Routed through the same path as the composer so a suggestion and a typed
+  /// question cannot drift apart in validation or error handling.
+  Future<void> _askNow(String question) async {
+    _composer.clear();
+    await _ask(question);
+  }
+
+  Future<void> _ask(String question) async {
+    final messenger = ScaffoldMessenger.of(context);
 
     final rejection = await ref
         .read(assistantControllerProvider.notifier)
@@ -93,27 +115,6 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     // Only a question rejected before it was recorded needs telling; anything
     // else is already in the transcript as a failed turn.
-    if (rejection != null) {
-      messenger.showSnackBar(SnackBar(content: Text(rejection)));
-    }
-  }
-
-  /// Asks a question the user picked rather than typed.
-  ///
-  /// Routed through the same path as the composer so a suggestion and a typed
-  /// question cannot drift apart in validation or error handling.
-  Future<void> _askNow(String question) async {
-    _composer.clear();
-
-    final messenger = ScaffoldMessenger.of(context);
-    final rejection = await ref
-        .read(assistantControllerProvider.notifier)
-        .ask(
-          question,
-          conversationId: widget.conversationId,
-          documentId: widget.documentId,
-        );
-
     if (rejection != null) {
       messenger.showSnackBar(SnackBar(content: Text(rejection)));
     }
@@ -141,7 +142,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
           'The questions and answers are removed. Your documents are not '
           'affected.',
         ),
-        actions: [
+        actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
@@ -186,12 +187,13 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         title: Text(
           widget.documentTitle == null
               ? 'Assistant'
-              : 'Ask ${widget.documentTitle}',
+              : 'About ${widget.documentTitle}',
+          overflow: TextOverflow.ellipsis,
         ),
-        actions: [
+        actions: <Widget>[
           if (recent.isNotEmpty && !busy)
             PopupMenuButton<String>(
-              tooltip: 'Recent questions',
+              tooltip: 'Questions you asked before',
               icon: const Icon(Icons.history),
               onSelected: _askNow,
               itemBuilder: (context) => <PopupMenuEntry<String>>[
@@ -211,27 +213,36 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         ],
       ),
       body: Column(
-        children: [
+        children: <Widget>[
           Expanded(
             child: history.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => const AppEmptyState(
+              loading: () =>
+                  const AppStateView.busy(title: 'Opening this conversation…'),
+              error: (error, stackTrace) => const AppStateView.problem(
                 icon: Icons.error_outline,
                 title: 'The conversation could not be loaded',
               ),
               data: (messages) => messages.isEmpty
-                  ? _Introduction(onAsk: _askNow, scope: widget.documentId)
+                  ? _Introduction(
+                      onAsk: _askNow,
+                      onWriteQuestion: _composerFocus.requestFocus,
+                      scope: widget.documentId,
+                    )
                   : _Transcript(
                       messages: messages,
                       controller: _scroll,
                       busy: busy,
-                      lastAnswer: assistant.scopeId == scope
-                          ? assistant.lastAnswer
-                          : null,
                     ),
             ),
           ),
-          _Composer(controller: _composer, busy: busy, onSend: _send),
+          _Composer(
+            controller: _composer,
+            focusNode: _composerFocus,
+            busy: busy,
+            scoped: widget.documentId != null,
+            onSend: _send,
+            onAsk: _askNow,
+          ),
         ],
       ),
     );
@@ -243,34 +254,22 @@ class _Transcript extends StatelessWidget {
     required this.messages,
     required this.controller,
     required this.busy,
-    required this.lastAnswer,
   });
 
   final List<ChatMessage> messages;
   final ScrollController controller;
   final bool busy;
-  final AssistantAnswer? lastAnswer;
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
       controller: controller,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       itemCount: messages.length + (busy ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= messages.length) return const ThinkingIndicator();
 
-        final message = messages[index];
-
-        // Confidence belongs to the run that produced it, and only the newest
-        // answer has a run this session knows about.
-        final isNewestAnswer =
-            index == messages.length - 1 && !message.isFromUser && !busy;
-
-        return ChatBubble(
-          message: message,
-          answer: isNewestAnswer ? lastAnswer : null,
-        );
+        return ChatTurn(message: messages[index]);
       },
     );
   }
@@ -278,59 +277,54 @@ class _Transcript extends StatelessWidget {
 
 /// Shown before the first question.
 ///
-/// States the two things that are not obvious and that determine whether the
-/// assistant appears to work at all: it can only read documents whose text has
-/// been recognised, and it quotes rather than composes.
+/// Leads with what the user can do rather than with a caveat about how the
+/// engine works. The old version opened with two paragraphs — one explaining
+/// that answers are quoted rather than composed, one pointing at the Search tab
+/// — which is a lot of reading in front of an empty box.
 class _Introduction extends ConsumerWidget {
-  const _Introduction({required this.onAsk, required this.scope});
+  const _Introduction({
+    required this.onAsk,
+    required this.onWriteQuestion,
+    required this.scope,
+  });
 
   final ValueChanged<String> onAsk;
+  final VoidCallback onWriteQuestion;
 
   /// The document this conversation is about, or null for the library-wide
-  /// one — the suggestions and the explanation both change.
+  /// one — the suggestions and the actions both change.
   final String? scope;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Suggestions are a convenience: a document or library that cannot produce
-    // any still gets the explanation, never an error.
+    // any still gets the actions, never an error.
     final suggestions =
         ref.watch(suggestedQuestionsProvider(scope)).value ?? const <String>[];
 
-    if (scope != null) {
-      return AppEmptyState(
-        icon: Icons.auto_awesome_outlined,
-        title: 'Ask about this document',
-        message:
-            'Answers are quoted from this document only. Its conversation is '
-            'kept separately, so it is still here next time you open it.',
-        action: suggestions.isEmpty
-            ? null
-            : QuestionChips(
+    return AppStateView(
+      icon: Icons.auto_awesome_outlined,
+      title: scope == null
+          ? 'Ask anything about your documents'
+          : 'Ask anything about this document',
+      message:
+          'Every answer comes from the pages themselves, and shows you '
+          'where it came from.',
+      action: AssistantQuickActions(
+        onAsk: onAsk,
+        onWriteQuestion: onWriteQuestion,
+        scoped: scope != null,
+      ),
+      secondaryAction: suggestions.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: QuestionChips(
                 questions: suggestions,
-                label: 'TRY ASKING',
+                label: 'FOR EXAMPLE',
                 icon: Icons.north_east,
                 onSelected: onAsk,
               ),
-      );
-    }
-
-    return AppEmptyState(
-      icon: Icons.auto_awesome_outlined,
-      title: 'Ask about your documents',
-      message:
-          'Answers are quoted from the pages themselves — nothing is sent '
-          'anywhere, and nothing is made up. Every answer shows where it came '
-          'from.\n\n'
-          'Looking for a document rather than an answer? The Search tab finds '
-          'them by name, tag or text.',
-      action: suggestions.isEmpty
-          ? null
-          : QuestionChips(
-              questions: suggestions,
-              label: 'TRY ASKING',
-              icon: Icons.north_east,
-              onSelected: onAsk,
             ),
     );
   }
@@ -339,13 +333,19 @@ class _Introduction extends ConsumerWidget {
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
+    required this.focusNode,
     required this.busy,
+    required this.scoped,
     required this.onSend,
+    required this.onAsk,
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool busy;
+  final bool scoped;
   final VoidCallback onSend;
+  final ValueChanged<String> onAsk;
 
   @override
   Widget build(BuildContext context) {
@@ -354,7 +354,12 @@ class _Composer extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           border: Border(
@@ -363,10 +368,26 @@ class _Composer extends StatelessWidget {
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
+          children: <Widget>[
+            // The quick actions, still reachable. They used to exist only in
+            // the empty state, so the second question onwards you were on your
+            // own with a blank field.
+            IconButton(
+              tooltip: 'Summarize, explain, find information',
+              onPressed: busy
+                  ? null
+                  : () => showQuickActionsSheet(
+                      context,
+                      scoped: scoped,
+                      onAsk: onAsk,
+                      onWriteQuestion: focusNode.requestFocus,
+                    ),
+              icon: const Icon(Icons.auto_awesome_outlined),
+            ),
             Expanded(
               child: TextField(
                 controller: controller,
+                focusNode: focusNode,
                 enabled: !busy,
                 maxLength: AskAssistant.maxQuestionLength,
                 maxLines: 4,
@@ -374,17 +395,37 @@ class _Composer extends StatelessWidget {
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.send,
                 onSubmitted: busy ? null : (_) => onSend(),
-                decoration: const InputDecoration(
-                  hintText: 'Ask questions about your documents',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: 'Ask about your documents',
                   isDense: true,
                   // The limit only matters as it is approached, and a permanent
                   // "0/500" under the field is noise the rest of the time.
                   counterText: '',
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHigh,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 2,
+                    ),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            AppSpacing.gapHorizontalSm,
             IconButton.filled(
               onPressed: busy ? null : onSend,
               icon: const Icon(Icons.arrow_upward),

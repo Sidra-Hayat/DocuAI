@@ -19,6 +19,21 @@ abstract final class AppTheme {
   /// The single source of truth for DocuAI's colour identity.
   static const Color seedColor = Color(0xFF2563EB);
 
+  /// The brand gold, reachable through `colorScheme.tertiary`.
+  ///
+  /// Deliberately *not* a colour widgets import. Gold arrives through the
+  /// scheme so that no widget can hard-code a hex, and so both brightnesses get
+  /// a value chosen for their own ground rather than one colour used twice —
+  /// the light-mode gold is considerably deeper, because a gold that reads as
+  /// premium on charcoal is illegible on paper.
+  ///
+  /// It is an accent, not an action colour. Reserved for the brand mark, the
+  /// favourite star, and the small labels that mark a section as DocuAI's own.
+  /// Every button, link and other primary action stays [seedColor] indigo — a
+  /// second action colour would leave nothing saying which one to press.
+  static const Color goldDark = Color(0xFFE3BE6E);
+  static const Color goldLight = Color(0xFF7A5C10);
+
   /// Radii come from [AppRadius] rather than being restated here. They used to
   /// be private to this file, which is precisely why widgets had grown their
   /// own — a component that cannot reach the token invents one.
@@ -44,6 +59,12 @@ abstract final class AppTheme {
     //  * `surfaceContainerLowest` becomes the card colour, since a card that is
     //    *lighter* than its background is what reads as raised on a dark
     //    screen, where a shadow shows nothing.
+    //
+    // The tertiary ramp is replaced outright in both brightnesses. Material
+    // derives a tertiary from the seed, and what it derives from a blue seed is
+    // a muted violet — a colour DocuAI's identity has no use for, and the only
+    // slot in the scheme where the brand's gold can live without a widget
+    // reaching for a raw hex.
     final colorScheme = isDark
         ? generated.copyWith(
             surface: const Color(0xFF101418),
@@ -52,8 +73,17 @@ abstract final class AppTheme {
             surfaceContainer: const Color(0xFF1A2026),
             surfaceContainerHigh: const Color(0xFF222930),
             surfaceContainerHighest: const Color(0xFF2A323A),
+            tertiary: goldDark,
+            onTertiary: const Color(0xFF3D2E00),
+            tertiaryContainer: const Color(0xFF574314),
+            onTertiaryContainer: const Color(0xFFFFDFA0),
           )
-        : generated;
+        : generated.copyWith(
+            tertiary: goldLight,
+            onTertiary: const Color(0xFFFFFFFF),
+            tertiaryContainer: const Color(0xFFF6E7BF),
+            onTertiaryContainer: const Color(0xFF261A00),
+          );
 
     return ThemeData(
       colorScheme: colorScheme,
