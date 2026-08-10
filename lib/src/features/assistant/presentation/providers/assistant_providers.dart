@@ -8,6 +8,7 @@ import '../../../search/presentation/providers/search_providers.dart';
 import '../../data/datasources/chat_history_local_data_source.dart';
 import '../../data/repositories/retrieval_assistant_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
+import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/repositories/assistant_repository.dart';
@@ -53,9 +54,8 @@ final conversationsProvider =
 ///
 /// Keyed by conversation id — the same key the messages themselves carry.
 final chatHistoryProvider = StreamProvider.family<List<ChatMessage>, String>(
-  (ref, conversationId) => WatchChatHistory(
-    ref.watch(assistantRepositoryProvider),
-  )(conversationId),
+  (ref, conversationId) =>
+      WatchChatHistory(ref.watch(assistantRepositoryProvider))(conversationId),
 );
 
 final suggestQuestionsProvider = Provider<SuggestQuestions>(
@@ -71,13 +71,14 @@ final suggestQuestionsProvider = Provider<SuggestQuestions>(
 /// Empty list on failure rather than an error state: suggestions are a
 /// convenience, and an empty state that reports "suggestions unavailable"
 /// would make a working assistant look broken.
-final suggestedQuestionsProvider =
-    FutureProvider.family<List<String>, String?>((ref, documentId) async {
-      final result = await ref.watch(suggestQuestionsProvider)(
-        documentId: documentId,
-      );
-      return result.valueOrNull ?? const <String>[];
-    });
+final suggestedQuestionsProvider = FutureProvider.family<List<String>, String?>(
+  (ref, documentId) async {
+    final result = await ref.watch(suggestQuestionsProvider)(
+      documentId: documentId,
+    );
+    return result.valueOrNull ?? const <String>[];
+  },
+);
 
 /// The last few questions actually asked, newest first.
 ///
@@ -92,7 +93,9 @@ final recentQuestionsProvider = Provider.family<List<String>, String>((
       const <ChatMessage>[];
 
   return RecentQuestions.from(
-    history.where((message) => message.isFromUser).map((message) => message.text),
+    history
+        .where((message) => message.isFromUser)
+        .map((message) => message.text),
   );
 });
 
@@ -145,16 +148,43 @@ class AssistantController extends Notifier<AssistantState> {
     String question, {
     required String conversationId,
     String? documentId,
-  }) async {
+  }) => _perform(
+    conversationId,
+    (useCase) => useCase(
+      question,
+      conversationId: conversationId,
+      documentId: documentId,
+    ),
+  );
+
+  /// Carries out an action the user chose from the quick actions or a button.
+  ///
+  /// Deliberately not routed through [ask] with an English sentence. The button
+  /// knows what it means; turning that back into "Explain this document" for
+  /// the engine to re-parse is how the assistant came to answer with the words
+  /// of the question rather than with anything from a page.
+  Future<String?> run(
+    AssistantIntent intent, {
+    required String conversationId,
+    String? documentId,
+  }) => _perform(
+    conversationId,
+    (useCase) => useCase.run(
+      intent,
+      conversationId: conversationId,
+      documentId: documentId,
+    ),
+  );
+
+  Future<String?> _perform(
+    String conversationId,
+    FutureResult<AssistantAnswer> Function(AskAssistant useCase) body,
+  ) async {
     if (state.busy) return null;
     state = AssistantState(busy: true, scopeId: conversationId);
 
     try {
-      final result = await ref.read(askAssistantProvider)(
-        question,
-        conversationId: conversationId,
-        documentId: documentId,
-      );
+      final result = await body(ref.read(askAssistantProvider));
 
       return switch (result) {
         Success(:final value) => () {

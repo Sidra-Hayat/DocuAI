@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:docuai/src/core/error/failure.dart';
 import 'package:docuai/src/core/error/result.dart';
 import 'package:docuai/src/features/assistant/domain/entities/assistant_answer.dart';
+import 'package:docuai/src/features/assistant/domain/entities/assistant_intent.dart';
 import 'package:docuai/src/features/assistant/domain/entities/chat_message.dart';
 import 'package:docuai/src/features/assistant/domain/entities/conversation.dart';
 import 'package:docuai/src/features/assistant/domain/repositories/assistant_repository.dart';
@@ -123,8 +124,8 @@ class FakeDocumentRepository implements DocumentRepository {
   }
 
   /// Newest first, the order `DocumentLocalDataSource.readAll` guarantees.
-  List<Document> _sorted() => store.values.toList()
-    ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  List<Document> _sorted() =>
+      store.values.toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
   void _emit() {
     if (!_controller.isClosed) _controller.add(_sorted());
@@ -372,9 +373,10 @@ class FakeDocumentRepository implements DocumentRepository {
     );
   }
 
-  static List<DocumentPage> _renumber(List<DocumentPage> pages) => <DocumentPage>[
-    for (var i = 0; i < pages.length; i++) pages[i].copyWith(index: i),
-  ];
+  static List<DocumentPage> _renumber(List<DocumentPage> pages) =>
+      <DocumentPage>[
+        for (var i = 0; i < pages.length; i++) pages[i].copyWith(index: i),
+      ];
 
   Result<Document> _store(Document document) {
     savedDocuments.add(document);
@@ -501,7 +503,17 @@ class FakeExportRepository implements ExportRepository {
 
 class FakeAssistantRepository implements AssistantRepository {
   final List<ChatMessage> messages = <ChatMessage>[];
+
+  /// Questions that arrived as text to be understood.
+  ///
+  /// An action does not land here, which is the point: something that appears
+  /// in this list was parsed, and the whole reason [AssistantIntent] exists is
+  /// that a button's label should never be.
   final List<String> askedQuestions = <String>[];
+
+  /// Every intent this repository was asked to carry out, in order.
+  final List<AssistantIntent> intents = <AssistantIntent>[];
+
   String? lastScopedDocumentId;
   Result<AssistantAnswer> answer = const Success(
     AssistantAnswer(text: 'Because the deadline moved.'),
@@ -509,14 +521,19 @@ class FakeAssistantRepository implements AssistantRepository {
   bool historyCleared = false;
 
   @override
-  FutureResult<AssistantAnswer> ask(
-    String question, {
+  FutureResult<AssistantAnswer> run(
+    AssistantIntent intent, {
     String? documentId,
   }) async {
-    askedQuestions.add(question);
+    intents.add(intent);
     lastScopedDocumentId = documentId;
+    if (intent case AskQuestion(:final question)) askedQuestions.add(question);
     return answer;
   }
+
+  @override
+  FutureResult<AssistantAnswer> ask(String question, {String? documentId}) =>
+      run(AskQuestion(question), documentId: documentId);
 
   @override
   Stream<List<ChatMessage>> watchHistory({required String conversationId}) =>

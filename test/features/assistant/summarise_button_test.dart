@@ -1,5 +1,5 @@
 import 'package:docuai/src/core/router/app_routes.dart';
-import 'package:docuai/src/features/assistant/domain/usecases/suggest_questions.dart';
+import 'package:docuai/src/features/assistant/presentation/assistant_intent_codec.dart';
 import 'package:docuai/src/features/assistant/presentation/widgets/summarise_button.dart';
 import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
@@ -12,7 +12,7 @@ import '../../helpers/fakes.dart';
 /// The Summarise button on the document screen.
 ///
 /// It runs no summariser of its own — it opens this document's conversation
-/// with the question already asked. These tests hold that wiring, because the
+/// with the action already chosen. These tests hold that wiring, because the
 /// moment the button grows a private path to an answer there are two
 /// summarisers to keep in step, and the answer stops arriving with citations.
 void main() {
@@ -69,7 +69,7 @@ void main() {
             : const <DocumentPage>[],
       );
 
-  testWidgets('it opens this document’s conversation with the question asked', (
+  testWidgets('it opens this document’s conversation with the action chosen', (
     tester,
   ) async {
     await pumpButton(tester, documentWith(recognised: true));
@@ -79,9 +79,17 @@ void main() {
 
     expect(askedDocumentId, 'bill');
     expect(
-      askedQuery?['ask'],
-      DocumentQuestions.summarise,
-      reason: 'the button and someone typing it must reach the same analyser',
+      askedQuery?[AssistantIntentCodec.actionKey],
+      'summarize',
+      reason:
+          'the button carries what it means, not a sentence for the engine to '
+          're-read — that indirection is what made Explain answer with the '
+          'words "this document"',
+    );
+    expect(
+      askedQuery?.containsKey('ask'),
+      isFalse,
+      reason: 'no English round trip is left to misparse',
     );
     expect(
       askedQuery?['title'],
@@ -105,10 +113,7 @@ void main() {
   testWidgets('a document with no pages has nothing to summarise', (
     tester,
   ) async {
-    await pumpButton(
-      tester,
-      documentWith(recognised: false, hasPages: false),
-    );
+    await pumpButton(tester, documentWith(recognised: false, hasPages: false));
 
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,

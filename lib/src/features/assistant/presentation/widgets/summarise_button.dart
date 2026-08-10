@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../../documents/domain/entities/document.dart';
-import '../../domain/usecases/suggest_questions.dart';
+import '../../domain/entities/assistant_intent.dart';
 import '../screens/conversations_screen.dart';
 
 /// Summarises the document, offline, from its own recognised text.
 ///
-/// Opens this document's conversation with the question already asked, rather
-/// than running a summariser of its own. That is deliberate: the button and
-/// someone typing "summarise this" must produce the same result, and the answer
-/// belongs in the transcript with its citations — a summary the user cannot
-/// trace back to the pages it was lifted from is exactly the kind of claim this
-/// assistant is built not to make.
+/// Opens this document's conversation with the action already chosen. It used
+/// to open it with the *sentence* "Summarise this document" typed in, which
+/// worked only for as long as the analyser kept recognising that particular
+/// phrasing — and which is the same mistake that made the Explain button answer
+/// with the words "this document". A [SummarizeDocument] cannot be misread.
+///
+/// The answer still belongs in the transcript with its citations: a summary the
+/// user cannot trace back to the pages it was lifted from is exactly the kind
+/// of claim this assistant is built not to make.
 class SummariseButton extends StatelessWidget {
   const SummariseButton({required this.document, super.key});
 
@@ -31,7 +34,7 @@ class SummariseButton extends StatelessWidget {
               context,
               documentId: document.id,
               documentTitle: document.title,
-              ask: DocumentQuestions.summarise,
+              intent: const SummarizeDocument(),
             ),
       icon: const Icon(Icons.subject_outlined),
       label: const Text('Summarise'),

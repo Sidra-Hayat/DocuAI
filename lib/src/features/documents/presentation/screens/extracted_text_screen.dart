@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../../assistant/domain/entities/assistant_intent.dart';
 import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../export/presentation/providers/export_controller.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -388,11 +389,15 @@ class _ExplainableSelectionState extends State<_ExplainableSelection> {
                   state.hideToolbar();
                   if (selected.isEmpty) return;
 
+                  // The selection *is* the source, so it travels as one. It
+                  // used to be pasted into the sentence "Explain: …" and read
+                  // back out at the far end, which worked until the thing
+                  // selected was short enough to look like a request.
                   openNewConversation(
                     context,
                     documentId: widget.document.id,
                     documentTitle: widget.document.title,
-                    ask: 'Explain: $selected',
+                    intent: ExplainSelection(selected),
                   );
                 },
               ),

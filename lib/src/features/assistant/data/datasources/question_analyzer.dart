@@ -7,7 +7,15 @@ import 'synonym_index.dart';
 /// receipts are overwhelmingly asked when, how much, who and where, and a
 /// passage carrying a date or an amount is a far better answer to those than
 /// one that merely repeats the question's words back.
-enum QuestionIntent { date, amount, person, place, contact, identifier, general }
+enum QuestionIntent {
+  date,
+  amount,
+  person,
+  place,
+  contact,
+  identifier,
+  general,
+}
 
 /// What the user wants done, as opposed to what they are asking about.
 ///
@@ -52,6 +60,7 @@ class AnalyzedQuestion {
     required this.subjectTerms,
     this.brief = false,
     this.subject = '',
+    this.subjectIsDelimited = false,
   });
 
   final String original;
@@ -78,6 +87,16 @@ class AnalyzedQuestion {
   /// For [QuestionMode.explain], the passage to be explained.
   final String subject;
 
+  /// True when [subject] was marked off by a colon rather than inferred by
+  /// stripping the opening verb.
+  ///
+  /// The difference decides whether there is a passage here at all. "Explain:
+  /// Total amount due: 248.60 EUR" is someone handing over a piece of text.
+  /// "Explain its features" is someone asking a question, and treating its two
+  /// remaining words as a passage is what produced `This passage says: “its
+  /// features”`.
+  final bool subjectIsDelimited;
+
   /// [terms] with the words that only describe the *request* removed — the
   /// summary verbs, the intent vocabulary, the qualifiers, and the words that
   /// refer to the document itself.
@@ -102,16 +121,99 @@ abstract final class QuestionAnalyzer {
   /// score a passage containing only "is" at one third coverage, and a
   /// confident answer would be assembled out of a preposition.
   static const Set<String> stopwords = <String>{
-    'about', 'after', 'again', 'all', 'am', 'an', 'and', 'any', 'are', 'as',
-    'at', 'be', 'been', 'before', 'being', 'but', 'by', 'can', 'could', 'did',
-    'do', 'does', 'each', 'find', 'for', 'from', 'get', 'give', 'had', 'has',
-    'have', 'he', 'her', 'here', 'his', 'how', 'if', 'in', 'into', 'is', 'it',
-    'its', 'just', 'know', 'me', 'much', 'my', 'need', 'no', 'not', 'of', 'on',
-    'or', 'our', 'out', 'over', 'please', 'said', 'say', 'says', 'she',
-    'should', 'show', 'so', 'some', 'tell', 'than', 'that', 'the', 'their',
-    'them', 'then', 'there', 'these', 'they', 'this', 'to', 'up', 'us', 'was',
-    'we', 'were', 'what', 'when', 'where', 'which', 'who', 'why', 'will',
-    'with', 'would', 'you', 'your',
+    'about',
+    'after',
+    'again',
+    'all',
+    'am',
+    'an',
+    'and',
+    'any',
+    'are',
+    'as',
+    'at',
+    'be',
+    'been',
+    'before',
+    'being',
+    'but',
+    'by',
+    'can',
+    'could',
+    'did',
+    'do',
+    'does',
+    'each',
+    'find',
+    'for',
+    'from',
+    'get',
+    'give',
+    'had',
+    'has',
+    'have',
+    'he',
+    'her',
+    'here',
+    'his',
+    'how',
+    'if',
+    'in',
+    'into',
+    'is',
+    'it',
+    'its',
+    'just',
+    'know',
+    'me',
+    'much',
+    'my',
+    'need',
+    'no',
+    'not',
+    'of',
+    'on',
+    'or',
+    'our',
+    'out',
+    'over',
+    'please',
+    'said',
+    'say',
+    'says',
+    'she',
+    'should',
+    'show',
+    'so',
+    'some',
+    'tell',
+    'than',
+    'that',
+    'the',
+    'their',
+    'them',
+    'then',
+    'there',
+    'these',
+    'they',
+    'this',
+    'to',
+    'up',
+    'us',
+    'was',
+    'we',
+    'were',
+    'what',
+    'when',
+    'where',
+    'which',
+    'who',
+    'why',
+    'will',
+    'with',
+    'would',
+    'you',
+    'your',
   };
 
   /// Contractions expanded before tokenising.
@@ -147,37 +249,117 @@ abstract final class QuestionAnalyzer {
   static final RegExp _quoted = RegExp('"([^"]+)"');
 
   static const Set<String> _dateWords = <String>{
-    'when', 'date', 'dates', 'deadline', 'deadlines', 'due', 'expires',
-    'expiry', 'expiration', 'starts', 'start', 'ends', 'end', 'valid',
-    'renewal', 'renew', 'day', 'month', 'year', 'period',
+    'when',
+    'date',
+    'dates',
+    'deadline',
+    'deadlines',
+    'due',
+    'expires',
+    'expiry',
+    'expiration',
+    'starts',
+    'start',
+    'ends',
+    'end',
+    'valid',
+    'renewal',
+    'renew',
+    'day',
+    'month',
+    'year',
+    'period',
   };
 
   static const Set<String> _amountWords = <String>{
-    'much', 'cost', 'costs', 'price', 'prices', 'total', 'totals', 'amount',
-    'amounts', 'fee', 'fees', 'charge', 'charges', 'pay', 'paid', 'payable',
-    'balance', 'owe', 'owed', 'sum', 'sums', 'rate', 'refund', 'deposit',
-    'discount', 'tax', 'figures',
+    'much',
+    'cost',
+    'costs',
+    'price',
+    'prices',
+    'total',
+    'totals',
+    'amount',
+    'amounts',
+    'fee',
+    'fees',
+    'charge',
+    'charges',
+    'pay',
+    'paid',
+    'payable',
+    'balance',
+    'owe',
+    'owed',
+    'sum',
+    'sums',
+    'rate',
+    'refund',
+    'deposit',
+    'discount',
+    'tax',
+    'figures',
   };
 
   static const Set<String> _personWords = <String>{
-    'who', 'whom', 'whose', 'name', 'names', 'named', 'signed', 'signatory',
-    'signatories', 'tenant', 'landlord', 'customer', 'holder', 'client',
-    'owner', 'people', 'person',
+    'who',
+    'whom',
+    'whose',
+    'name',
+    'names',
+    'named',
+    'signed',
+    'signatory',
+    'signatories',
+    'tenant',
+    'landlord',
+    'customer',
+    'holder',
+    'client',
+    'owner',
+    'people',
+    'person',
   };
 
   static const Set<String> _placeWords = <String>{
-    'where', 'address', 'addresses', 'location', 'locations', 'premises',
-    'property', 'city', 'street', 'postcode', 'zip',
+    'where',
+    'address',
+    'addresses',
+    'location',
+    'locations',
+    'premises',
+    'property',
+    'city',
+    'street',
+    'postcode',
+    'zip',
   };
 
   static const Set<String> _contactWords = <String>{
-    'phone', 'phones', 'telephone', 'mobile', 'email', 'emails', 'contact',
-    'contacts', 'call',
+    'phone',
+    'phones',
+    'telephone',
+    'mobile',
+    'email',
+    'emails',
+    'contact',
+    'contacts',
+    'call',
   };
 
   static const Set<String> _identifierWords = <String>{
-    'number', 'numbers', 'reference', 'references', 'ref', 'code', 'codes',
-    'account', 'policy', 'invoice', 'id', 'serial',
+    'number',
+    'numbers',
+    'reference',
+    'references',
+    'ref',
+    'code',
+    'codes',
+    'account',
+    'policy',
+    'invoice',
+    'id',
+    'serial',
   };
 
   /// Every intent's vocabulary, for deciding whether anything in a question
@@ -194,19 +376,42 @@ abstract final class QuestionAnalyzer {
   /// Asks for the document as a whole. Both spellings, since the keyboard and
   /// the app do not have to agree on which side of the Atlantic they are on.
   static const Set<String> _summaryWords = <String>{
-    'summarise', 'summarize', 'summarised', 'summarized', 'summary',
-    'summaries', 'overview', 'gist', 'tldr', 'recap', 'synopsis', 'outline',
+    'summarise',
+    'summarize',
+    'summarised',
+    'summarized',
+    'summary',
+    'summaries',
+    'overview',
+    'gist',
+    'tldr',
+    'recap',
+    'synopsis',
+    'outline',
   };
 
   /// Asks for the summary to be shorter than the default.
   static const Set<String> _briefWords = <String>{
-    'brief', 'briefly', 'short', 'shortly', 'quick', 'quickly', 'tldr',
-    'concise', 'concisely', 'one', 'two',
+    'brief',
+    'briefly',
+    'short',
+    'shortly',
+    'quick',
+    'quickly',
+    'tldr',
+    'concise',
+    'concisely',
+    'one',
+    'two',
   };
 
   /// Opens a request to be told what a passage holds.
   static const Set<String> _explainWords = <String>{
-    'explain', 'explanation', 'clarify', 'meaning', 'means',
+    'explain',
+    'explanation',
+    'clarify',
+    'meaning',
+    'means',
   };
 
   static const List<String> _summaryPhrases = <String>[
@@ -222,7 +427,14 @@ abstract final class QuestionAnalyzer {
   /// these, "when is it due" stays on the answer path — the user wants the due
   /// date, not a list of every date on the page.
   static const Set<String> _enumerationWords = <String>{
-    'find', 'list', 'show', 'all', 'every', 'any', 'extract', 'pull',
+    'find',
+    'list',
+    'show',
+    'all',
+    'every',
+    'any',
+    'extract',
+    'pull',
   };
 
   static const List<String> _enumerationPhrases = <String>[
@@ -236,14 +448,46 @@ abstract final class QuestionAnalyzer {
   /// important — so treating it as a search term would drop the question onto
   /// the answer path and return nothing.
   static const Set<String> _qualifierWords = <String>{
-    'important', 'key', 'main', 'major', 'significant', 'relevant', 'useful',
-    'mentioned', 'listed', 'notable', 'critical', 'essential',
+    'important',
+    'key',
+    'main',
+    'major',
+    'significant',
+    'relevant',
+    'useful',
+    'mentioned',
+    'listed',
+    'notable',
+    'critical',
+    'essential',
   };
 
   /// The user referring to the thing in front of them rather than naming it.
+  ///
+  /// "Information", "details" and "facts" belong here for the same reason
+  /// "document" does: they name the contents of a page in general and none of
+  /// its contents in particular. Treated as search terms they send "find
+  /// important information" looking for whichever passage happens to use the
+  /// word "information" — which is how that request came to be answered with an
+  /// unrelated sentence.
   static const Set<String> _selfWords = <String>{
-    'document', 'documents', 'doc', 'file', 'page', 'pages', 'text', 'scan',
-    'paper', 'contents', 'content',
+    'document',
+    'documents',
+    'doc',
+    'file',
+    'page',
+    'pages',
+    'text',
+    'scan',
+    'paper',
+    'contents',
+    'content',
+    'information',
+    'info',
+    'details',
+    'detail',
+    'facts',
+    'data',
   };
 
   static AnalyzedQuestion analyze(String question) {
@@ -284,6 +528,34 @@ abstract final class QuestionAnalyzer {
       subjectTerms: List<String>.unmodifiable(_subjectOf(terms)),
       brief: mode == QuestionMode.summary && all.any(_briefWords.contains),
       subject: mode == QuestionMode.explain ? _passageOf(question) : '',
+      subjectIsDelimited:
+          mode == QuestionMode.explain && question.contains(':'),
+    );
+  }
+
+  /// True when [text] refers to the document without naming anything in it.
+  ///
+  /// "this document", "this", "the page", "its contents" — all of them point at
+  /// whatever the user is looking at, and none of them is a phrase to search
+  /// for. Distinguishing them is what stops "Explain this document" being
+  /// answered with a passage that happens to contain the word "document".
+  ///
+  /// Deliberately narrower than [_subjectOf]: only the words that refer to the
+  /// document itself and the words that grade a request are removed, so a
+  /// genuine selection made of ordinary vocabulary — "Total amount due" — is
+  /// still recognised as content.
+  static bool namesOnlyTheDocument(String text) {
+    final tokens = SearchTokenizer.tokenize(
+      _expandContractions(text.toLowerCase()),
+    );
+
+    return !tokens.any(
+      (token) =>
+          !stopwords.contains(token) &&
+          !_selfWords.contains(token) &&
+          !_qualifierWords.contains(token) &&
+          !_explainWords.contains(token) &&
+          !_summaryWords.contains(token),
     );
   }
 
@@ -335,17 +607,6 @@ abstract final class QuestionAnalyzer {
         _enumerationPhrases.any(normalised.contains);
     if (!enumerating) return QuestionMode.answer;
 
-    // Nothing to enumerate without a shape to recognise on the page. A place
-    // reads as ordinary prose, so it is deliberately not listed here.
-    const shaped = <QuestionIntent>{
-      QuestionIntent.date,
-      QuestionIntent.amount,
-      QuestionIntent.person,
-      QuestionIntent.contact,
-      QuestionIntent.identifier,
-    };
-    if (!shaped.contains(intent)) return QuestionMode.answer;
-
     // "Find the amount on the electricity bill" names which amount, and is a
     // question with an answer — not a request to list every figure on the
     // page. Anything left after the request vocabulary is that narrowing.
@@ -357,8 +618,29 @@ abstract final class QuestionAnalyzer {
           !_selfWords.contains(token) &&
           !_intentVocabulary.contains(token),
     );
+    if (narrowing.isNotEmpty) return QuestionMode.answer;
 
-    return narrowing.isEmpty ? QuestionMode.find : QuestionMode.answer;
+    // A shape to recognise on the page. A place is deliberately absent: an
+    // address can now be *located* on request, but "find the landlord address"
+    // wants one answer rather than every address in the document, and the
+    // enumeration cue alone is too weak to tell those apart.
+    const shaped = <QuestionIntent>{
+      QuestionIntent.date,
+      QuestionIntent.amount,
+      QuestionIntent.person,
+      QuestionIntent.contact,
+      QuestionIntent.identifier,
+    };
+    if (shaped.contains(intent)) return QuestionMode.find;
+
+    // Nothing left to search *for*, and no shape named either: a request made
+    // entirely of request words — "find important information", "list all".
+    // There is no term on any page to look for, which is why sending it down
+    // the answer path made it retrieve whichever passage happened to use the
+    // word "information". It is answered with every shape at once instead.
+    return intent == QuestionIntent.general
+        ? QuestionMode.find
+        : QuestionMode.answer;
   }
 
   /// The passage an explain request is about.
@@ -382,10 +664,16 @@ abstract final class QuestionAnalyzer {
   }
 
   /// The part of a question that could name a document.
+  ///
+  /// The explain verbs are filtered alongside the summary ones, for the same
+  /// reason: "explain" describes the request, not the thing requested. Without
+  /// it "Explain this document" leaves the single term `explain` behind, which
+  /// reads as the user having named something when they named nothing at all.
   static List<String> _subjectOf(List<String> terms) => terms
       .where(
         (term) =>
             !_summaryWords.contains(term) &&
+            !_explainWords.contains(term) &&
             !_enumerationWords.contains(term) &&
             !_qualifierWords.contains(term) &&
             !_selfWords.contains(term) &&
@@ -445,6 +733,34 @@ abstract final class PassageSignals {
   /// Two or more capitalised words in a row — how a name reads on a page.
   static final RegExp _properName = RegExp(r'\b[A-Z][a-z]+\s+[A-Z][a-z]+\b');
 
+  /// A street address, and nothing looser.
+  ///
+  /// Deliberately conservative. A town or a country reads as ordinary prose,
+  /// and there is no offline way to tell "Reading" the place from "reading" the
+  /// activity without a gazetteer this app has no business shipping. A street
+  /// type at the end of a capitalised run is a convention documents actually
+  /// follow, so it is the one shape that can be claimed honestly.
+  ///
+  /// The complement of [_furniture], which lists these same street words as
+  /// things a *name* may not contain — so "12 Baker Street" is reported as a
+  /// place and never as a person.
+  static final RegExp _streetAddress = RegExp(
+    r'\b\d{1,4}[a-z]?[,\s]+'
+    r'(?:[A-Z][a-zA-Z]+\s+){1,3}'
+    r'(?:Street|St|Road|Rd|Avenue|Ave|Lane|Ln|Drive|Dr|Close|Court|Ct|'
+    r'Crescent|Square|Sq|Way|Terrace|Place|Boulevard|Blvd|Parade|Row)\b\.?'
+    r'|\b(?:[A-Z][a-zA-Z]+\s+){1,3}'
+    r'(?:Street|Road|Avenue|Lane|Drive|Crescent|Square|Terrace|Boulevard)\b',
+  );
+
+  /// A UK-style postcode.
+  ///
+  /// The one postal format specific enough to match on. A five-digit ZIP would
+  /// match every invoice number on the page, which is why it is absent.
+  static final RegExp _postcode = RegExp(
+    r'\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b',
+  );
+
   /// Capitalised words that are almost never part of a person's name.
   ///
   /// Titles and table headers are capitalised exactly like names — "Total
@@ -453,19 +769,91 @@ abstract final class PassageSignals {
   /// name is reported as a partial match and a currency figure is not:
   /// capitalisation is a convention, a currency symbol is a fact.
   static const Set<String> _furniture = <String>{
-    'account', 'address', 'amount', 'avenue', 'balance', 'bank', 'billing',
-    'card', 'close', 'court', 'crescent', 'drive', 'lane', 'road', 'square',
-    'street', 'terrace', 'way',
-    'charge', 'charges', 'closing', 'code', 'conditions', 'contact', 'credit',
-    'current', 'customer', 'date', 'dates', 'dear', 'debit', 'delivery',
-    'description', 'detail', 'details', 'due', 'email', 'gross', 'grand',
-    'invoice', 'item', 'items', 'madam', 'mobile', 'month', 'net', 'new',
-    'note', 'notes', 'number', 'opening', 'order', 'page', 'payable',
-    'payment', 'payments', 'period', 'phone', 'please', 'previous', 'price',
-    'quantity', 'rate', 'receipt', 'reference', 'service', 'services',
-    'shipping', 'sir', 'statement', 'sub', 'subtotal', 'summary', 'tax',
-    'telephone', 'terms', 'thank', 'thanks', 'total', 'unit', 'units',
-    'valid', 'vat', 'year', 'your',
+    'account',
+    'address',
+    'amount',
+    'avenue',
+    'balance',
+    'bank',
+    'billing',
+    'card',
+    'close',
+    'court',
+    'crescent',
+    'drive',
+    'lane',
+    'road',
+    'square',
+    'street',
+    'terrace',
+    'way',
+    'charge',
+    'charges',
+    'closing',
+    'code',
+    'conditions',
+    'contact',
+    'credit',
+    'current',
+    'customer',
+    'date',
+    'dates',
+    'dear',
+    'debit',
+    'delivery',
+    'description',
+    'detail',
+    'details',
+    'due',
+    'email',
+    'gross',
+    'grand',
+    'invoice',
+    'item',
+    'items',
+    'madam',
+    'mobile',
+    'month',
+    'net',
+    'new',
+    'note',
+    'notes',
+    'number',
+    'opening',
+    'order',
+    'page',
+    'payable',
+    'payment',
+    'payments',
+    'period',
+    'phone',
+    'please',
+    'previous',
+    'price',
+    'quantity',
+    'rate',
+    'receipt',
+    'reference',
+    'service',
+    'services',
+    'shipping',
+    'sir',
+    'statement',
+    'sub',
+    'subtotal',
+    'summary',
+    'tax',
+    'telephone',
+    'terms',
+    'thank',
+    'thanks',
+    'total',
+    'unit',
+    'units',
+    'valid',
+    'vat',
+    'year',
+    'your',
   };
 
   static bool hasDate(String text) =>
@@ -508,8 +896,8 @@ abstract final class PassageSignals {
       QuestionIntent.contact => from(<RegExp>[_email, _phone]),
       QuestionIntent.identifier => from(<RegExp>[_identifier]),
       QuestionIntent.person => _locateNames(text),
-      // No shape to read off the page — see [satisfies].
-      QuestionIntent.place || QuestionIntent.general => const <(int, String)>[],
+      QuestionIntent.place => from(<RegExp>[_streetAddress, _postcode]),
+      QuestionIntent.general => const <(int, String)>[],
     };
   }
 
@@ -536,9 +924,17 @@ abstract final class PassageSignals {
     QuestionIntent.contact => hasContact(text),
     QuestionIntent.identifier => hasIdentifier(text),
     QuestionIntent.person => hasProperName(text),
-    // A place reads as ordinary prose on the page, so there is no shape to
-    // match on — the terms have to carry it alone.
+    // Deliberately not [hasPlace], even though one now exists. This drives the
+    // *ranker's* boost for questions like "where is the property", and a street
+    // pattern is far rarer than a date or an amount: a document that mentions
+    // one address would have that passage boosted above the one that actually
+    // answers. Listing places on request is a different job, and [locate] does
+    // it without touching how questions are ranked.
     QuestionIntent.place => false,
     QuestionIntent.general => false,
   };
+
+  /// Whether [text] carries a street address or postcode.
+  static bool hasPlace(String text) =>
+      _streetAddress.hasMatch(text) || _postcode.hasMatch(text);
 }

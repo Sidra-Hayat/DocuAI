@@ -7,7 +7,9 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/conversation.dart';
+import '../assistant_intent_codec.dart';
 import '../providers/assistant_providers.dart';
 
 /// Every thread, newest first.
@@ -60,12 +62,14 @@ Future<void> openNewConversation(
   BuildContext context, {
   String? documentId,
   String? documentTitle,
-  String? ask,
+  AssistantIntent? intent,
 }) {
   final query = <String, String>{
     'document': ?documentId,
     'title': ?documentTitle,
-    'ask': ?ask,
+    // Encoded as an action token, never as the sentence it stands for. See
+    // [AssistantIntentCodec].
+    if (intent != null) ...AssistantIntentCodec.encode(intent),
   };
 
   return context.pushNamed<void>(

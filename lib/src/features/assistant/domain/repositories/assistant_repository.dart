@@ -1,5 +1,6 @@
 import '../../../../core/error/result.dart';
 import '../entities/assistant_answer.dart';
+import '../entities/assistant_intent.dart';
 import '../entities/chat_message.dart';
 import '../entities/conversation.dart';
 
@@ -11,14 +12,32 @@ import '../entities/conversation.dart';
 /// strategy behind the same method — callers cannot tell which ran except by
 /// reading [AssistantAnswer.source].
 abstract interface class AssistantRepository {
-  /// Answers [question] from the user's documents.
+  /// Carries out what the user asked for.
+  ///
+  /// The one entry point. An action arrives as the [AssistantIntent] the button
+  /// stood for, and only [AskQuestion] is parsed — which is the whole point of
+  /// the type: the Explain button used to send the English sentence "Explain
+  /// this document" and have the engine guess, and what it guessed was that
+  /// "this document" was a phrase to go and find.
   ///
   /// Scoped to one document when [documentId] is given — "ask this document"
-  /// from the detail screen — and across the whole library otherwise.
+  /// from the detail screen — and across the whole library otherwise. The
+  /// document-shaped intents need a scope and say so when they have none;
+  /// summarising a library is not a thing.
   ///
-  /// Finding no relevant passage is a success carrying an ungrounded answer,
-  /// not a failure: "I could not find that in your documents" is a legitimate
-  /// reply, and rendering it as an error would be misleading.
+  /// Finding nothing is a success carrying an ungrounded answer, not a failure:
+  /// "I could not find that in your documents" is a legitimate reply, and
+  /// rendering it as an error would be misleading.
+  FutureResult<AssistantAnswer> run(
+    AssistantIntent intent, {
+    String? documentId,
+  });
+
+  /// Answers a typed [question] from the user's documents.
+  ///
+  /// Sugar for [run] with an [AskQuestion]. Kept because "ask the assistant a
+  /// question" is what most callers and every test mean, and reading
+  /// `run(AskQuestion(q))` at those call sites would be ceremony.
   FutureResult<AssistantAnswer> ask(String question, {String? documentId});
 
   /// Every conversation, newest first, re-emitted as turns are added.

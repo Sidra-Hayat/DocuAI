@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../providers/assistant_providers.dart';
@@ -27,7 +28,7 @@ class AssistantScreen extends ConsumerStatefulWidget {
     required this.conversationId,
     this.documentId,
     this.documentTitle,
-    this.initialQuestion,
+    this.initialIntent,
     super.key,
   });
 
@@ -45,14 +46,16 @@ class AssistantScreen extends ConsumerStatefulWidget {
   /// Shown in the bar so a scoped conversation says what it is scoped to.
   final String? documentTitle;
 
-  /// Asked once, on arrival, as though the user had typed it.
+  /// Carried out once, on arrival.
   ///
-  /// How the Summarise button works. Routing it through the composer rather
-  /// than calling a summariser directly is what keeps the button and the typed
-  /// question the same feature: one analyser decides what "summarise" means,
-  /// and the result lands in the transcript with its citations like any other
-  /// turn.
-  final String? initialQuestion;
+  /// How the Summarise button, the Explain button and the reader's selection
+  /// work. Each arrives as the intent it stood for rather than as a sentence to
+  /// be re-read: the button already knew what it meant, and the whole class of
+  /// defect this replaced came from throwing that knowledge away and asking the
+  /// engine to recover it from English.
+  ///
+  /// The result still lands in the transcript as an ordinary pair of turns.
+  final AssistantIntent? initialIntent;
 
   @override
   ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
@@ -67,13 +70,14 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   void initState() {
     super.initState();
 
-    final question = widget.initialQuestion;
-    if (question == null || question.trim().isEmpty) return;
+    final intent = widget.initialIntent;
+    if (intent == null) return;
 
-    // After the first frame: `ask` reads a provider and writes the transcript,
-    // neither of which may happen while the widget is still being built.
+    // After the first frame: running an intent reads a provider and writes the
+    // transcript, neither of which may happen while the widget is still being
+    // built.
     Future.microtask(() {
-      if (mounted) _askNow(question);
+      if (mounted) _run(intent);
     });
   }
 
@@ -115,6 +119,28 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     // Only a question rejected before it was recorded needs telling; anything
     // else is already in the transcript as a failed turn.
+    if (rejection != null) {
+      messenger.showSnackBar(SnackBar(content: Text(rejection)));
+    }
+  }
+
+  /// Runs a chosen action.
+  ///
+  /// Straight to the intent — never through the composer. Rendering an action
+  /// as the sentence a user might have typed and asking the engine to read it
+  /// back is exactly how the Explain button came to answer with the words
+  /// "this document".
+  Future<void> _run(AssistantIntent intent) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final rejection = await ref
+        .read(assistantControllerProvider.notifier)
+        .run(
+          intent,
+          conversationId: widget.conversationId,
+          documentId: widget.documentId,
+        );
+
     if (rejection != null) {
       messenger.showSnackBar(SnackBar(content: Text(rejection)));
     }
@@ -225,6 +251,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
               data: (messages) => messages.isEmpty
                   ? _Introduction(
                       onAsk: _askNow,
+                      onIntent: _run,
                       onWriteQuestion: _composerFocus.requestFocus,
                       scope: widget.documentId,
                     )
@@ -241,7 +268,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
             busy: busy,
             scoped: widget.documentId != null,
             onSend: _send,
-            onAsk: _askNow,
+            onIntent: _run,
           ),
         ],
       ),
@@ -284,11 +311,16 @@ class _Transcript extends StatelessWidget {
 class _Introduction extends ConsumerWidget {
   const _Introduction({
     required this.onAsk,
+    required this.onIntent,
     required this.onWriteQuestion,
     required this.scope,
   });
 
+  /// Sends one of the suggested *questions*, which are questions and go through
+  /// retrieval like any other.
   final ValueChanged<String> onAsk;
+
+  final ValueChanged<AssistantIntent> onIntent;
   final VoidCallback onWriteQuestion;
 
   /// The document this conversation is about, or null for the library-wide
@@ -311,7 +343,7 @@ class _Introduction extends ConsumerWidget {
           'Every answer comes from the pages themselves, and shows you '
           'where it came from.',
       action: AssistantQuickActions(
-        onAsk: onAsk,
+        onIntent: onIntent,
         onWriteQuestion: onWriteQuestion,
         scoped: scope != null,
       ),
@@ -337,7 +369,7 @@ class _Composer extends StatelessWidget {
     required this.busy,
     required this.scoped,
     required this.onSend,
-    required this.onAsk,
+    required this.onIntent,
   });
 
   final TextEditingController controller;
@@ -345,7 +377,7 @@ class _Composer extends StatelessWidget {
   final bool busy;
   final bool scoped;
   final VoidCallback onSend;
-  final ValueChanged<String> onAsk;
+  final ValueChanged<AssistantIntent> onIntent;
 
   @override
   Widget build(BuildContext context) {
@@ -379,7 +411,7 @@ class _Composer extends StatelessWidget {
                   : () => showQuickActionsSheet(
                       context,
                       scoped: scoped,
-                      onAsk: onAsk,
+                      onIntent: onIntent,
                       onWriteQuestion: focusNode.requestFocus,
                     ),
               icon: const Icon(Icons.auto_awesome_outlined),

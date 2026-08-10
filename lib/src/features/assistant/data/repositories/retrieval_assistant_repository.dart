@@ -9,11 +9,13 @@ import '../../../documents/domain/entities/document.dart';
 import '../../../documents/domain/repositories/document_repository.dart';
 import '../../../search/domain/repositories/search_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
+import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation.dart';
 import '../../domain/repositories/assistant_repository.dart';
 import '../../domain/usecases/suggest_questions.dart';
 import '../datasources/chat_history_local_data_source.dart';
+import '../datasources/document_topics.dart';
 import '../datasources/passage_extractor.dart';
 import '../datasources/passage_ranker.dart';
 import '../datasources/passage_summarizer.dart';
@@ -102,43 +104,45 @@ class RetrievalAssistantRepository implements AssistantRepository {
       'There is not enough recognised text in this document to summarise. It '
       'may have scanned poorly — try rescanning the page.';
 
+  /// Said when a document has text but nothing that describes it.
+  static const String cannotExplainMessage =
+      "I couldn't extract enough readable text from this document to explain "
+      'it.';
+
+  /// Said when a document-shaped action arrives with no document.
+  static const String openADocumentMessage =
+      'Open the document you want first — this works on one document at a '
+      'time.';
+
   @override
-  FutureResult<AssistantAnswer> ask(
-    String question, {
+  FutureResult<AssistantAnswer> run(
+    AssistantIntent intent, {
     String? documentId,
   }) async {
     try {
-      final analyzed = QuestionAnalyzer.analyze(question);
-      if (analyzed.isEmpty) {
-        return const Success(
-          AssistantAnswer(
-            text: unclearMessage,
-            kind: AnswerKind.unclearQuestion,
+      return switch (intent) {
+        AskQuestion(:final question) => await _answerQuestion(
+          question,
+          documentId,
+        ),
+        SummarizeDocument(:final brief) => await _onOneDocument(
+          documentId,
+          (document) async => _composeSummary(
+            document,
+            PassageExtractor.extract(document),
+            brief: brief,
           ),
-        );
-      }
-
-      // Explaining reads a passage the user already has in front of them, so
-      // it needs no target document — only the library, to say where else the
-      // same terms appear.
-      if (analyzed.mode == QuestionMode.explain) {
-        return _explain(analyzed, documentId);
-      }
-
-      // Summarising and listing work on one document at a time, and neither
-      // has query terms to rank with — so they resolve a target first and then
-      // run their own ranker over the same extracted passages.
-      if (analyzed.mode != QuestionMode.answer) {
-        return _wholeDocument(analyzed, documentId);
-      }
-
-      final candidates = await _candidates(analyzed, documentId);
-      switch (candidates) {
-        case Failed(:final failure):
-          return Failed(failure);
-        case Success(:final value):
-          return Success(await _answerFrom(analyzed, value));
-      }
+        ),
+        ExplainDocument() => await _onOneDocument(documentId, _explainDocument),
+        ExplainSelection(:final text) => await _explainPassage(
+          text,
+          documentId,
+        ),
+        FindInformation(:final kind) => await _findInformation(
+          kind,
+          documentId,
+        ),
+      };
     } catch (error, stackTrace) {
       return Failed(
         AssistantFailure(
@@ -148,6 +152,142 @@ class RetrievalAssistantRepository implements AssistantRepository {
         ),
       );
     }
+  }
+
+  @override
+  FutureResult<AssistantAnswer> ask(String question, {String? documentId}) =>
+      run(AskQuestion(question), documentId: documentId);
+
+  /// A typed question: the only input that is parsed.
+  Future<Result<AssistantAnswer>> _answerQuestion(
+    String question,
+    String? documentId,
+  ) async {
+    final analyzed = QuestionAnalyzer.analyze(question);
+    if (analyzed.isEmpty) {
+      return const Success(
+        AssistantAnswer(text: unclearMessage, kind: AnswerKind.unclearQuestion),
+      );
+    }
+
+    if (analyzed.mode == QuestionMode.explain) {
+      return _routeTypedExplain(analyzed, documentId);
+    }
+
+    // Summarising and listing work on one document at a time, and neither has
+    // query terms to rank with — so they resolve a target first and then run
+    // their own ranker over the same extracted passages.
+    if (analyzed.mode != QuestionMode.answer) {
+      return _wholeDocument(analyzed, documentId);
+    }
+
+    return _retrieve(analyzed, documentId);
+  }
+
+  /// The ordinary retrieval path: BM25, then passage ranking, then a quote.
+  Future<Result<AssistantAnswer>> _retrieve(
+    AnalyzedQuestion analyzed,
+    String? documentId,
+  ) async {
+    final candidates = await _candidates(analyzed, documentId);
+    return switch (candidates) {
+      Failed(:final failure) => Failed(failure),
+      Success(:final value) => Success(await _answerFrom(analyzed, value)),
+    };
+  }
+
+  /// What a typed "explain …" actually asked for.
+  ///
+  /// Three different requests wear the same verb, and telling them apart is the
+  /// whole of the defect this method exists to close. The old code took
+  /// everything after the verb and treated it as a passage to be explained,
+  /// which is right for exactly one of the three and produced, for the other
+  /// two, the query quoted back as though it were content:
+  ///
+  /// ```
+  /// This passage says:
+  /// “this document”
+  /// ```
+  ///
+  /// The rule, in order:
+  ///
+  ///  * **Nothing named beyond the document itself** — "explain this document",
+  ///    "explain this", "explain the page". The subject is the document, so the
+  ///    document gets explained. This is also the reason the *button* no longer
+  ///    goes through here at all: it knew that already.
+  ///  * **Marked off by a colon, or long enough to be prose** — someone handed
+  ///    over a passage. Explain the passage.
+  ///  * **Anything else** — "explain its features", "explain the standing
+  ///    charge". That is a question about a topic, and it goes down the same
+  ///    retrieval path as any other question. If the documents do not cover it,
+  ///    the answer is that they do not cover it, which is the truth and is
+  ///    never the words of the question read back.
+  Future<Result<AssistantAnswer>> _routeTypedExplain(
+    AnalyzedQuestion analyzed,
+    String? documentId,
+  ) async {
+    final subject = analyzed.subject.trim();
+    if (subject.isEmpty) {
+      return const Success(
+        AssistantAnswer(
+          text: nothingToExplainMessage,
+          kind: AnswerKind.unclearQuestion,
+        ),
+      );
+    }
+
+    if (QuestionAnalyzer.namesOnlyTheDocument(subject)) {
+      return _onOneDocument(documentId, _explainDocument);
+    }
+
+    if (analyzed.subjectIsDelimited || _readsAsProse(subject)) {
+      return _explainPassage(subject, documentId);
+    }
+
+    return _retrieve(analyzed, documentId);
+  }
+
+  /// Long enough that someone pasted it rather than typed a request.
+  ///
+  /// A backstop for a selection pasted without the colon the Explain action
+  /// puts there. Deliberately generous — being wrong here costs a passage
+  /// explained as a question, which still answers from the document.
+  static bool _readsAsProse(String subject) =>
+      subject.trim().split(RegExp(r'\s+')).length >= 8;
+
+  /// Runs [body] against the document the conversation is about.
+  ///
+  /// The document-shaped actions — summarise, explain — need one document and
+  /// cannot invent one. Saying so beats answering about whichever document
+  /// happened to rank first.
+  Future<Result<AssistantAnswer>> _onOneDocument(
+    String? documentId,
+    Future<AssistantAnswer> Function(Document document) body,
+  ) async {
+    if (documentId == null) {
+      return const Success(
+        AssistantAnswer(
+          text: openADocumentMessage,
+          kind: AnswerKind.needsDocument,
+        ),
+      );
+    }
+
+    final loaded = await _documents.getDocument(documentId);
+    if (loaded case Failed(:final failure)) return Failed(failure);
+
+    final document = (loaded as Success<Document>).value;
+    if (!document.hasText) {
+      return const Success(
+        AssistantAnswer(
+          text: documentHasNoTextMessage,
+          kind: AnswerKind.noRecognisedText,
+          documentsSearched: 1,
+        ),
+      );
+    }
+
+    return Success(await body(document));
   }
 
   /// Stage one: narrow the library to the documents worth reading.
@@ -176,7 +316,8 @@ class RetrievalAssistantRepository implements AssistantRepository {
             .map((hit) => hit.document)
             .toList(growable: false),
         priors: PassageRanker.priorsFrom(<String, double>{
-          for (final hit in value.take(maxDocuments)) hit.document.id: hit.score,
+          for (final hit in value.take(maxDocuments))
+            hit.document.id: hit.score,
         }),
       )),
     };
@@ -253,7 +394,10 @@ class RetrievalAssistantRepository implements AssistantRepository {
       );
     }
 
-    return const AssistantAnswer(text: notFoundMessage, kind: AnswerKind.noMatch);
+    return const AssistantAnswer(
+      text: notFoundMessage,
+      kind: AnswerKind.noMatch,
+    );
   }
 
   /// Applies deduplication, per-document diversity and the context budget.
@@ -347,11 +491,11 @@ class RetrievalAssistantRepository implements AssistantRepository {
   /// *in* the passage — the dates, amounts, names and references it carries —
   /// and which other pages use the same words. Both are read off documents the
   /// user already has.
-  FutureResult<AssistantAnswer> _explain(
-    AnalyzedQuestion question,
+  Future<Result<AssistantAnswer>> _explainPassage(
+    String selection,
     String? documentId,
   ) async {
-    final passage = question.subject.trim();
+    final passage = selection.trim();
     if (passage.isEmpty) {
       return const Success(
         AssistantAnswer(
@@ -359,6 +503,14 @@ class RetrievalAssistantRepository implements AssistantRepository {
           kind: AnswerKind.unclearQuestion,
         ),
       );
+    }
+
+    // A selection that turns out to name only the document is the document
+    // asking to be explained. The reader cannot produce one — it passes what
+    // was highlighted — but a typed "Explain: this document" can, and quoting
+    // those two words back is the defect this whole change is about.
+    if (QuestionAnalyzer.namesOnlyTheDocument(passage)) {
+      return _onOneDocument(documentId, _explainDocument);
     }
 
     final lines = <String>['This passage says:', '“${_flatten(passage)}”'];
@@ -389,7 +541,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
     // Where else the same words appear. The passage is used as a query, which
     // is the same retrieval every question goes through.
-    final related = await _relatedTo(question, passage, documentId);
+    final related = await _relatedTo(passage, documentId);
     if (related.isNotEmpty) {
       lines
         ..add('')
@@ -426,7 +578,6 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
   /// Passages elsewhere that use the same words as [passage].
   Future<List<RankedPassage>> _relatedTo(
-    AnalyzedQuestion question,
     String passage,
     String? documentId,
   ) async {
@@ -462,6 +613,222 @@ class RetrievalAssistantRepository implements AssistantRepository {
     }
 
     return const <RankedPassage>[];
+  }
+
+  // ---- Actions -------------------------------------------------------------
+
+  /// What the document is, and what it covers.
+  ///
+  /// Composed rather than quoted, and this is the one place that word is used
+  /// honestly: the *scaffolding* is written here — "This document is called",
+  /// "What it covers" — and every fact between those words was read off the
+  /// page. The topics are the document's own headings where it has them, and
+  /// its most representative sentences where it does not.
+  ///
+  /// It is worth being plain about what this is not. Without a language model
+  /// there is no paraphrase available, so this does not read like a person
+  /// describing the document in their own words. It reads like the document's
+  /// table of contents plus the facts it carries — which is a genuine answer to
+  /// "what is this?", and unlike a paraphrase it cannot be wrong.
+  Future<AssistantAnswer> _explainDocument(Document document) async {
+    final passages = PassageExtractor.extract(document);
+    final topics = DocumentTopics.of(document);
+
+    if (topics.isEmpty) {
+      return const AssistantAnswer(
+        text: cannotExplainMessage,
+        kind: AnswerKind.noMatch,
+        documentsSearched: 1,
+      );
+    }
+
+    final readable = document.pages.where((page) => page.hasText).length;
+
+    final lines = <String>[
+      'This document is called “${document.title}”. '
+          'It has $readable readable ${readable == 1 ? 'page' : 'pages'}.',
+      '',
+      'What it covers:',
+      for (final topic in topics) '• ${topic.text}',
+    ];
+
+    final carries = <String>[];
+    for (final intent in _digestIntents) {
+      final findings = ShapeFinder.find(intent, passages, maxFindings: 4);
+      if (findings.isEmpty) continue;
+
+      final label = ShapeFinder.labelFor(intent, plural: findings.length != 1);
+      carries.add(
+        '• ${_capitalise(label)}: '
+        '${findings.map((finding) => finding.value).join(', ')}',
+      );
+    }
+
+    if (carries.isNotEmpty) {
+      lines
+        ..add('')
+        ..add('It also contains:')
+        ..addAll(carries);
+    }
+
+    // One citation per page a topic came from, so the explanation can be
+    // checked against the pages it was built out of.
+    final firstOnPage = <int, Passage>{};
+    for (final passage in passages) {
+      firstOnPage.putIfAbsent(passage.pageIndex, () => passage);
+    }
+
+    return AssistantAnswer(
+      text: lines.join('\n'),
+      kind: AnswerKind.explanation,
+      documentsSearched: 1,
+      citations: _citationsByPage(<_Cited>[
+        for (final topic in topics)
+          if (firstOnPage[topic.pageIndex] case final passage?)
+            (passage: passage, relevance: 1, terms: <String>[topic.text]),
+      ]),
+    );
+  }
+
+  /// A shape's label at the start of a line.
+  static String _capitalise(String label) =>
+      '${label[0].toUpperCase()}${label.substring(1)}';
+
+  /// The shapes a digest reports, in the order they are worth reading.
+  static const List<QuestionIntent> _digestIntents = <QuestionIntent>[
+    QuestionIntent.date,
+    QuestionIntent.amount,
+    QuestionIntent.person,
+    QuestionIntent.contact,
+    QuestionIntent.identifier,
+    QuestionIntent.place,
+  ];
+
+  static QuestionIntent _intentFor(InformationKind kind) => switch (kind) {
+    InformationKind.names => QuestionIntent.person,
+    InformationKind.dates => QuestionIntent.date,
+    InformationKind.amounts => QuestionIntent.amount,
+    InformationKind.locations => QuestionIntent.place,
+    InformationKind.references => QuestionIntent.identifier,
+    InformationKind.contacts => QuestionIntent.contact,
+    // Handled before this is reached — a digest is every shape, not one.
+    InformationKind.important => QuestionIntent.general,
+  };
+
+  /// Pulls every value of one kind — or of all of them — off the pages.
+  ///
+  /// Reads shapes rather than words, which is the entire reason these are
+  /// actions and not questions: no page writes "dates" beside its dates, so
+  /// ranking by term coverage scores zero everywhere and answers "I could not
+  /// find that" about values that are plainly there.
+  ///
+  /// Scoped to the open document when there is one. With none — the Assistant
+  /// tab's own conversation — it reads the most recent documents that have
+  /// text, because "find every date I have" is a reasonable thing to want and
+  /// refusing it would be a worse answer than a bounded one.
+  Future<Result<AssistantAnswer>> _findInformation(
+    InformationKind kind,
+    String? documentId,
+  ) async {
+    final List<Document> documents;
+    final String scope;
+
+    if (documentId != null) {
+      final loaded = await _documents.getDocument(documentId);
+      if (loaded case Failed(:final failure)) return Failed(failure);
+
+      final document = (loaded as Success<Document>).value;
+      if (!document.hasText) {
+        return const Success(
+          AssistantAnswer(
+            text: documentHasNoTextMessage,
+            kind: AnswerKind.noRecognisedText,
+            documentsSearched: 1,
+          ),
+        );
+      }
+
+      documents = <Document>[document];
+      scope = document.title;
+    } else {
+      final loaded = await _documents.getDocuments();
+      if (loaded case Failed(:final failure)) return Failed(failure);
+
+      documents = (loaded as Success<List<Document>>).value
+          .where((document) => document.hasText)
+          .take(maxDocuments)
+          .toList(growable: false);
+      scope = 'your documents';
+    }
+
+    if (documents.isEmpty) return Success(await _emptyHanded());
+
+    final passages = <Passage>[
+      for (final document in documents) ...PassageExtractor.extract(document),
+    ];
+
+    if (kind == InformationKind.important) {
+      return Success(_composeDigest(passages, scope, documents.length));
+    }
+
+    final intent = _intentFor(kind);
+    return Success(
+      _composeFindings(
+        intent,
+        ShapeFinder.find(intent, passages),
+        scope,
+        documents.length,
+      ),
+    );
+  }
+
+  /// Everything worth knowing, grouped by what kind of thing it is.
+  static AssistantAnswer _composeDigest(
+    List<Passage> passages,
+    String scope,
+    int documentsSearched,
+  ) {
+    final sections = <String>[];
+    final cited = <_Cited>[];
+
+    for (final intent in _digestIntents) {
+      final findings = ShapeFinder.find(intent, passages, maxFindings: 6);
+      if (findings.isEmpty) continue;
+
+      sections.add(
+        '${_capitalise(ShapeFinder.labelFor(intent, plural: true))}\n'
+        '${findings.map((finding) => '• ${finding.value}').join('\n')}',
+      );
+
+      for (final finding in findings) {
+        cited.add((
+          passage: finding.passage,
+          relevance: 1,
+          terms: <String>[finding.value],
+        ));
+      }
+    }
+
+    if (sections.isEmpty) {
+      return AssistantAnswer(
+        text:
+            'I could not find any dates, amounts, names or reference numbers '
+            'in $scope.',
+        kind: AnswerKind.noMatch,
+        documentsSearched: documentsSearched,
+      );
+    }
+
+    return AssistantAnswer(
+      text: 'Here is what stands out in $scope:\n\n${sections.join('\n\n')}',
+      kind: AnswerKind.extraction,
+      // A digest mixes a currency figure, which is a fact about the page, with
+      // a capitalised pair of words, which is a convention headings share with
+      // names. Partial is the honest reading of the set.
+      confidence: AnswerConfidence.partial,
+      documentsSearched: documentsSearched,
+      citations: _citationsByPage(cited),
+    );
   }
 
   // ---- Whole-document modes ------------------------------------------------
@@ -511,12 +878,27 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
     final passages = PassageExtractor.extract(document);
 
-    // Only summary and find reach here; `ask` routes the answer mode away
-    // above, before a document is ever resolved.
+    // Only summary and find reach here; the question path routes the answer
+    // mode away above, before a document is ever resolved.
+    if (question.mode == QuestionMode.summary) {
+      return Success(
+        _composeSummary(document, passages, brief: question.brief),
+      );
+    }
+
+    // A listing request that named no shape — "find important information" —
+    // is the digest, the same answer the button produces.
+    if (question.intent == QuestionIntent.general) {
+      return Success(_composeDigest(passages, document.title, 1));
+    }
+
     return Success(
-      question.mode == QuestionMode.summary
-          ? _composeSummary(document, passages, brief: question.brief)
-          : _composeFindings(question.intent, document, passages),
+      _composeFindings(
+        question.intent,
+        ShapeFinder.find(question.intent, passages),
+        document.title,
+        1,
+      ),
     );
   }
 
@@ -561,7 +943,9 @@ class RetrievalAssistantRepository implements AssistantRepository {
       passages,
       // A brief summary is two sentences, not five. Asked for "briefly", a
       // wall of text is the wrong answer however well chosen its sentences.
-      maxSentences: brief ? briefSummarySentences : PassageSummarizer.maxSentences,
+      maxSentences: brief
+          ? briefSummarySentences
+          : PassageSummarizer.maxSentences,
       characterBudget: brief
           ? contextCharacterBudget ~/ 2
           : contextCharacterBudget,
@@ -595,22 +979,24 @@ class RetrievalAssistantRepository implements AssistantRepository {
     );
   }
 
-  /// Every value of one shape, in the order the document states them.
+  /// Every value of one shape, in the order the pages state them.
+  ///
+  /// [scope] names what was read — a document's title, or "your documents" when
+  /// the request was not about one in particular — so a fruitless search says
+  /// where it looked.
   static AssistantAnswer _composeFindings(
     QuestionIntent intent,
-    Document document,
-    List<Passage> passages,
+    List<ShapeFinding> findings,
+    String scope,
+    int documentsSearched,
   ) {
-    final findings = ShapeFinder.find(intent, passages);
-
     if (findings.isEmpty) {
       return AssistantAnswer(
         text:
             'I could not find any '
-            '${ShapeFinder.labelFor(intent, plural: true)} in '
-            '${document.title}.',
+            '${ShapeFinder.labelFor(intent, plural: true)} in $scope.',
         kind: AnswerKind.noMatch,
-        documentsSearched: 1,
+        documentsSearched: documentsSearched,
       );
     }
 
@@ -668,7 +1054,8 @@ class RetrievalAssistantRepository implements AssistantRepository {
                 ...existing.matchedTerms,
                 ...entry.terms,
               }),
-              relevance: math.max(existing.relevance, entry.relevance)
+              relevance: math
+                  .max(existing.relevance, entry.relevance)
                   .clamp(0, 1)
                   .toDouble(),
             );
@@ -751,16 +1138,18 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
     final text = document.extractedText;
 
-    return List<String>.unmodifiable(<String>[
-      // Always available: any recognised text can be summarised, and this is
-      // the question people arrive with.
-      DocumentQuestions.summarise,
-      if (PassageSignals.hasDate(text)) DocumentQuestions.dates,
-      if (PassageSignals.hasAmount(text)) DocumentQuestions.amounts,
-      if (PassageSignals.hasProperName(text)) DocumentQuestions.names,
-      if (PassageSignals.hasContact(text)) DocumentQuestions.contact,
-      if (PassageSignals.hasIdentifier(text)) DocumentQuestions.references,
-    ].take(4));
+    return List<String>.unmodifiable(
+      <String>[
+        // Always available: any recognised text can be summarised, and this is
+        // the question people arrive with.
+        DocumentQuestions.summarise,
+        if (PassageSignals.hasDate(text)) DocumentQuestions.dates,
+        if (PassageSignals.hasAmount(text)) DocumentQuestions.amounts,
+        if (PassageSignals.hasProperName(text)) DocumentQuestions.names,
+        if (PassageSignals.hasContact(text)) DocumentQuestions.contact,
+        if (PassageSignals.hasIdentifier(text)) DocumentQuestions.references,
+      ].take(4),
+    );
   }
 
   // ---- Transcript ----------------------------------------------------------
@@ -857,6 +1246,4 @@ class RetrievalAssistantRepository implements AssistantRepository {
       );
     }
   }
-
-
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/assistant/presentation/assistant_intent_codec.dart';
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/assistant/presentation/screens/conversations_screen.dart';
 import '../../features/documents/presentation/screens/document_detail_screen.dart';
@@ -155,9 +156,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       // the first frame instead of flashing a placeholder
                       // while a stream resolves.
                       documentTitle: state.uri.queryParameters['title'],
-                      // Set by Summarise and Explain, which are this route
-                      // arriving with the question already typed.
-                      initialQuestion: state.uri.queryParameters['ask'],
+                      // Set by Summarise, Explain and the reader's selection —
+                      // this route arriving with the action already chosen.
+                      // Decoded to an intent here rather than carried as a
+                      // sentence, so nothing downstream has to parse it.
+                      initialIntent: AssistantIntentCodec.decode(
+                        action: state
+                            .uri
+                            .queryParameters[AssistantIntentCodec.actionKey],
+                        selection: state
+                            .uri
+                            .queryParameters[AssistantIntentCodec.selectionKey],
+                      ),
                     ),
                   ),
                 ],

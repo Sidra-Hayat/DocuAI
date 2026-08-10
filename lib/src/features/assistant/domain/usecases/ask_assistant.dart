@@ -2,6 +2,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/utils/clock.dart';
 import '../entities/assistant_answer.dart';
+import '../entities/assistant_intent.dart';
 import '../entities/chat_message.dart';
 import '../repositories/assistant_repository.dart';
 
@@ -26,6 +27,7 @@ class AskAssistant {
 
   static const int maxQuestionLength = 500;
 
+  /// Asks a question the user typed.
   FutureResult<AssistantAnswer> call(
     String question, {
     required String conversationId,
@@ -37,15 +39,39 @@ class AskAssistant {
     }
     if (trimmed.length > maxQuestionLength) {
       return const Failed(
-        ValidationFailure('That question is too long — try asking it in fewer words.'),
+        ValidationFailure(
+          'That question is too long — try asking it in fewer words.',
+        ),
       );
     }
 
+    return run(
+      AskQuestion(trimmed),
+      conversationId: conversationId,
+      documentId: documentId,
+    );
+  }
+
+  /// Carries out an action the user chose, and records it like a question.
+  ///
+  /// An action produces an ordinary pair of turns: the request as the user
+  /// would have phrased it, then the answer with its citations. That is what
+  /// keeps the transcript a record of the conversation rather than of the
+  /// typing — a thread showing a summary with nothing above it explains
+  /// nothing when it is reopened a month later.
+  ///
+  /// No validation here. There is nothing to validate: an intent came from a
+  /// button, so it cannot be blank or five hundred characters long.
+  FutureResult<AssistantAnswer> run(
+    AssistantIntent intent, {
+    required String conversationId,
+    String? documentId,
+  }) async {
     await _repository.appendMessage(
       ChatMessage(
         id: _newId(),
         role: ChatRole.user,
-        text: trimmed,
+        text: intent.transcriptLabel,
         createdAt: _now(),
         // Both turns carry the thread and the scope, so the transcript can be
         // filtered back into the conversation it belongs to.
@@ -54,30 +80,28 @@ class AskAssistant {
       ),
     );
 
-    final answered = await _repository.ask(trimmed, documentId: documentId);
+    final answered = await _repository.run(intent, documentId: documentId);
 
-    await _repository.appendMessage(
-      switch (answered) {
-        Success(:final value) => ChatMessage(
-          id: _newId(),
-          role: ChatRole.assistant,
-          text: value.text,
-          createdAt: _now(),
-          citations: value.citations,
-          conversationId: conversationId,
-          documentId: documentId,
-        ),
-        Failed(:final failure) => ChatMessage(
-          id: _newId(),
-          role: ChatRole.assistant,
-          text: '',
-          createdAt: _now(),
-          errorMessage: failure.message,
-          conversationId: conversationId,
-          documentId: documentId,
-        ),
-      },
-    );
+    await _repository.appendMessage(switch (answered) {
+      Success(:final value) => ChatMessage(
+        id: _newId(),
+        role: ChatRole.assistant,
+        text: value.text,
+        createdAt: _now(),
+        citations: value.citations,
+        conversationId: conversationId,
+        documentId: documentId,
+      ),
+      Failed(:final failure) => ChatMessage(
+        id: _newId(),
+        role: ChatRole.assistant,
+        text: '',
+        createdAt: _now(),
+        errorMessage: failure.message,
+        conversationId: conversationId,
+        documentId: documentId,
+      ),
+    });
 
     return answered;
   }
