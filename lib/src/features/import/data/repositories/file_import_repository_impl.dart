@@ -8,6 +8,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../domain/repositories/file_import_repository.dart';
 import '../datasources/document_text_extractor.dart';
+import '../datasources/import_scratch.dart';
 import '../datasources/imported_image_normalizer.dart';
 import '../datasources/pdf_page_rasterizer.dart';
 
@@ -119,10 +120,9 @@ class FileImportRepositoryImpl implements FileImportRepository {
 
       final bytes = await File(path).readAsBytes();
 
-      final directory = Directory(
-        p.join((await _tempDir()).path, 'docuai_import'),
+      final directory = await ImportScratch.prepare(
+        temporaryDirectory: _tempDir,
       );
-      if (!directory.existsSync()) await directory.create(recursive: true);
 
       // Stamped so two imports of the same file in one session cannot write
       // over each other's temporary pages.

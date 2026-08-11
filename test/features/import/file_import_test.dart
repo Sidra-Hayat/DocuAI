@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -7,10 +8,12 @@ import 'package:docuai/src/core/error/result.dart';
 import 'package:docuai/src/features/documents/domain/entities/document.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/import/data/datasources/document_text_extractor.dart';
+import 'package:docuai/src/features/import/data/datasources/import_scratch.dart';
 import 'package:docuai/src/features/import/domain/repositories/file_import_repository.dart';
 import 'package:docuai/src/features/import/domain/usecases/import_file.dart';
 import 'package:docuai/src/features/import/domain/usecases/import_images.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import '../../helpers/fakes.dart';
 
@@ -201,6 +204,51 @@ void main() {
 
       expect(result, isA<Failed<ImportResult>>());
       expect(documents.store, isEmpty);
+    });
+  });
+
+  group('the scratch directory', () {
+    late Directory root;
+
+    setUp(() async {
+      root = await Directory.systemTemp.createTemp('docuai_scratch');
+    });
+
+    tearDown(() async {
+      if (root.existsSync()) await root.delete(recursive: true);
+    });
+
+    Future<Directory> temporaryDirectory() async => root;
+
+    test('is empty when an import begins', () async {
+      // What the previous import left behind. Every photograph a user brought
+      // in used to stay on disk twice — once as a page in the library, once as
+      // the temporary JPEG it was made from — because nothing ever removed the
+      // second copy.
+      final scratch = await ImportScratch.prepare(
+        temporaryDirectory: temporaryDirectory,
+      );
+      File(p.join(scratch.path, 'leftover.jpg')).writeAsBytesSync(<int>[1, 2]);
+
+      final second = await ImportScratch.prepare(
+        temporaryDirectory: temporaryDirectory,
+      );
+
+      expect(second.existsSync(), isTrue);
+      expect(
+        second.listSync(),
+        isEmpty,
+        reason: 'the directory holds one import at most',
+      );
+    });
+
+    test('is created when it does not exist yet', () async {
+      final scratch = await ImportScratch.prepare(
+        temporaryDirectory: temporaryDirectory,
+      );
+
+      expect(scratch.existsSync(), isTrue);
+      expect(p.basename(scratch.path), ImportScratch.directoryName);
     });
   });
 }

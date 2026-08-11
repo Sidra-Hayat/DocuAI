@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../domain/repositories/image_import_repository.dart';
+import '../datasources/import_scratch.dart';
 import '../datasources/imported_image_normalizer.dart';
 
 /// Picks photos and hands back normalised temporary files.
@@ -48,10 +49,9 @@ class ImageImportRepositoryImpl implements ImageImportRepository {
         return const Success(ImportOutcome(imagePaths: <String>[]));
       }
 
-      final directory = Directory(
-        p.join((await _tempDir()).path, 'docuai_import'),
+      final directory = await ImportScratch.prepare(
+        temporaryDirectory: _tempDir,
       );
-      if (!directory.existsSync()) await directory.create(recursive: true);
 
       final normalised = <String>[];
       final rejected = <String>[];

@@ -74,9 +74,9 @@ Future<void> bootstrap() async {
       );
     },
     (error, stackTrace) {
-      // Last line of defence. Phase 8 can route this to a local crash log; it
+      // Last line of defence. A local crash log could be routed from here; it
       // must never leave the device, since DocuAI ships with no network layer.
-      debugPrint('Uncaught zone error: $error\n$stackTrace');
+      _report('Uncaught zone error', error, stackTrace);
     },
   );
 }
@@ -84,15 +84,35 @@ Future<void> bootstrap() async {
 /// Routes framework and platform errors through a single path.
 void _installErrorHandlers() {
   FlutterError.onError = (details) {
+    // `presentError` writes the error to the console, and in a release build
+    // the console is logcat. See [_report].
+    if (kReleaseMode) return;
     FlutterError.presentError(details);
-    if (kReleaseMode) {
-      debugPrint('Flutter error: ${details.exceptionAsString()}');
-    }
   };
 
   // Errors raised on the platform thread that never reach the Flutter zone.
   PlatformDispatcher.instance.onError = (error, stackTrace) {
-    debugPrint('Platform error: $error\n$stackTrace');
+    _report('Platform error', error, stackTrace);
+    // Handled either way: swallowing the error keeps the app running, and that
+    // decision is separate from whether anything is printed about it.
     return true;
   };
+}
+
+/// Prints a failure where there is a developer to read it, and nowhere else.
+///
+/// Release builds say nothing. An exception string from this app routinely
+/// carries a document title or a path into the sandbox — `NotFoundException`
+/// names the id it could not find, storage failures name the file — and in a
+/// release build the only reader of logcat is another application on a rooted
+/// device. That is the same leak the router's route logging is already gated
+/// for, arriving by a different door.
+///
+/// This costs nothing in diagnostics that anyone was actually getting: there is
+/// no crash reporter, so a release trace printed here was only ever read by
+/// whoever had the phone plugged in. If production diagnostics are wanted
+/// later, the answer is a local crash log the user can export — not logcat.
+void _report(String label, Object error, StackTrace stackTrace) {
+  if (kReleaseMode) return;
+  debugPrint('$label: $error\n$stackTrace');
 }

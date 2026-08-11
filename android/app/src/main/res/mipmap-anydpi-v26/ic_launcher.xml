@@ -6,4 +6,22 @@
           android:drawable="@drawable/ic_launcher_foreground"
           android:inset="17%" />
   </foreground>
+  <!--
+    Android 13's themed icons, which recolour the launcher to the user's
+    wallpaper palette. Without a monochrome layer the system falls back to
+    showing the full-colour icon on a grey plate, which is the one icon on the
+    home screen that has not joined in.
+
+    The same artwork and the same inset as the foreground, deliberately. Android
+    reads only the *alpha* of this layer and tints it, so the mark's own colours
+    are irrelevant and a second drawing would be a second thing to keep in step.
+    The existing foreground suits this because it is a silhouette rather than a
+    filled tile — 61% of its canvas is transparent and 33% is the mark — so what
+    gets tinted is the shape and not a square.
+  -->
+  <monochrome>
+      <inset
+          android:drawable="@drawable/ic_launcher_foreground"
+          android:inset="17%" />
+  </monochrome>
 </adaptive-icon>
