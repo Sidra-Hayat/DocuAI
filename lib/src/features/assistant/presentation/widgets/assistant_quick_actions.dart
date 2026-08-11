@@ -54,7 +54,7 @@ class AssistantQuickActions extends StatelessWidget {
       children: <Widget>[
         ActionChip(
           avatar: const Icon(Icons.help_outline, size: 18),
-          label: const Text('Ask'),
+          label: const Text('Ask a question'),
           onPressed: onWriteQuestion,
         ),
         for (final action in AssistantActions.headline(scoped))
@@ -81,8 +81,8 @@ Future<void> showQuickActionsSheet(
     actions: <AppSheetAction>[
       AppSheetAction(
         icon: Icons.help_outline,
-        label: 'Ask',
-        description: 'Write your own question',
+        label: 'Ask a question',
+        description: 'Type it in your own words',
         onSelected: onWriteQuestion,
       ),
       for (final action in AssistantActions.all(scoped))
@@ -138,14 +138,14 @@ abstract final class AssistantActions {
 
   static AssistantAction _summarize(bool scoped) => AssistantAction(
     icon: Icons.subject_outlined,
-    label: scoped ? 'Summarise document' : 'Summarise',
+    label: scoped ? 'Summarise this document' : 'Summarize a document',
     description: 'The main points, in the document’s own words',
     intent: const SummarizeDocument(),
   );
 
   static AssistantAction _explain(bool scoped) => AssistantAction(
     icon: Icons.lightbulb_outline,
-    label: scoped ? 'Explain document' : 'Explain',
+    label: scoped ? 'Explain this document' : 'Explain something',
     description: 'What this document is and what it covers',
     intent: const ExplainDocument(),
   );

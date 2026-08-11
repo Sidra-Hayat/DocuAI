@@ -54,6 +54,16 @@ abstract final class DocumentTopics {
   /// one, and reads badly in a list.
   static const int maxTopicChars = 90;
 
+  /// A line that reads as a form field rather than as a statement.
+  ///
+  /// `Account number: NW-4471902` is a fact, not a description, and opening an
+  /// explanation with "This document is about Account number: NW-4471902" is
+  /// how a bill gets introduced by its least informative line. Sentences are
+  /// preferred for the opening; the fields are still reported, as counts.
+  static final RegExp _fieldLine = RegExp(r'^[^:]{1,28}:\s*\S');
+
+  static bool _readsAsAField(String text) => _fieldLine.hasMatch(text.trim());
+
   /// The document's own account of itself, best source first.
   static DocumentOutline of(Document document) {
     final headings = _headings(document);
@@ -112,13 +122,46 @@ abstract final class DocumentTopics {
       maxSentences: 4,
     );
 
-    return <DocumentTopic>[
+    final topics = <DocumentTopic>[
       for (final sentence in sentences)
         DocumentTopic(
           text: _clause(Markup.toInlineText(sentence.passage.text)),
           pageIndex: sentence.passage.pageIndex,
         ),
     ];
+
+    // The opening line leads, taken from the page rather than from the ranking.
+    //
+    // The summariser ranks by how well a sentence represents the whole
+    // document — the right question for a summary, the wrong one for an opening
+    // line. On a bill it ranked "Call 0800 900 1234 to pay by card" above the
+    // statement at the top and left the descriptive line out of its four
+    // entirely. Documents say what they are first; that is where to look.
+    final opening = _openingLine(document);
+    if (opening != null) {
+      topics
+        ..removeWhere((topic) => topic.text == opening.text)
+        ..insert(0, opening);
+    }
+
+    return topics.take(maxTopics).toList(growable: false);
+  }
+
+  /// The first line that describes the document rather than recording a value.
+  static DocumentTopic? _openingLine(Document document) {
+    for (final page in document.pages) {
+      if (!page.hasText) continue;
+
+      for (final line in Markup.withoutImages(page.text).split('\n')) {
+        final text = Markup.toInlineText(line);
+        // Long enough to be a statement, and not `Label: value`.
+        if (text.length < 20 || _readsAsAField(text)) continue;
+
+        return DocumentTopic(text: _clause(text), pageIndex: page.index);
+      }
+    }
+
+    return null;
   }
 
   /// Shortens a sentence to something that reads as a topic.

@@ -58,6 +58,7 @@ class AnalyzedQuestion {
     required this.intent,
     required this.mode,
     required this.subjectTerms,
+    required this.contentTerms,
     this.brief = false,
     this.subject = '',
     this.subjectIsDelimited = false,
@@ -106,6 +107,21 @@ class AnalyzedQuestion {
   /// leaves nothing, which is the engine's only way to know it has been asked
   /// to summarise something the user never identified.
   final List<String> subjectTerms;
+
+  /// [terms] with the words that describe the *request* removed, keeping the
+  /// words that describe what is being asked about.
+  ///
+  /// What a passage is scored against. Coverage is a fraction — how many of the
+  /// asked-for terms a passage contains — so every word that no page could
+  /// possibly hold drags every passage down by the same amount. "What documents
+  /// mention Aisha?" was scored as asking for three things, so the sentence
+  /// naming Aisha covered one third of it and fell under the floor; the
+  /// assistant then reported that it could not find a name that was sitting
+  /// there in plain sight.
+  ///
+  /// Falls back to [terms] when filtering would leave nothing, so a question
+  /// made entirely of request words is still scored against something.
+  final List<String> contentTerms;
 
   bool get isEmpty => terms.isEmpty && phrases.isEmpty;
 }
@@ -388,6 +404,12 @@ abstract final class QuestionAnalyzer {
     'recap',
     'synopsis',
     'outline',
+    // Asked for as a noun rather than as a verb: "what are the important
+    // points", "the key takeaways". Vocabulary rather than another phrase to
+    // match, so the wording around it does not have to be anticipated.
+    'points',
+    'takeaways',
+    'highlights',
   };
 
   /// Asks for the summary to be shorter than the default.
@@ -432,13 +454,29 @@ abstract final class QuestionAnalyzer {
   /// produce a bulleted summary, and for the second of them that is a list of
   /// details in answer to a question about the whole.
   static const List<String> _aboutPhrases = <String>[
-    'what is this about',
-    'what is this document about',
     'what is this',
     'what kind of document',
     'what type of document',
     'what document is this',
   ];
+
+  /// "What is *X* about?", for any X.
+  ///
+  /// The phrase list above used to carry `what is this about` and `what is this
+  /// document about` as literals, which meant the question worked on the
+  /// document that was open and failed the moment someone named one: "what is
+  /// the internship report about?" went down the answer path and reported that
+  /// a document it had just identified contained nothing.
+  ///
+  /// The shape is what matters, not the words in the middle — a `what is …
+  /// about` question asks to be told what a thing *is*, whatever fills the gap.
+  /// Anchored at the end so it stays a question about identity: "what do you
+  /// know about the rent" has "about" in the middle and is an ordinary
+  /// question, which is the answer path and should stay there.
+  static final RegExp _aboutPattern = RegExp(
+    r"^(what|what's|whats)\s+(is|are|was|were|s)?\s*"
+    r"[a-z0-9 '’-]{0,40}\babout\s*[?.!]*$",
+  );
 
   /// Asks for *everything* of a kind rather than one instance. Without one of
   /// these, "when is it due" stays on the answer path — the user wants the due
@@ -600,6 +638,7 @@ abstract final class QuestionAnalyzer {
       intent: intent,
       mode: mode,
       subjectTerms: List<String>.unmodifiable(_subjectOf(terms)),
+      contentTerms: List<String>.unmodifiable(_contentOf(terms)),
       brief: mode == QuestionMode.summary && all.any(_briefWords.contains),
       subject: mode == QuestionMode.explain ? _passageOf(question) : '',
       subjectIsDelimited:
@@ -672,7 +711,10 @@ abstract final class QuestionAnalyzer {
     // Checked first: "explain the summary of clause 4" is a request about a
     // passage, not a request to summarise the document.
     if (tokens.any(_explainWords.contains)) return QuestionMode.explain;
-    if (_aboutPhrases.any(normalised.contains)) return QuestionMode.explain;
+    if (_aboutPhrases.any(normalised.contains) ||
+        _aboutPattern.hasMatch(normalised.trim())) {
+      return QuestionMode.explain;
+    }
 
     if (tokens.any(_summaryWords.contains)) return QuestionMode.summary;
     if (_summaryPhrases.any(normalised.contains)) return QuestionMode.summary;
@@ -695,6 +737,7 @@ abstract final class QuestionAnalyzer {
           !stopwords.contains(token) &&
           !_enumerationWords.contains(token) &&
           !_qualifierWords.contains(token) &&
+          !_mentionWords.contains(token) &&
           !_selfWords.contains(token) &&
           !_intentVocabulary.contains(token),
     );
@@ -743,6 +786,28 @@ abstract final class QuestionAnalyzer {
         .trim();
   }
 
+  /// Everything a page could actually contain.
+  ///
+  /// Narrower than [terms] and wider than [subjectTerms]: the request verbs go,
+  /// the intent vocabulary stays. "How much is the total" keeps `total`, which
+  /// a bill really does say; "what documents mention Aisha" keeps only `aisha`,
+  /// because no page says "documents" or "mention" about itself.
+  static List<String> _contentOf(List<String> terms) {
+    final content = terms
+        .where(
+          (term) =>
+              !_summaryWords.contains(term) &&
+              !_explainWords.contains(term) &&
+              !_enumerationWords.contains(term) &&
+              !_qualifierWords.contains(term) &&
+              !_mentionWords.contains(term) &&
+              !_selfWords.contains(term),
+        )
+        .toList(growable: false);
+
+    return content.isEmpty ? terms : content;
+  }
+
   /// The part of a question that could name a document.
   ///
   /// The explain verbs are filtered alongside the summary ones, for the same
@@ -756,6 +821,7 @@ abstract final class QuestionAnalyzer {
             !_explainWords.contains(term) &&
             !_enumerationWords.contains(term) &&
             !_qualifierWords.contains(term) &&
+            !_mentionWords.contains(term) &&
             !_selfWords.contains(term) &&
             !_intentVocabulary.contains(term),
       )

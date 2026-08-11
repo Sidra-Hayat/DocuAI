@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../../documents/domain/entities/document.dart';
+import '../../../documents/presentation/providers/document_providers.dart';
 import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
@@ -334,14 +336,32 @@ class _Introduction extends ConsumerWidget {
     final suggestions =
         ref.watch(suggestedQuestionsProvider(scope)).value ?? const <String>[];
 
+    // A library with nothing readable in it cannot answer anything, and saying
+    // so beats offering four actions that all come back empty.
+    final library = ref.watch(documentsProvider).value ?? const <Document>[];
+    if (scope == null && !library.any((document) => document.hasText)) {
+      return const AppStateView(
+        icon: Icons.folder_open_outlined,
+        title: 'Nothing to ask about yet',
+        message:
+            'Add or scan a document first, then you can ask questions about '
+            'it.',
+      );
+    }
+
     return AppStateView(
       icon: Icons.auto_awesome_outlined,
       title: scope == null
-          ? 'Ask anything about your documents'
-          : 'Ask anything about this document',
-      message:
-          'Every answer comes from the pages themselves, and shows you '
-          'where it came from.',
+          ? 'Ask about your documents'
+          : 'Ask about this document',
+      message: scope == null
+          // Said plainly on the screen where it is not obvious. Inside a
+          // document the scope explains itself; from the Assistant tab the user
+          // has no way of knowing what the question is being asked *of*.
+          ? 'Ask a question about any of your documents. DocuAI searches your '
+                'saved documents and answers only from information it can find.'
+          : 'Every answer comes from this document’s own pages, and shows you '
+                'where it came from.',
       action: AssistantQuickActions(
         onIntent: onIntent,
         onWriteQuestion: onWriteQuestion,

@@ -7,6 +7,7 @@ import '../../../../core/error/result.dart';
 import '../../../../core/text/markup.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../../documents/domain/repositories/document_repository.dart';
+import '../../../search/domain/entities/search_hit.dart';
 import '../../../search/domain/repositories/search_repository.dart';
 import '../../domain/entities/assistant_answer.dart';
 import '../../domain/entities/assistant_intent.dart';
@@ -186,15 +187,56 @@ class RetrievalAssistantRepository implements AssistantRepository {
   }
 
   /// The ordinary retrieval path: BM25, then passage ranking, then a quote.
+  ///
+  /// With one rescue on the way out. A question can name a shape *and* narrow
+  /// it — "who is mentioned in the internship report" asks for names and says
+  /// where — and narrowing sends it down this path, where the words "mentioned"
+  /// and "report" appear on no page and nothing matches. Rather than report
+  /// that a document full of names contains none, a failed answer to a question
+  /// that asked for a *kind* of thing falls through to listing that kind.
+  ///
+  /// Only ever on failure, so it cannot dilute a question retrieval did answer.
   Future<Result<AssistantAnswer>> _retrieve(
     AnalyzedQuestion analyzed,
     String? documentId,
   ) async {
     final candidates = await _candidates(analyzed, documentId);
-    return switch (candidates) {
-      Failed(:final failure) => Failed(failure),
-      Success(:final value) => Success(await _answerFrom(analyzed, value)),
+    if (candidates case Failed(:final failure)) return Failed(failure);
+
+    final found = (candidates as Success<
+      ({List<Document> documents, Map<String, double> priors})
+    >).value;
+    final answer = await _answerFrom(analyzed, found);
+
+    if (answer.kind != AnswerKind.noMatch ||
+        analyzed.intent == QuestionIntent.general) {
+      return Success(answer);
+    }
+
+    // Scoped to whichever document the question pointed at, when it pointed at
+    // one, so "names in the internship report" does not answer with names from
+    // the electricity bill.
+    final scope = documentId ?? await _bestMatchFor(analyzed);
+    final listed = await _findInformation(_kindFor(analyzed.intent), scope);
+
+    return switch (listed) {
+      Success(value: final AssistantAnswer value)
+          when value.kind == AnswerKind.extraction =>
+        Success(value),
+      // The listing found nothing either. The original answer is the honest
+      // one: it says the information is not there, which is true.
+      _ => Success(answer),
     };
+  }
+
+  /// The document a question's own words point at, if any.
+  Future<String?> _bestMatchFor(AnalyzedQuestion question) async {
+    if (question.subjectTerms.isEmpty) return null;
+
+    final found = await _search.search(question.subjectTerms.join(' '));
+    return found is Success<List<SearchHit>> && found.value.isNotEmpty
+        ? found.value.first.document.id
+        : null;
   }
 
   /// What a typed "explain …" actually asked for.
@@ -245,7 +287,24 @@ class RetrievalAssistantRepository implements AssistantRepository {
       return _explainPassage(subject, documentId);
     }
 
-    return _retrieve(analyzed, documentId);
+    final retrieved = await _retrieve(analyzed, documentId);
+
+    // "Explain the second section" names a part of the document the app cannot
+    // see — there is no section index — so retrieval finds nothing. Explaining
+    // the document answers the question that was actually being asked.
+    //
+    // Which document, when none is open, is the same question "what is the
+    // internship report about?" already answers: the one the user named. That
+    // is resolved by searching for the subject, so a subject naming nothing in
+    // the library resolves to nothing and the not-found answer stands — the
+    // fallback can reach a document the user pointed at, and never invents one.
+    if (retrieved is Success<AssistantAnswer> &&
+        retrieved.value.kind == AnswerKind.noMatch) {
+      final target = documentId ?? await _bestMatchFor(analyzed);
+      if (target != null) return _onOneDocument(target, _explainDocument);
+    }
+
+    return retrieved;
   }
 
   /// Long enough that someone pasted it rather than typed a request.
@@ -733,6 +792,61 @@ class RetrievalAssistantRepository implements AssistantRepository {
     QuestionIntent.place,
   ];
 
+  /// The listing that answers a question of this shape.
+  ///
+  /// The inverse of [_intentFor]. It exists so a *typed* request reaches the
+  /// same extraction the button does — the quick actions are shortcuts, not a
+  /// second engine.
+  static InformationKind _kindFor(QuestionIntent intent) => switch (intent) {
+    QuestionIntent.person => InformationKind.names,
+    QuestionIntent.date => InformationKind.dates,
+    QuestionIntent.amount => InformationKind.amounts,
+    QuestionIntent.place => InformationKind.locations,
+    QuestionIntent.identifier => InformationKind.references,
+    QuestionIntent.contact => InformationKind.contacts,
+    QuestionIntent.general => InformationKind.important,
+  };
+
+  /// Names the documents a request could have meant.
+  ///
+  /// Better than "open the document you want": the user is on the Assistant
+  /// screen precisely because they were not thinking in terms of which document
+  /// holds what, and listing three titles is a shorter route to an answer than
+  /// making them go and find one.
+  Future<AssistantAnswer> _askWhichDocument(AnalyzedQuestion question) async {
+    // Something was named and matched nothing — a different problem, and one
+    // the user fixes by correcting the name rather than by picking from a list.
+    if (question.subjectTerms.isNotEmpty) {
+      return AssistantAnswer(
+        text:
+            'I could not find a document matching '
+            '"${question.subjectTerms.join(' ')}".',
+        kind: AnswerKind.noMatch,
+      );
+    }
+
+    final loaded = await _documents.getDocuments();
+    final readable = loaded is Success<List<Document>>
+        ? loaded.value.where((document) => document.hasText).toList()
+        : const <Document>[];
+
+    if (readable.isEmpty) {
+      return const AssistantAnswer(
+        text: emptyLibraryMessage,
+        kind: AnswerKind.emptyLibrary,
+      );
+    }
+
+    final named = readable.take(5).map((document) => document.title);
+
+    return AssistantAnswer(
+      text:
+          'Which document did you mean? You can ask about '
+          '${AnswerPhrasing.list(named)}.',
+      kind: AnswerKind.needsDocument,
+    );
+  }
+
   static QuestionIntent _intentFor(InformationKind kind) => switch (kind) {
     InformationKind.names => QuestionIntent.person,
     InformationKind.dates => QuestionIntent.date,
@@ -877,22 +991,21 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
     final document = (resolved as Success<Document?>).value;
     if (document == null) {
-      // Two different dead ends. Nothing named means the request never said
-      // which document; something named that matched nothing is a search that
-      // came back empty, and saying so is what lets the user correct the name.
-      return Success(
-        question.subjectTerms.isEmpty
-            ? const AssistantAnswer(
-                text: needsDocumentMessage,
-                kind: AnswerKind.needsDocument,
-              )
-            : AssistantAnswer(
-                text:
-                    'I could not find a document matching '
-                    '"${question.subjectTerms.join(' ')}".',
-                kind: AnswerKind.noMatch,
-              ),
-      );
+      // Nothing to narrow to. Asked from inside a document this cannot happen;
+      // asked from the Assistant tab it is the ordinary case, and it used to
+      // end here with "open the document you want" — which made every listing
+      // question typed from the main screen a dead end, while the same request
+      // made with a button worked. The button was right: a request for every
+      // date does not need a document, it needs the library.
+      if (question.mode == QuestionMode.find) {
+        return _findInformation(_kindFor(question.intent), null);
+      }
+
+      // Summarising and explaining genuinely do need one document — there is no
+      // such thing as the summary of a library — so this says which documents
+      // there are to choose from rather than asking the user to guess the
+      // wording that would have worked.
+      return Success(await _askWhichDocument(question));
     }
 
     if (!document.hasText) {

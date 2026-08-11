@@ -101,7 +101,7 @@ abstract final class PassageRanker {
     var lastMatch = -1;
     final matchedTerms = <String>[];
 
-    for (final term in question.terms) {
+    for (final term in question.contentTerms) {
       if (present.contains(term)) {
         credit += 1;
         matchedTerms.add(term);
@@ -118,7 +118,8 @@ abstract final class PassageRanker {
     for (var i = 0; i < tokens.length; i++) {
       final token = tokens[i];
       final isMatch =
-          question.terms.contains(token) || question.synonyms.contains(token);
+          question.contentTerms.contains(token) ||
+          question.synonyms.contains(token);
       if (!isMatch) continue;
 
       occurrences++;
@@ -128,12 +129,15 @@ abstract final class PassageRanker {
 
     // A quoted phrase that matched is itself full coverage, even when the
     // loose terms around it did not land.
-    final coverage = question.terms.isEmpty
+    // Scored against what a page could hold, not against the whole sentence.
+    // A request word cannot appear on any page, so counting one would put every
+    // passage the same distance below the floor — see [contentTerms].
+    final coverage = question.contentTerms.isEmpty
         ? (question.phrases.isEmpty ? 0.0 : 1.0)
-        : math.min(1.0, credit / question.terms.length);
+        : math.min(1.0, credit / question.contentTerms.length);
 
     if (coverage <= 0 && question.phrases.isEmpty) return null;
-    if (question.terms.length > 1 &&
+    if (question.contentTerms.length > 1 &&
         question.phrases.isEmpty &&
         coverage < minCoverage) {
       return null;
