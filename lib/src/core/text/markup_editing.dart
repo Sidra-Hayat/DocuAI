@@ -1,3 +1,5 @@
+import 'markup.dart';
+
 /// A text field's contents and where the selection sits in it.
 ///
 /// Plain integers rather than Flutter's `TextSelection`, so every toolbar
@@ -64,6 +66,60 @@ abstract final class MarkupEditing {
 
   static TextEdit toggleQuote(TextEdit edit) =>
       _toggleLinePrefix(edit, prefixFor: (_) => '> ', already: _quotePrefix);
+
+  /// The label an inserted picture carries.
+  ///
+  /// What the editor shows in place of the picture, so it has to read as a
+  /// thing rather than as syntax. Not a file name: the user did not choose one
+  /// and would learn nothing from `9c2e1f4a`.
+  static const String imageLabel = 'Image';
+
+  /// Places a picture at the caret, on a line of its own.
+  ///
+  /// Not a toggle, unlike everything else here — inserting a picture and
+  /// removing one are different actions, and the second is done by deleting the
+  /// line like any other.
+  ///
+  /// The blank line after it is deliberate. Without one, the next thing typed
+  /// lands on the same line as the reference and turns the picture back into
+  /// ordinary text mid-keystroke; with one, the caret is already where writing
+  /// continues.
+  static TextEdit insertImage(TextEdit edit, String imageName) {
+    final before = edit.text.substring(0, edit.start);
+    final after = edit.text.substring(edit.end);
+
+    // Only as much whitespace as it takes to stand alone. Inserting into an
+    // empty document, or at the start of a line, should not push a blank line
+    // in front of the picture.
+    final lead = before.isEmpty || before.endsWith('\n') ? '' : '\n';
+    final marker = '![$imageLabel]($imageName)';
+    final trail = after.startsWith('\n') ? '\n' : '\n\n';
+
+    final text = '$before$lead$marker$trail$after';
+    final caret = (before + lead + marker + trail).length;
+
+    return TextEdit(text: text, start: caret, end: caret);
+  }
+
+  /// Removes the picture line that [edit]'s caret sits on.
+  ///
+  /// Returns the edit unchanged when the caret is not on one, so a caller can
+  /// offer this without first proving where the caret is.
+  static TextEdit removeImageAt(TextEdit edit) {
+    final lineStart = _startOfLine(edit.text, edit.start);
+    final lineEnd = _endOfLine(edit.text, edit.start);
+
+    if (!Markup.isImageLine(edit.text.substring(lineStart, lineEnd))) {
+      return edit;
+    }
+
+    // The line's own newline goes with it, so removing a picture does not leave
+    // the gap where it was.
+    final cut = lineEnd < edit.text.length ? lineEnd + 1 : lineEnd;
+    final text = edit.text.substring(0, lineStart) + edit.text.substring(cut);
+
+    return TextEdit(text: text, start: lineStart, end: lineStart);
+  }
 
   // ---- inline ---------------------------------------------------------------
 

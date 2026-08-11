@@ -47,7 +47,10 @@ class MarkupEditingController extends TextEditingController {
         for (final token in tokens)
           TextSpan(
             text: text.substring(token.start, token.end),
-            style: token.isMarker
+            // A picture's line is a marker from end to end, so it would
+            // otherwise render as dimmed syntax. It is the one marker meant to
+            // be *seen*: it stands in for something the user put there.
+            style: token.isMarker && token.block != MarkupBlockKind.image
                 ? base.copyWith(color: markerColour)
                 : _styleFor(token, base, theme),
           ),
@@ -80,6 +83,17 @@ class MarkupEditingController extends TextEditingController {
       MarkupBlockKind.quote => base.copyWith(
         fontStyle: FontStyle.italic,
         color: theme.colorScheme.onSurfaceVariant,
+      ),
+      // A picture cannot be drawn inside a text field — a widget span occupies
+      // exactly one character and the reference is many, which would put the
+      // caret somewhere other than where it appears. So the line is styled to
+      // read as an object instead of as text: tinted, compact, and set apart
+      // from the writing around it.
+      MarkupBlockKind.image => base.copyWith(
+        fontSize: size * 0.92,
+        color: theme.colorScheme.onPrimaryContainer,
+        backgroundColor: theme.colorScheme.primaryContainer,
+        fontWeight: FontWeight.w600,
       ),
       MarkupBlockKind.bullet ||
       MarkupBlockKind.numbered ||
@@ -131,6 +145,24 @@ class MarkupEditingController extends TextEditingController {
       if (best.block == MarkupBlockKind.numbered) MarkupFormat.numbered,
       if (best.block == MarkupBlockKind.quote) MarkupFormat.quote,
     };
+  }
+
+  /// The picture the caret is sitting on, or null if it is not on one.
+  ///
+  /// How the editor knows to offer Preview and Remove. A tap inside a text
+  /// field places the caret — it does not reach a gesture recogniser on a span,
+  /// which is why the actions appear beside the field rather than on the line
+  /// itself.
+  String? get imageAtCaret {
+    if (!selection.isValid || text.isEmpty) return null;
+
+    final at = selection.start.clamp(0, text.length);
+    final start = at == 0 ? 0 : text.lastIndexOf('\n', at - 1) + 1;
+    final newline = text.indexOf('\n', at);
+    final end = newline < 0 ? text.length : newline;
+
+    if (start > end) return null;
+    return Markup.imageNameIn(text.substring(start, end));
   }
 
   /// Applies a toolbar operation, keeping the selection on the text it was on.

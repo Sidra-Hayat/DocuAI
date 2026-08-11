@@ -6,6 +6,17 @@ import 'package:archive/archive.dart';
 
 import '../../../../core/text/markup.dart';
 
+/// Raised when a document holds a picture, which Word export cannot carry yet.
+///
+/// A refusal rather than a degradation, and its own type so the layer above can
+/// turn it into advice — share it as a PDF — instead of a generic failure.
+class DocxImageUnsupportedException implements Exception {
+  const DocxImageUnsupportedException();
+
+  @override
+  String toString() => 'DocxImageUnsupportedException';
+}
+
 /// One page's worth of text to set.
 class DocxPage {
   const DocxPage(this.text);
@@ -40,6 +51,17 @@ class DocxJob {
 /// Everything here is offline and dependency-light: `archive` for the zip, and
 /// string building for the XML.
 Future<Uint8List> composeDocxBytes(DocxJob job) async {
+  // Refused up front rather than written without them. A Word file that
+  // silently dropped the pictures would look complete, and the user would only
+  // discover otherwise after sending it — by which point the omission is what
+  // the recipient has. Embedding them needs media parts, content types,
+  // relationships and drawing XML, which is a feature of its own.
+  for (final page in job.pages) {
+    if (Markup.hasImages(page.text)) {
+      throw const DocxImageUnsupportedException();
+    }
+  }
+
   final archive = Archive();
 
   void add(String path, String contents) {
@@ -158,9 +180,7 @@ String _document(DocxJob job) {
     // A page break between pages, so a multi-page document opens looking like
     // the document it came from rather than one continuous run of text.
     if (i > 0) {
-      body.write(
-        '<w:p><w:r><w:br w:type="page"/></w:r></w:p>',
-      );
+      body.write('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
     }
 
     for (final block in Markup.parse(job.pages[i].text)) {
@@ -190,6 +210,10 @@ String _paragraph(MarkupBlock block) {
     MarkupBlockKind.numbered =>
       '<w:pStyle w:val="ListParagraph"/>'
           '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr>',
+    // Unreachable: a document containing one is refused before any of this
+    // runs. Kept so that adding picture support later is a compiler error here
+    // rather than a silent omission.
+    MarkupBlockKind.image => '',
     MarkupBlockKind.paragraph => '',
   };
 

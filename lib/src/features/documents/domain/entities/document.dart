@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../../core/text/markup.dart';
 import 'document_page.dart';
 
 part 'document.freezed.dart';
@@ -74,8 +75,22 @@ abstract class Document with _$Document {
   /// Computed rather than stored: keeping one copy of the text on the pages
   /// removes any chance of the document-level copy drifting out of sync after a
   /// page is re-scanned or deleted.
-  String get extractedText =>
-      pages.where((page) => page.hasText).map((page) => page.text).join('\n\n');
+  ///
+  /// **Pictures are not text.** A written page may place one in its text, and
+  /// the reference is stored there as a line — so it is removed here, at the
+  /// single point every text consumer reads from. Left in, the name of a JPEG
+  /// would be indexed by search and quotable by the assistant.
+  ///
+  /// For a document containing no pictures this is exactly what it always was:
+  /// [Markup.withoutImages] returns its input unchanged, so the same string
+  /// yields the same tokens and the same results as before the feature existed.
+  /// The emptiness test is [DocumentPage.hasText]'s, applied to the text that
+  /// survives — a page holding only a picture has words to contribute in the
+  /// same sense a blank page does, which is none.
+  String get extractedText => pages
+      .map((page) => Markup.withoutImages(page.text))
+      .where((text) => text.trim().isNotEmpty)
+      .join('\n\n');
 
   bool get hasText => pages.any((page) => page.hasText);
 

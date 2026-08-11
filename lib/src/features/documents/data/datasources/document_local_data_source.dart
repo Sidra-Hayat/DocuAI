@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/error/exceptions.dart';
 import '../../../../core/storage/storage_paths.dart';
+import '../../../../core/text/markup.dart';
 import '../../../../core/utils/clock.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
@@ -44,7 +45,10 @@ class DocumentLocalDataSource {
       return _box.values.toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     } catch (error) {
-      throw CacheException('Could not read the document library.', cause: error);
+      throw CacheException(
+        'Could not read the document library.',
+        cause: error,
+      );
     }
   }
 
@@ -152,6 +156,28 @@ class DocumentLocalDataSource {
     );
   }
 
+  /// Copies a picture into the document's own folder and returns its name.
+  ///
+  /// The name is what goes into the text. The source is a file the picker left
+  /// in the cache, and the cache is cleared on the next import — which is
+  /// exactly why the copy happens here and why nothing outside this method ever
+  /// sees the temporary path.
+  Future<String> addInlineImage(String documentId, String sourcePath) async {
+    // Read first: a picture may not be added to a document that is not there.
+    read(documentId);
+
+    final directory = await _paths.inlineImagesDir(documentId);
+    final name = AppConstants.inlineImageFileName(_uuid.v4());
+
+    try {
+      await File(sourcePath).copy(p.join(directory.path, name));
+    } catch (error) {
+      throw CacheException('Could not save the picture.', cause: error);
+    }
+
+    return name;
+  }
+
   Future<DocumentModel> updatePageText(
     String documentId,
     String pageId,
@@ -162,7 +188,7 @@ class DocumentLocalDataSource {
     final existing = model.pages.where((page) => page.id == pageId).firstOrNull;
     if (existing == null) throw NotFoundException(pageId);
 
-    return write(
+    final saved = await write(
       _withPages(model, <DocumentPageModel>[
         for (final page in model.pages)
           if (page.id == pageId)
@@ -185,6 +211,54 @@ class DocumentLocalDataSource {
             page,
       ]),
     );
+
+    // Deleting a picture is deleting its line, so the file it named has to go
+    // too — and the moment the text no longer names it is the only moment
+    // anyone can be sure of that.
+    //
+    // Swept from the *written* state rather than from the text about to be
+    // written, so a save that failed leaves every file intact.
+    await _sweepInlineImages(saved);
+
+    return saved;
+  }
+
+  /// Removes pictures in this document's folder that its text no longer names.
+  ///
+  /// Self-healing rather than bookkeeping: whatever happened in between — a
+  /// picture deleted, an edit abandoned, a crash between the copy and the save
+  /// — the folder ends up holding exactly the pictures the text refers to.
+  ///
+  /// Scoped to the `inline/` subfolder, which is the entire reason that folder
+  /// exists. A sweep over the document directory would be one predicate away
+  /// from deleting scanned pages.
+  ///
+  /// Failures are swallowed. An orphaned file is reclaimable disk space; an
+  /// edit that reports failure because a leftover picture could not be removed
+  /// is a lost edit.
+  Future<void> _sweepInlineImages(DocumentModel model) async {
+    try {
+      final directory = Directory(
+        p.join(
+          _paths.documentsRoot.path,
+          model.id,
+          AppConstants.inlineImagesDirName,
+        ),
+      );
+      if (!directory.existsSync()) return;
+
+      final referenced = <String>{
+        for (final page in model.pages) ...Markup.imageNames(page.text),
+      };
+
+      for (final entity in directory.listSync()) {
+        if (entity is! File) continue;
+        if (referenced.contains(p.basename(entity.path))) continue;
+        await entity.delete();
+      }
+    } catch (_) {
+      // See above.
+    }
   }
 
   DocumentPageModel _emptyTextPage({required int index}) => DocumentPageModel(
@@ -247,7 +321,9 @@ class DocumentLocalDataSource {
       throw CacheException('Could not add the pages.', cause: error);
     }
 
-    return write(_withPages(model, <DocumentPageModel>[...model.pages, ...added]));
+    return write(
+      _withPages(model, <DocumentPageModel>[...model.pages, ...added]),
+    );
   }
 
   Future<DocumentModel> deletePage(String documentId, String pageId) async {
@@ -291,10 +367,9 @@ class DocumentLocalDataSource {
     }
 
     return write(
-      _withPages(
-        model,
-        <DocumentPageModel>[for (final id in orderedPageIds) byId[id]!],
-      ),
+      _withPages(model, <DocumentPageModel>[
+        for (final id in orderedPageIds) byId[id]!,
+      ]),
     );
   }
 
@@ -350,38 +425,40 @@ class DocumentLocalDataSource {
   /// Index is assigned from list position rather than preserved, so every path
   /// through page editing produces a contiguous 0..n-1 sequence and no caller
   /// has to remember to renumber.
-  DocumentModel _withPages(DocumentModel model, List<DocumentPageModel> pages) =>
-      DocumentModel(
-        id: model.id,
-        title: model.title,
-        createdAt: model.createdAt,
-        updatedAt: _now(),
-        pages: <DocumentPageModel>[
-          for (var i = 0; i < pages.length; i++)
-            DocumentPageModel(
-              id: pages[i].id,
-              imagePath: pages[i].imagePath,
-              index: i,
-              text: pages[i].text,
-              ocrStatus: pages[i].ocrStatus,
-              // Carried explicitly. This rebuild runs on every add, delete and
-              // reorder, so dropping a field here would quietly discard it —
-              // the page would revert to a scan, or lose the record of having
-              // been corrected and become fair game for a re-read.
-              kind: pages[i].kind,
-              textEditedAt: pages[i].textEditedAt,
-            ),
-        ],
-        tags: model.tags,
-        // Any page change makes the exported PDF stale, so the reference goes
-        // and the next share composes a fresh one.
-        pdfPath: null,
-        isFavorite: model.isFavorite,
-        // Carried for the same reason the page kind is: this rebuild runs on
-        // every page edit, and a document that lost its origin here would
-        // report as scanned the first time anything was added to it.
-        source: model.source,
-      );
+  DocumentModel _withPages(
+    DocumentModel model,
+    List<DocumentPageModel> pages,
+  ) => DocumentModel(
+    id: model.id,
+    title: model.title,
+    createdAt: model.createdAt,
+    updatedAt: _now(),
+    pages: <DocumentPageModel>[
+      for (var i = 0; i < pages.length; i++)
+        DocumentPageModel(
+          id: pages[i].id,
+          imagePath: pages[i].imagePath,
+          index: i,
+          text: pages[i].text,
+          ocrStatus: pages[i].ocrStatus,
+          // Carried explicitly. This rebuild runs on every add, delete and
+          // reorder, so dropping a field here would quietly discard it —
+          // the page would revert to a scan, or lose the record of having
+          // been corrected and become fair game for a re-read.
+          kind: pages[i].kind,
+          textEditedAt: pages[i].textEditedAt,
+        ),
+    ],
+    tags: model.tags,
+    // Any page change makes the exported PDF stale, so the reference goes
+    // and the next share composes a fresh one.
+    pdfPath: null,
+    isFavorite: model.isFavorite,
+    // Carried for the same reason the page kind is: this rebuild runs on
+    // every page edit, and a document that lost its origin here would
+    // report as scanned the first time anything was added to it.
+    source: model.source,
+  );
 
   /// Removes a page's image if it has one.
   ///

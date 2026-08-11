@@ -201,6 +201,26 @@ class FakeDocumentRepository implements DocumentRepository {
     return Success(document);
   }
 
+  /// Names handed out by [addInlineImage], and the sources they were copied
+  /// from — so a test can prove the temporary path never reached the document.
+  final Map<String, String> inlineImages = <String, String>{};
+
+  /// When set, copying a picture fails with this.
+  Failure? inlineImageFailure;
+
+  @override
+  FutureResult<String> addInlineImage({
+    required String documentId,
+    required String sourcePath,
+  }) async {
+    final failure = inlineImageFailure;
+    if (failure != null) return Failed(failure);
+
+    final name = 'inline-${inlineImages.length}.jpg';
+    inlineImages[name] = sourcePath;
+    return Success(name);
+  }
+
   @override
   FutureResult<Document> addTextPage({required String documentId}) async {
     pageOperations.add('addText:$documentId');

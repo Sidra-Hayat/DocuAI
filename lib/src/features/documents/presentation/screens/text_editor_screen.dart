@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/storage/storage_paths.dart';
+import '../../../../core/text/markup_editing.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
@@ -152,6 +156,67 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
     final navigator = Navigator.of(context);
     final saved = await _save();
     if (saved && mounted && navigator.canPop()) navigator.pop();
+  }
+
+  /// Picks a picture, copies it into the document, and puts it at the caret.
+  ///
+  /// The copy happens before the reference is written, so the text never names
+  /// a file that is not there yet. If the user backs out, nothing was written
+  /// and the sweep on the next save removes the copy.
+  Future<void> _insertImage() async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final result = await ref.read(insertInlineImageProvider)(
+      documentId: widget.documentId,
+    );
+
+    switch (result) {
+      case Success(:final value):
+        _editor.apply((edit) => MarkupEditing.insertImage(edit, value));
+        // Straight back to writing: a picture is placed mid-sentence, and
+        // having to tap the page again to carry on would be a step nobody
+        // asked for.
+        if (mounted) _focus.requestFocus();
+      case Failed(:final failure):
+        // Dismissing the picker is not a failure worth reporting — the user
+        // knows they backed out.
+        if (failure is ImportFailure && failure.cancelled) return;
+        messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+    }
+  }
+
+  /// Shows the picture the caret is on, full size.
+  ///
+  /// The answer to not being able to draw it in the text field: the placeholder
+  /// says a picture is here, and this says which.
+  Future<void> _previewImage(String imageName) async {
+    final path = ref
+        .read(storagePathsProvider)
+        .inlineImagePath(widget.documentId, imageName);
+
+    if (!File(path).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That picture is no longer on this device. Remove it from the page '
+            'and add it again.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(AppSpacing.lg),
+        clipBehavior: Clip.antiAlias,
+        child: InteractiveViewer(
+          maxScale: 5,
+          child: Image.file(File(path), fit: BoxFit.contain),
+        ),
+      ),
+    );
   }
 
   Future<void> _done() async {
@@ -307,13 +372,72 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
                   ),
                 ),
               ),
+              // What to do with the picture the caret is on. It sits above the
+              // toolbar rather than on the line itself: a tap inside a text
+              // field places the caret and never reaches a gesture recogniser
+              // on a span, so the actions have to live somewhere the tap can
+              // actually land.
+              if (_editor.imageAtCaret case final imageName?)
+                _ImageActions(
+                  onPreview: () => _previewImage(imageName),
+                  onRemove: () {
+                    _editor.apply(MarkupEditing.removeImageAt);
+                    _focus.requestFocus();
+                  },
+                ),
               // Below the field and above the keyboard, which is where a
               // formatting bar is reached from without covering what is being
               // formatted.
-              MarkupToolbar(controller: _editor),
+              MarkupToolbar(controller: _editor, onInsertImage: _insertImage),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// What can be done with the picture the caret is on.
+///
+/// Deliberately two actions and no more. A picture in a written note is either
+/// something you want to look at or something you want gone; anything else —
+/// resize, align, caption — is a document editor, which this is not.
+class _ImageActions extends StatelessWidget {
+  const _ImageActions({required this.onPreview, required this.onRemove});
+
+  final VoidCallback onPreview;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      color: theme.colorScheme.primaryContainer,
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.image_outlined,
+            size: 18,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+          AppSpacing.gapHorizontalSm,
+          Expanded(
+            child: Text(
+              'Picture',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onPreview, child: const Text('View')),
+          TextButton(onPressed: onRemove, child: const Text('Remove')),
+        ],
       ),
     );
   }

@@ -63,6 +63,14 @@ enum MarkupBlockKind {
   bullet,
   numbered,
   quote,
+
+  /// A picture the user placed in a written document.
+  ///
+  /// The odd one out: it holds no words. The whole line is a reference, which
+  /// is why it is classified as a marker from end to end — so it disappears
+  /// from every consumer that wants text, and appears only in the ones that
+  /// draw.
+  image,
 }
 
 /// A run of text with one set of emphasis applied to all of it.
@@ -96,10 +104,20 @@ class MarkupBlock {
     required this.kind,
     required this.spans,
     this.number,
+    this.imageName,
   });
 
   final MarkupBlockKind kind;
   final List<MarkupSpan> spans;
+
+  /// For [MarkupBlockKind.image], the file's name inside the document's own
+  /// `inline/` folder — never a path, and never one from outside the sandbox.
+  ///
+  /// A name rather than a path because the folder is derivable: an inline image
+  /// belongs to the document whose text references it, and that document knows
+  /// its own id. Storing the full path would bake the id into the text, where
+  /// it would be one more thing to rewrite if a document were ever copied.
+  final String? imageName;
 
   /// The number a [MarkupBlockKind.numbered] item was written with. Kept so an
   /// export can renumber from it rather than assuming the list starts at one.
@@ -154,9 +172,8 @@ abstract final class Markup {
   ///
   /// For anywhere the text is read rather than rendered — quoting it back,
   /// copying it out — where `**Total**` would otherwise be shown verbatim.
-  static String toPlainText(String text) => parse(
-    text,
-  ).map((block) => block.text).join('\n');
+  static String toPlainText(String text) =>
+      parse(text).map((block) => block.text).join('\n');
 
   /// Stripped text together with a map from where every character *was* to
   /// where it now is.
@@ -341,6 +358,8 @@ abstract final class Markup {
 
   /// Which block a line is, without parsing its contents.
   static MarkupBlockKind _blockKindOf(String line) {
+    if (_image.hasMatch(line)) return MarkupBlockKind.image;
+
     final heading = _heading.firstMatch(line);
     if (heading != null) {
       return switch (heading.group(1)!.length) {
@@ -365,6 +384,13 @@ abstract final class Markup {
   /// Mirrors the patterns [parse] classifies on, in the same order, so the two
   /// cannot disagree about what counts as a marker.
   static int _prefixLength(String line) {
+    // An image line is a marker from end to end. There is no content after the
+    // prefix because the line *is* the reference, and treating it this way is
+    // what makes every text consumer drop it without knowing images exist:
+    // `strip` removes markers, and the offset map it returns already accounts
+    // for their removal.
+    if (_image.hasMatch(line)) return line.length;
+
     for (final pattern in _prefixes) {
       final match = pattern.firstMatch(line);
       if (match != null) return match.end;
@@ -394,12 +420,78 @@ abstract final class Markup {
   static String toInlineText(String text) =>
       strip(text).text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
+  /// [text] with every picture reference taken out, line and all.
+  ///
+  /// The one function that keeps images away from search and from the
+  /// assistant. Both index words, and the name of a JPEG is not a word anybody
+  /// meant to write — left in, `9c2e1f4a.jpg` would be three searchable tokens
+  /// and a passage the assistant could quote.
+  ///
+  /// The line goes with the reference, rather than being blanked, so a document
+  /// does not gain an empty paragraph everywhere a picture was.
+  ///
+  /// **For text containing no pictures this returns its input unchanged**, which
+  /// is what makes it safe to put in front of the existing index: every
+  /// document written before this feature produces the same string, therefore
+  /// the same tokens, therefore the same results.
+  static String withoutImages(String text) {
+    if (!text.contains('](')) return text;
+
+    final kept = <String>[
+      for (final line in text.split('\n'))
+        if (!_image.hasMatch(line)) line,
+    ];
+
+    return kept.join('\n');
+  }
+
+  /// Whether [text] holds at least one picture.
+  static bool hasImages(String text) => imageNames(text).isNotEmpty;
+
+  /// Whether one line is a picture reference and nothing else.
+  static bool isImageLine(String line) => _image.hasMatch(line);
+
+  /// The file a picture line names, or null if it is not one.
+  static String? imageNameIn(String line) =>
+      _image.firstMatch(line)?.group(2)?.trim();
+
+  /// Every picture [text] refers to, in the order it refers to them.
+  ///
+  /// Duplicates are kept: the same file placed twice is two references, and the
+  /// sweep that deletes unreferenced files has to see that removing one of them
+  /// leaves the other.
+  static List<String> imageNames(String text) => <String>[
+    for (final block in parse(text))
+      if (block.kind == MarkupBlockKind.image && block.imageName != null)
+        block.imageName!,
+  ];
+
+  /// A picture on a line of its own: `![Image](9c2e1f4a.jpg)`.
+  ///
+  /// Markdown's own syntax, because the format is already a Markdown subset and
+  /// a reader who has met one has met the other. The label in the brackets is
+  /// what the editor shows; the name in the parentheses is the file.
+  ///
+  /// Anchored to the whole line on purpose. A reference in the middle of a
+  /// sentence would have to flow inside a paragraph, and this format is
+  /// line-based — one line is one block — so a picture is a line.
+  static final RegExp _image = RegExp(r'^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*$');
+
   static final RegExp _heading = RegExp(r'^(#{1,3})\s+(.*)$');
   static final RegExp _bullet = RegExp(r'^\s*[-*•]\s+(.*)$');
   static final RegExp _numbered = RegExp(r'^\s*(\d{1,3})[.)]\s+(.*)$');
   static final RegExp _quote = RegExp(r'^\s*>\s?(.*)$');
 
   static MarkupBlock _parseLine(String line) {
+    final image = _image.firstMatch(line);
+    if (image != null) {
+      return MarkupBlock(
+        kind: MarkupBlockKind.image,
+        spans: const <MarkupSpan>[],
+        imageName: image.group(2)!.trim(),
+      );
+    }
+
     final heading = _heading.firstMatch(line);
     if (heading != null) {
       return MarkupBlock(

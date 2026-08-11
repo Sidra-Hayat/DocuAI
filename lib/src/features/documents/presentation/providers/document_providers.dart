@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
+import '../../../import/presentation/providers/import_providers.dart';
 import '../../../scanner/presentation/providers/scan_controller.dart';
 import '../../../search/presentation/providers/search_providers.dart';
 import '../../data/datasources/document_local_data_source.dart';
@@ -12,6 +13,7 @@ import '../../domain/usecases/create_text_document.dart';
 import '../../domain/usecases/delete_document.dart';
 import '../../domain/usecases/edit_document_pages.dart';
 import '../../domain/usecases/edit_page_text.dart';
+import '../../domain/usecases/insert_inline_image.dart';
 import '../../domain/usecases/rename_document.dart';
 import '../../domain/usecases/toggle_favorite.dart';
 import '../../domain/usecases/update_document_tags.dart';
@@ -81,6 +83,18 @@ final editPageTextProvider = Provider<EditPageText>(
 
 final addTextPageProvider = Provider<AddTextPage>(
   (ref) => AddTextPage(ref.watch(documentRepositoryProvider)),
+);
+
+/// Picks a picture and copies it into the document being written.
+///
+/// Reuses the photo importer rather than opening a second picker: a picture
+/// placed in a note and a picture imported as a page come from the same place
+/// and want the same normalisation — upright, bounded in size, re-encoded.
+final insertInlineImageProvider = Provider<InsertInlineImage>(
+  (ref) => InsertInlineImage(
+    importer: ref.watch(imageImportRepositoryProvider),
+    documents: ref.watch(documentRepositoryProvider),
+  ),
 );
 
 final renameDocumentProvider = Provider<RenameDocument>(

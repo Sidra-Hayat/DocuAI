@@ -33,7 +33,10 @@ class DocumentRepositoryImpl implements DocumentRepository {
         // this correct for puts, deletes and clears alike.
         controller.add(_toEntities(_local.readAll()));
       } on CacheException catch (error, stackTrace) {
-        controller.addError(StorageFailure(error.message, cause: error), stackTrace);
+        controller.addError(
+          StorageFailure(error.message, cause: error),
+          stackTrace,
+        );
       }
     }
 
@@ -115,6 +118,12 @@ class DocumentRepositoryImpl implements DocumentRepository {
       });
 
   @override
+  FutureResult<String> addInlineImage({
+    required String documentId,
+    required String sourcePath,
+  }) => _guard(() => _local.addInlineImage(documentId, sourcePath));
+
+  @override
   FutureResult<Document> updatePageText({
     required String documentId,
     required String pageId,
@@ -168,11 +177,7 @@ class DocumentRepositoryImpl implements DocumentRepository {
     required String pageId,
     required String sourceImagePath,
   }) => _guard(() async {
-    final model = await _local.replacePage(
-      documentId,
-      pageId,
-      sourceImagePath,
-    );
+    final model = await _local.replacePage(documentId, pageId, sourceImagePath);
     return model.toEntity();
   });
 

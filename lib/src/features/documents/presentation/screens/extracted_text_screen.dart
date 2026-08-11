@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
+import '../../../../core/storage/storage_paths.dart';
+import '../../../../core/text/markup.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_empty_state.dart';
 import '../../../../core/widgets/app_state_view.dart';
 import '../../../assistant/domain/entities/assistant_intent.dart';
@@ -248,7 +253,12 @@ class _Body extends ConsumerWidget {
                         page: page,
                         editable: trimmed.isEmpty,
                       ),
-                    if (block.text.isEmpty)
+                    if (block.imageName case final imageName?)
+                      _ReaderImage(
+                        documentId: document.id,
+                        imageName: imageName,
+                      )
+                    else if (block.text.isEmpty)
                       _EmptyPageNote(scale: scale)
                     else
                       ReaderParagraph(
@@ -290,8 +300,25 @@ class _Body extends ConsumerWidget {
         continue;
       }
 
-      for (final paragraph in page.text.split(RegExp(r'\n\s*\n'))) {
-        final text = paragraph.trim();
+      for (final paragraph in _split(page.text)) {
+        // A picture is not text and cannot match a search, so it is shown when
+        // the page is being read and left out when it is being searched — the
+        // same rule the empty-page note follows.
+        if (paragraph.imageName != null) {
+          if (query.isEmpty) {
+            blocks.add(
+              _Block(
+                text: '',
+                pageIndex: page.index,
+                matches: 0,
+                imageName: paragraph.imageName,
+              ),
+            );
+          }
+          continue;
+        }
+
+        final text = paragraph.text.trim();
         if (text.isEmpty) continue;
 
         if (query.isEmpty) {
@@ -309,6 +336,40 @@ class _Body extends ConsumerWidget {
     }
 
     return blocks;
+  }
+
+  /// Paragraphs, with any picture standing on its own.
+  ///
+  /// The reader has always split on blank lines. A picture is a line, and a
+  /// line can sit inside a paragraph — so this splits those out rather than
+  /// letting one disappear into the middle of a block of prose that then
+  /// renders it as nothing.
+  static List<({String text, String? imageName})> _split(String pageText) {
+    final parts = <({String text, String? imageName})>[];
+
+    for (final paragraph in pageText.split(RegExp(r'\n\s*\n'))) {
+      final buffer = <String>[];
+
+      void flush() {
+        if (buffer.isEmpty) return;
+        parts.add((text: buffer.join('\n'), imageName: null));
+        buffer.clear();
+      }
+
+      for (final line in paragraph.split('\n')) {
+        final name = Markup.imageNameIn(line);
+        if (name == null) {
+          buffer.add(line);
+          continue;
+        }
+        flush();
+        parts.add((text: '', imageName: name));
+      }
+
+      flush();
+    }
+
+    return parts;
   }
 
   static int _countMatches(String haystack, String needle) {
@@ -413,11 +474,72 @@ class _Block {
     required this.text,
     required this.pageIndex,
     required this.matches,
+    this.imageName,
   });
 
   final String text;
   final int pageIndex;
   final int matches;
+
+  /// Set when this block is a picture rather than words.
+  final String? imageName;
+}
+
+/// A picture, where the writing put it.
+///
+/// This is where "see the image in its correct position" is actually
+/// delivered: the editor can only show that one is there, and this shows which.
+class _ReaderImage extends ConsumerWidget {
+  const _ReaderImage({required this.documentId, required this.imageName});
+
+  final String documentId;
+  final String imageName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final path = ref
+        .read(storagePathsProvider)
+        .inlineImagePath(documentId, imageName);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: ClipRRect(
+        borderRadius: AppRadius.card,
+        child: Image.file(
+          File(path),
+          fit: BoxFit.contain,
+          // Said rather than left blank. A picture that silently renders as
+          // nothing looks like a document that lost it, which is exactly the
+          // impression this app must never give.
+          errorBuilder: (context, error, stackTrace) => Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.errorContainer,
+              borderRadius: AppRadius.card,
+            ),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.broken_image_outlined,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+                AppSpacing.gapHorizontalMd,
+                Expanded(
+                  child: Text(
+                    'This picture is no longer on this device.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The header above each page's text.

@@ -20,9 +20,18 @@ import 'markup_editing_controller.dart';
 /// Scrolls horizontally rather than wrapping. On a narrow phone a wrapping row
 /// would take a second line away from the text, and the text is the point.
 class MarkupToolbar extends StatelessWidget {
-  const MarkupToolbar({required this.controller, super.key});
+  const MarkupToolbar({
+    required this.controller,
+    this.onInsertImage,
+    super.key,
+  });
 
   final MarkupEditingController controller;
+
+  /// Adds a picture at the caret. Absent where there is nowhere to put one —
+  /// the button then does not appear at all, rather than appearing and
+  /// refusing.
+  final Future<void> Function()? onInsertImage;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +104,15 @@ class MarkupToolbar extends StatelessWidget {
                     onPressed: () =>
                         controller.apply(MarkupEditing.toggleQuote),
                   ),
+                  if (onInsertImage != null) ...<Widget>[
+                    const _Divider(),
+                    _Button(
+                      icon: Icons.image_outlined,
+                      tooltip: 'Add a picture',
+                      active: false,
+                      onPressed: () => onInsertImage!(),
+                    ),
+                  ],
                 ],
               ),
             );

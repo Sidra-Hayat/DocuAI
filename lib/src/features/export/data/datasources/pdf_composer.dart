@@ -7,6 +7,20 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../../../../core/text/markup.dart';
 
+/// A picture the document refers to and the exporter could not find.
+///
+/// Its own type rather than a generic failure so the repository can say which
+/// file is missing, and so the message a user sees names the document rather
+/// than a path they have never seen.
+class PdfImageMissingException implements Exception {
+  const PdfImageMissingException(this.imageName);
+
+  final String imageName;
+
+  @override
+  String toString() => 'PdfImageMissingException: $imageName';
+}
+
 /// One page to draw.
 ///
 /// A sealed pair rather than two lists, because the order pages are drawn in is
@@ -25,9 +39,17 @@ final class PdfImagePage extends PdfPageJob {
 
 /// A written page: text to set and flow across as many sheets as it needs.
 final class PdfTextPage extends PdfPageJob {
-  const PdfTextPage(this.text);
+  const PdfTextPage(this.text, {this.images = const <String, String>{}});
 
   final String text;
+
+  /// Every picture the text names, mapped to where the file actually is.
+  ///
+  /// Resolved by the caller rather than here, because the text stores bare
+  /// filenames and only the repository knows which document's folder they
+  /// belong to — and because this object crosses an isolate, where a
+  /// `StoragePaths` would be useless.
+  final Map<String, String> images;
 }
 
 /// Everything the renderer needs, as plain data.
@@ -70,12 +92,34 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
           ),
         );
 
-      case PdfTextPage(:final text):
+      case PdfTextPage(:final text, :final images):
         final blocks = Markup.parse(text);
         // Nothing written on it. A blank sheet in the middle of a document is
         // noise, and the caller has already refused a document with nothing in
         // it at all.
         if (blocks.isEmpty) continue;
+
+        // Decoded before the page is built, because a picture has to be read
+        // from disk and building a widget tree is synchronous. Ordered by
+        // block, so the widgets below can take them in the order they appear.
+        final decoded = <int, pw.MemoryImage>{};
+        for (var i = 0; i < blocks.length; i++) {
+          final name = blocks[i].imageName;
+          if (blocks[i].kind != MarkupBlockKind.image || name == null) continue;
+
+          final path = images[name];
+          // Loudly, never quietly. A PDF silently missing a picture is worse
+          // than one that failed: the user finds out after sending it to
+          // somebody, and by then the document is the record.
+          if (path == null) {
+            throw PdfImageMissingException(name);
+          }
+
+          final file = File(path);
+          if (!file.existsSync()) throw PdfImageMissingException(name);
+
+          decoded[i] = pw.MemoryImage(await file.readAsBytes());
+        }
 
         document.addPage(
           // MultiPage, not Page: written text has no fixed extent, and a single
@@ -84,12 +128,15 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
             pageFormat: PdfPageFormat.a4,
             // Margins here where the image pages have none. A scan carries its
             // own borders; set text needs its own.
-            margin: const pw.EdgeInsets.symmetric(
-              horizontal: 56,
-              vertical: 64,
-            ),
+            margin: const pw.EdgeInsets.symmetric(horizontal: 56, vertical: 64),
+            // One list, in block order, so a picture lands exactly where the
+            // text put it. MultiPage flows the whole sequence across sheets.
             build: (context) => <pw.Widget>[
-              for (final block in blocks) _blockWidget(block),
+              for (var i = 0; i < blocks.length; i++)
+                if (decoded[i] case final image?)
+                  _imageWidget(image)
+                else
+                  _blockWidget(blocks[i]),
             ],
           ),
         );
@@ -98,6 +145,20 @@ Future<Uint8List> composePdfBytes(PdfJob job) async {
 
   return document.save();
 }
+
+/// Places a picture in the flow of the text.
+///
+/// Bounded in height rather than scaled to the page. A picture dropped into a
+/// paragraph is an illustration, not a plate: letting a tall photograph take a
+/// whole sheet would break the reading in a way the writer did not ask for.
+pw.Widget _imageWidget(pw.MemoryImage image) => pw.Container(
+  margin: const pw.EdgeInsets.symmetric(vertical: 10),
+  alignment: pw.Alignment.centerLeft,
+  child: pw.ConstrainedBox(
+    constraints: const pw.BoxConstraints(maxHeight: 320),
+    child: pw.Image(image, fit: pw.BoxFit.contain),
+  ),
+);
 
 /// Sets one parsed line.
 ///
@@ -123,6 +184,10 @@ pw.Widget _blockWidget(MarkupBlock block) {
   );
 
   return switch (block.kind) {
+    // Handled by the caller, which has the decoded bytes. Reaching here means
+    // a block was classified as a picture and then not resolved, which is a
+    // bug rather than a document problem.
+    MarkupBlockKind.image => pw.SizedBox.shrink(),
     MarkupBlockKind.heading1 => _heading(block, 20, 14),
     MarkupBlockKind.heading2 => _heading(block, 16, 12),
     MarkupBlockKind.heading3 => _heading(block, 13, 10),

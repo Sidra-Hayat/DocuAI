@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/storage/storage_paths.dart';
+import '../../../../core/text/markup.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../domain/repositories/export_repository.dart';
 import '../datasources/docx_composer.dart';
@@ -59,7 +60,26 @@ class ExportRepositoryImpl implements ExportRepository {
           }
           pages.add(PdfImagePage(absolute));
         } else if (page.hasText) {
-          pages.add(PdfTextPage(page.text));
+          // The text names its pictures by filename; only this layer knows
+          // which folder that means. Resolved here, and checked here for the
+          // same reason the page images above are: a document that cannot be
+          // exported should say so before anything is rendered.
+          final images = <String, String>{};
+          for (final name in Markup.imageNames(page.text)) {
+            final path = _paths.inlineImagePath(document.id, name);
+            if (!File(path).existsSync()) {
+              return Failed(
+                ExportFailure(
+                  'A picture in ${page.displayLabel} is missing, so this '
+                  'document cannot be exported. Remove it from the page and '
+                  'try again.',
+                ),
+              );
+            }
+            images[name] = path;
+          }
+
+          pages.add(PdfTextPage(page.text, images: images));
         }
       }
 
@@ -74,9 +94,7 @@ class ExportRepositoryImpl implements ExportRepository {
         );
       }
 
-      final bytes = await _render(
-        PdfJob(pages: pages, title: document.title),
-      );
+      final bytes = await _render(PdfJob(pages: pages, title: document.title));
 
       final directory = await _paths.documentDir(document.id);
       final file = File(p.join(directory.path, _fileNameFor(document.title)));
@@ -96,6 +114,19 @@ class ExportRepositoryImpl implements ExportRepository {
 
   @override
   FutureResult<String> buildDocx(Document document) async {
+    // Said here, where there is a document to name it against, rather than let
+    // through to a composer that would only be able to throw. Word export
+    // cannot carry pictures yet, and a file quietly missing them is worse than
+    // one that was never written.
+    if (document.pages.any((page) => Markup.hasImages(page.text))) {
+      return const Failed(
+        ExportFailure(
+          'This document has a picture in it, and Word files cannot include '
+          'pictures yet. Share it as a PDF to keep the pictures.',
+        ),
+      );
+    }
+
     try {
       // Every page's text, scanned and written alike. A Word file is wanted
       // because it can be edited, and recognised text is the part of a scan

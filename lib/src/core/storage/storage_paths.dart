@@ -30,6 +30,33 @@ class StoragePaths {
     return dir;
   }
 
+  /// Folder holding the pictures placed inside one document's text.
+  Future<Directory> inlineImagesDir(String documentId) async {
+    final dir = Directory(
+      p.join(
+        (await documentDir(documentId)).path,
+        AppConstants.inlineImagesDirName,
+      ),
+    );
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
+  /// Where a picture named in a document's text actually lives.
+  ///
+  /// The text stores a bare filename, so this is the one place that knows how
+  /// to turn one back into a path — and it can only ever produce a path inside
+  /// the document's own folder, which is what stops a crafted reference from
+  /// naming a file elsewhere.
+  String inlineImagePath(String documentId, String imageName) => p.join(
+    documentsRoot.path,
+    documentId,
+    AppConstants.inlineImagesDirName,
+    p.basename(imageName),
+  );
+
   /// Converts a stored relative path into a usable absolute path.
   String absolutePath(String relativePath) =>
       p.join(_appDocumentsDir.path, relativePath);

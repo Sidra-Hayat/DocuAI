@@ -30,6 +30,22 @@ abstract final class AppConstants {
   static String pageFileNameFor(String pageId) =>
       'page_${pageId.replaceAll('-', '').substring(0, 12)}.jpg';
 
+  /// Subfolder holding pictures placed inside a written document's text.
+  ///
+  /// Separate from the pages, which sit directly in the document's folder.
+  /// Not tidiness: the sweep that deletes pictures nobody references any more
+  /// runs over this directory, and a scanned page sharing it would be one
+  /// mis-scoped delete away from being destroyed by an unrelated text edit.
+  static const String inlineImagesDirName = 'inline';
+
+  /// Filename for a picture placed in a document's text.
+  ///
+  /// Named from its own id rather than from a position, because a picture has
+  /// no position — it sits wherever its reference sits in the text, and that
+  /// moves every time a line above it is typed.
+  static String inlineImageFileName(String imageId) =>
+      '${imageId.replaceAll('-', '').substring(0, 12)}.jpg';
+
   /// Debounce applied to search-as-you-type so we do not re-query the index on
   /// every keystroke.
   static const Duration searchDebounce = Duration(milliseconds: 300);

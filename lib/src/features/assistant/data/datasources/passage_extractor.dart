@@ -67,8 +67,15 @@ abstract final class PassageExtractor {
     for (final page in document.pages) {
       if (!page.hasText) continue;
 
-      for (final range in _ranges(page.text)) {
-        final text = page.text.substring(range.$1, range.$2).trim();
+      // A picture is not something the assistant can quote, and the line that
+      // names one is a filename rather than a sentence. Removed here, once, so
+      // that every offset below — and every citation built from them — indexes
+      // into the same string the passage was taken from.
+      final pageText = Markup.withoutImages(page.text);
+      if (pageText.isEmpty) continue;
+
+      for (final range in _ranges(pageText)) {
+        final text = pageText.substring(range.$1, range.$2).trim();
         if (text.length < minPassageChars) continue;
 
         passages.add(
@@ -79,7 +86,7 @@ abstract final class PassageExtractor {
             text: text,
             start: range.$1,
             end: range.$2,
-            pageText: page.text,
+            pageText: pageText,
           ),
         );
       }
@@ -138,9 +145,7 @@ abstract final class PassageExtractor {
     final start = (passage.start - padding).clamp(0, passage.pageText.length);
     final end = (passage.end + padding).clamp(0, passage.pageText.length);
 
-    final excerpt = Markup.toInlineText(
-      passage.pageText.substring(start, end),
-    );
+    final excerpt = Markup.toInlineText(passage.pageText.substring(start, end));
 
     final prefix = start > 0 ? '…' : '';
     final suffix = end < passage.pageText.length ? '…' : '';

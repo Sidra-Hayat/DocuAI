@@ -66,6 +66,21 @@ abstract interface class DocumentRepository {
   /// new page last and renumber nothing before it.
   FutureResult<Document> addTextPage({required String documentId});
 
+  /// Takes a picture into the document's own storage and returns its name.
+  ///
+  /// [sourcePath] is a file the picker left in the cache, which the next import
+  /// clears. Copying it here is what turns something temporary into part of the
+  /// document — and the *name* is what comes back, because that is all the text
+  /// needs to refer to it.
+  ///
+  /// Adds nothing to the document itself. The picture becomes part of it when
+  /// the page text that names it is saved, which keeps one write in charge of
+  /// what the document contains.
+  FutureResult<String> addInlineImage({
+    required String documentId,
+    required String sourcePath,
+  });
+
   /// Replaces one page's text.
   ///
   /// The same operation whether the page was typed or scanned — which is the
