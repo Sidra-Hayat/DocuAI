@@ -21,6 +21,10 @@ abstract final class AppRoutes {
   static const String scan = '/scan';
   static const String scanName = 'scan';
 
+  /// The beginner's guide, reached from the question mark on the library.
+  static const String help = '/help';
+  static const String helpName = 'help';
+
   /// Detail route is nested under documents so the back stack stays correct.
   static const String documentDetail = 'detail/:id';
   static const String documentDetailName = 'documentDetail';

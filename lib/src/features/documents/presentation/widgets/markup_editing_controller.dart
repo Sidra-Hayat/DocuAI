@@ -91,8 +91,12 @@ class MarkupEditingController extends TextEditingController {
       // from the writing around it.
       MarkupBlockKind.image => base.copyWith(
         fontSize: size * 0.92,
-        color: theme.colorScheme.onPrimaryContainer,
-        backgroundColor: theme.colorScheme.primaryContainer,
+        // Teal, not indigo. Indigo is what the app uses for things you press,
+        // and a placeholder tinted like a button invites a tap that a text
+        // field cannot deliver — the actions for it are the bar above the
+        // toolbar. Teal says "this is a thing in your document" instead.
+        color: theme.colorScheme.onSecondaryContainer,
+        backgroundColor: theme.colorScheme.secondaryContainer,
         fontWeight: FontWeight.w600,
       ),
       MarkupBlockKind.bullet ||

@@ -19,6 +19,21 @@ abstract final class AppTheme {
   /// The single source of truth for DocuAI's colour identity.
   static const Color seedColor = Color(0xFF2563EB);
 
+  /// The supporting accent, reachable through `colorScheme.secondary`.
+  ///
+  /// Teal reads as the same *kind* of colour as the indigo primary — both cool,
+  /// both technical — which is what lets the two sit together without the app
+  /// looking like it has two brands. It marks things that are informational
+  /// rather than actionable: the assistant's own chrome, a document's type, the
+  /// tools that are not the main path through a screen.
+  ///
+  /// Two values for the same reason the gold has two. A teal bright enough to
+  /// read on navy is close to illegible on paper, so light mode gets a deep one
+  /// and dark mode a bright one; each is chosen against the ground it appears
+  /// on rather than one hex being reused and hoped for.
+  static const Color tealDark = Color(0xFF4DD0C7);
+  static const Color tealLight = Color(0xFF00696B);
+
   /// The brand gold, reachable through `colorScheme.tertiary`.
   ///
   /// Deliberately *not* a colour widgets import. Gold arrives through the
@@ -67,18 +82,41 @@ abstract final class AppTheme {
     // reaching for a raw hex.
     final colorScheme = isDark
         ? generated.copyWith(
-            surface: const Color(0xFF101418),
-            surfaceContainerLowest: const Color(0xFF0B0E11),
-            surfaceContainerLow: const Color(0xFF161B20),
-            surfaceContainer: const Color(0xFF1A2026),
-            surfaceContainerHigh: const Color(0xFF222930),
-            surfaceContainerHighest: const Color(0xFF2A323A),
+            // Navy rather than neutral charcoal, and never flat black. Black
+            // gives an OLED panel nothing to separate a card from the page
+            // with, so every surface needs a border to exist; a navy ground
+            // lets the tonal steps below do that work instead. The blue channel
+            // runs about twice the red at every step, which is what keeps a
+            // scan of white paper reading as warm against it.
+            surface: const Color(0xFF0E1320),
+            surfaceContainerLowest: const Color(0xFF090D17),
+            surfaceContainerLow: const Color(0xFF141A2A),
+            surfaceContainer: const Color(0xFF181F31),
+            surfaceContainerHigh: const Color(0xFF202940),
+            surfaceContainerHighest: const Color(0xFF2A3450),
+            // Off-white, not white. Pure white on a dark ground haloes and is
+            // tiring over a page of recognised text; this keeps the contrast
+            // well past AA while taking the glare off.
+            onSurface: const Color(0xFFE8ECF4),
+            // The muted voice: timestamps, page counts, captions. Distinctly
+            // quieter than the body text and still comfortably readable, which
+            // is the whole difference between hierarchy and a contrast bug.
+            onSurfaceVariant: const Color(0xFFA3AEC6),
+            outlineVariant: const Color(0xFF2C3752),
+            secondary: tealDark,
+            onSecondary: const Color(0xFF00332F),
+            secondaryContainer: const Color(0xFF1F4E4C),
+            onSecondaryContainer: const Color(0xFFB8EDE8),
             tertiary: goldDark,
             onTertiary: const Color(0xFF3D2E00),
             tertiaryContainer: const Color(0xFF574314),
             onTertiaryContainer: const Color(0xFFFFDFA0),
           )
         : generated.copyWith(
+            secondary: tealLight,
+            onSecondary: const Color(0xFFFFFFFF),
+            secondaryContainer: const Color(0xFFCFEFEA),
+            onSecondaryContainer: const Color(0xFF00201F),
             tertiary: goldLight,
             onTertiary: const Color(0xFFFFFFFF),
             tertiaryContainer: const Color(0xFFF6E7BF),
@@ -124,6 +162,33 @@ abstract final class AppTheme {
         height: 72,
         backgroundColor: colorScheme.surfaceContainer,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // The generated indicator is `secondaryContainer`, which is now teal —
+        // and teal is this app's *informational* colour, so the current tab
+        // would have been marked in the one colour that means "not an action".
+        // Indigo says which destination you are on in the same voice every
+        // other active control uses.
+        indicatorColor: colorScheme.primaryContainer,
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData>(
+          (states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>(
+          (states) => TextStyle(
+            fontSize: 12,
+            // The selected label carries the weight, not a second colour: two
+            // signals for one state is how a navigation bar starts to shout.
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.onSurface
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
       ),
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(

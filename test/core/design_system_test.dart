@@ -144,6 +144,78 @@ void main() {
       }
     });
 
+    test('the teal accent is legible on its own ground', () {
+      double ratio(Color a, Color b) {
+        final la = a.computeLuminance();
+        final lb = b.computeLuminance();
+        final lighter = la > lb ? la : lb;
+        final darker = la > lb ? lb : la;
+        return (lighter + 0.05) / (darker + 0.05);
+      }
+
+      for (final scheme in <ColorScheme>[
+        AppTheme.light().colorScheme,
+        AppTheme.dark().colorScheme,
+      ]) {
+        expect(
+          ratio(scheme.secondary, scheme.surface),
+          greaterThanOrEqualTo(4.5),
+          reason: 'the teal accent on the page background',
+        );
+        expect(
+          ratio(scheme.onSecondaryContainer, scheme.secondaryContainer),
+          greaterThanOrEqualTo(4.5),
+          reason: 'text on a teal container',
+        );
+      }
+    });
+
+    test('the muted voice is quieter than the body, and still readable', () {
+      double ratio(Color a, Color b) {
+        final la = a.computeLuminance();
+        final lb = b.computeLuminance();
+        final lighter = la > lb ? la : lb;
+        final darker = la > lb ? lb : la;
+        return (lighter + 0.05) / (darker + 0.05);
+      }
+
+      for (final scheme in <ColorScheme>[
+        AppTheme.light().colorScheme,
+        AppTheme.dark().colorScheme,
+      ]) {
+        // Secondary text carries timestamps and page counts. It has to read as
+        // quieter than the title beside it — that is the hierarchy — without
+        // dropping under the threshold, which is where "muted" becomes "faint".
+        expect(
+          ratio(scheme.onSurfaceVariant, scheme.surface),
+          greaterThanOrEqualTo(4.5),
+          reason: 'muted secondary text on the page background',
+        );
+        expect(
+          ratio(scheme.onSurfaceVariant, scheme.surface),
+          lessThan(ratio(scheme.onSurface, scheme.surface)),
+          reason: 'muted text that matches the body text is not a hierarchy',
+        );
+      }
+    });
+
+    test('the dark ground is navy, not black', () {
+      final dark = AppTheme.dark().colorScheme;
+
+      // Flat black gives a card nothing to separate itself from the page with,
+      // so every surface would need a border to exist at all.
+      expect(
+        dark.surface.computeLuminance(),
+        greaterThan(0),
+        reason: 'a flat black ground cannot carry tonal elevation',
+      );
+      expect(
+        (dark.surface.b * 255).round(),
+        greaterThan((dark.surface.r * 255).round()),
+        reason: 'the ground is navy: blue runs ahead of red',
+      );
+    });
+
     test('gold is an accent, never an action', () {
       // The one rule that keeps it from becoming a second button colour: the
       // primary action stays indigo in both brightnesses.

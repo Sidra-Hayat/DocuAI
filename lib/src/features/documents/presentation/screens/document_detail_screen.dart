@@ -187,14 +187,46 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'Added ${DateFormat.yMMMd().format(document.createdAt)} · '
-                  '${document.pageCount} '
-                  '${document.pageCount == 1 ? 'page' : 'pages'}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                // The title, on the page rather than only in the bar. An app
+                // bar title is one line, small, and ellipsised — which for a
+                // document called "Tenancy agreement — 14 Marlowe Street" is
+                // most of the name missing from the screen that is about it.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        document.title,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    AppSpacing.gapHorizontalSm,
+                    // A second, larger favourite control beside the title. The
+                    // one in the app bar is easy to miss and hard to reach
+                    // one-handed on a tall phone; this one sits next to the
+                    // thing it marks.
+                    IconButton.filledTonal(
+                      onPressed: () =>
+                          toggleDocumentFavorite(context, ref, document),
+                      tooltip: document.isFavorite
+                          ? 'Remove from favourites'
+                          : 'Add to favourites',
+                      icon: Icon(
+                        document.isFavorite
+                            ? Icons.star
+                            : Icons.star_border_outlined,
+                        color: document.isFavorite
+                            ? theme.colorScheme.tertiary
+                            : null,
+                      ),
+                    ),
+                  ],
                 ),
+                AppSpacing.gapSm,
+                _DocumentMeta(document: document),
                 AppSpacing.gapMd,
                 // Shown even when empty, so tagging is discoverable from the
                 // document itself rather than only from a menu nobody opens
@@ -223,24 +255,145 @@ class _DocumentDetailState extends ConsumerState<_DocumentDetail> {
                 AppSpacing.gapXl,
                 DocumentActionBar(document: document, pageIndex: current),
                 AppSpacing.gapMd,
-                Wrap(
-                  spacing: AppSpacing.md,
-                  runSpacing: AppSpacing.md,
-                  children: <Widget>[
-                    FilledButton.tonalIcon(
-                      onPressed: () => openNewConversation(
-                        context,
-                        documentId: document.id,
-                        documentTitle: document.title,
-                      ),
-                      icon: const Icon(Icons.auto_awesome_outlined),
-                      label: const Text('Ask about this'),
-                    ),
-                    SummariseButton(document: document),
-                  ],
-                ),
+                _AssistantPanel(document: document),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What kind of document this is, how big, and when it arrived.
+///
+/// One muted line under the title, with the origin as a badge — the same
+/// treatment the library card uses, so a document looks like itself in both
+/// places.
+class _DocumentMeta extends StatelessWidget {
+  const _DocumentMeta({required this.document});
+
+  final Document document;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final (icon, origin) = switch (document.source) {
+      DocumentSource.scanned => (Icons.document_scanner_outlined, 'Scanned'),
+      DocumentSource.imported => (Icons.photo_library_outlined, 'Imported'),
+      DocumentSource.created => (Icons.edit_note_outlined, 'Written'),
+    };
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: AppRadius.chip,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 12,
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+              AppSpacing.gapHorizontalXs,
+              Text(
+                origin,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          '${document.pageCount} '
+          '${document.pageCount == 1 ? 'page' : 'pages'} · '
+          'Added ${DateFormat.yMMMd().format(document.createdAt)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The assistant, offered on the document it would be asked about.
+///
+/// Given a panel of its own rather than two tonal buttons in the run of the
+/// screen. Ask and Summarise are not more actions alongside Read, Edit and
+/// Share — they are a different faculty, and the teal ground says so in the one
+/// place a user is most likely to discover it: looking at a document they do
+/// not want to read all of.
+class _AssistantPanel extends StatelessWidget {
+  const _AssistantPanel({required this.document});
+
+  final Document document;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: .45),
+        borderRadius: AppRadius.card,
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: .3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.auto_awesome,
+                size: 16,
+                color: theme.colorScheme.secondary,
+              ),
+              AppSpacing.gapHorizontalSm,
+              Expanded(
+                child: Text(
+                  'Ask DocuAI about this document',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.gapSm,
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: () => openNewConversation(
+                  context,
+                  documentId: document.id,
+                  documentTitle: document.title,
+                ),
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                label: const Text('Ask about this'),
+              ),
+              SummariseButton(document: document),
+            ],
           ),
         ],
       ),

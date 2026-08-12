@@ -116,12 +116,41 @@ class _Meta extends StatelessWidget {
 
     return Row(
       children: <Widget>[
-        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-        AppSpacing.gapHorizontalXs,
+        // Where it came from, as a badge rather than as the first word of a
+        // muted sentence. Teal, because it is a fact about the document rather
+        // than something to press — the indigo is reserved for things that act.
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 1,
+          ),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.secondaryContainer,
+            borderRadius: AppRadius.chip,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 11,
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+              AppSpacing.gapHorizontalXs,
+              Text(
+                origin,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AppSpacing.gapHorizontalSm,
         Expanded(
           child: Text(
-            '$origin · $pages · '
-            '${DateFormat.yMMMd().format(document.updatedAt)}',
+            '$pages · ${DateFormat.yMMMd().format(document.updatedAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(

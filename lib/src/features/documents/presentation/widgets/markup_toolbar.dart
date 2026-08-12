@@ -57,8 +57,8 @@ class MarkupToolbar extends StatelessWidget {
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: 2,
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
               ),
               child: Row(
                 children: <Widget>[
@@ -106,10 +106,15 @@ class MarkupToolbar extends StatelessWidget {
                   ),
                   if (onInsertImage != null) ...<Widget>[
                     const _Divider(),
+                    // Not a toggle like the six before it — it inserts
+                    // something rather than restyling what is there. Given the
+                    // accent colour so the difference is visible rather than
+                    // only true.
                     _Button(
-                      icon: Icons.image_outlined,
+                      icon: Icons.add_photo_alternate_outlined,
                       tooltip: 'Add a picture',
                       active: false,
+                      accent: true,
                       onPressed: () => onInsertImage!(),
                     ),
                   ],
@@ -129,6 +134,7 @@ class _Button extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     required this.active,
+    this.accent = false,
   });
 
   final IconData icon;
@@ -136,12 +142,19 @@ class _Button extends StatelessWidget {
   final VoidCallback onPressed;
   final bool active;
 
+  /// Marks a button that inserts rather than toggles.
+  final bool accent;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final resting = accent
+        ? theme.colorScheme.secondary
+        : theme.colorScheme.onSurfaceVariant;
+
     return IconButton(
-      icon: Icon(icon, size: 20),
+      icon: Icon(icon, size: 21),
       tooltip: tooltip,
       onPressed: onPressed,
       isSelected: active,
@@ -149,7 +162,7 @@ class _Button extends StatelessWidget {
       // learns the state the sighted user reads off the highlight.
       style:
           IconButton.styleFrom(
-            foregroundColor: theme.colorScheme.onSurfaceVariant,
+            foregroundColor: resting,
             backgroundColor: Colors.transparent,
             highlightColor: theme.colorScheme.primary.withValues(alpha: .12),
           ).copyWith(
@@ -157,12 +170,15 @@ class _Button extends StatelessWidget {
               (states) => active ? theme.colorScheme.primaryContainer : null,
             ),
             foregroundColor: WidgetStateProperty.resolveWith<Color?>(
-              (states) => active
-                  ? theme.colorScheme.onPrimaryContainer
-                  : theme.colorScheme.onSurfaceVariant,
+              (states) =>
+                  active ? theme.colorScheme.onPrimaryContainer : resting,
             ),
           ),
-      visualDensity: VisualDensity.compact,
+      // Full-size targets. `VisualDensity.compact` shaved these to about 40dp,
+      // which is under the 48 the rest of the app is held to — and a formatting
+      // bar is used mid-sentence with a thumb, which is the worst case for a
+      // small target.
+      visualDensity: VisualDensity.standard,
     );
   }
 }

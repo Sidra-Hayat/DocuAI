@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../domain/entities/chat_message.dart';
 import 'answer_copy.dart';
+import 'assistant_identity.dart';
 import 'source_citation.dart';
 
 /// One turn in the conversation.
@@ -117,6 +118,26 @@ class _Answer extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // Who is speaking, in the smallest form that says it. An answer is
+          // set as running text rather than in a bubble — it is a passage out
+          // of the user's own papers — which reads well and leaves the two
+          // sides of a long transcript hard to tell apart at a glance. The mark
+          // is the cue the bubble would otherwise have provided.
+          Row(
+            children: <Widget>[
+              const AssistantMark(size: 22),
+              AppSpacing.gapHorizontalSm,
+              Text(
+                'DocuAI',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.secondary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.gapSm,
           // The answer, first and unqualified. Everything that used to sit
           // between the reply and the reader — a match-strength chip, a count
           // of documents searched — described the search rather than the

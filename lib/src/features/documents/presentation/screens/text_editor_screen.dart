@@ -412,32 +412,63 @@ class _ImageActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
       ),
-      color: theme.colorScheme.primaryContainer,
-      child: Row(
-        children: <Widget>[
-          Icon(
-            Icons.image_outlined,
-            size: 18,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          AppSpacing.gapHorizontalSm,
-          Expanded(
-            child: Text(
-              'Picture',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.xs,
+          AppSpacing.sm,
+          AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          // The same teal the placeholder in the text is tinted with, so the
+          // bar reads as belonging to the line the caret is on rather than as
+          // another toolbar that happened to appear.
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: AppRadius.card,
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.image_outlined,
+              size: 18,
+              color: theme.colorScheme.onSecondaryContainer,
+            ),
+            AppSpacing.gapHorizontalSm,
+            Expanded(
+              child: Text(
+                'Picture on this line',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-          TextButton(onPressed: onPreview, child: const Text('View')),
-          TextButton(onPressed: onRemove, child: const Text('Remove')),
-        ],
+            TextButton(
+              onPressed: onPreview,
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSecondaryContainer,
+              ),
+              child: const Text('View'),
+            ),
+            TextButton(
+              onPressed: onRemove,
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -457,27 +488,69 @@ class _SaveStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colour = theme.colorScheme.onSurfaceVariant;
 
-    final (icon, label) = switch ((saving, dirty)) {
-      (true, _) => (null, 'Saving…'),
-      (false, true) => (Icons.edit_outlined, 'Unsaved'),
-      (false, false) => (Icons.check, 'Saved'),
+    // Saved is the resting state and should read as reassurance rather than as
+    // a notice: it gets the quiet muted treatment. Unsaved is the one worth
+    // catching an eye, so it takes a tinted ground — and "Saving…" sits between
+    // them, because it is on its way to being fine.
+    final (icon, label, foreground, background) = switch ((saving, dirty)) {
+      (true, _) => (
+        null,
+        'Saving…',
+        theme.colorScheme.onSurfaceVariant,
+        Colors.transparent,
+      ),
+      (false, true) => (
+        Icons.edit_outlined,
+        'Unsaved',
+        theme.colorScheme.onTertiaryContainer,
+        theme.colorScheme.tertiaryContainer,
+      ),
+      (false, false) => (
+        Icons.check_circle_outline,
+        'Saved',
+        theme.colorScheme.onSurfaceVariant,
+        Colors.transparent,
+      ),
     };
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        if (icon == null)
-          SizedBox.square(
-            dimension: 12,
-            child: CircularProgressIndicator(strokeWidth: 2, color: colour),
-          )
-        else
-          Icon(icon, size: 14, color: colour),
-        AppSpacing.gapHorizontalXs,
-        Text(label, style: theme.textTheme.labelSmall?.copyWith(color: colour)),
-      ],
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 3,
+        ),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: AppRadius.chip,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon == null)
+              SizedBox.square(
+                dimension: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foreground,
+                ),
+              )
+            else
+              Icon(icon, size: 14, color: foreground),
+            AppSpacing.gapHorizontalXs,
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

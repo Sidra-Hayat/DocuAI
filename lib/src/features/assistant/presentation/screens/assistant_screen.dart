@@ -10,6 +10,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../providers/assistant_providers.dart';
 import '../widgets/answer_view.dart';
+import '../widgets/assistant_identity.dart';
 import '../widgets/assistant_quick_actions.dart';
 import '../widgets/question_chips.dart';
 import '../widgets/thinking_indicator.dart';
@@ -212,11 +213,16 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.documentTitle == null
-              ? 'Assistant'
-              : 'About ${widget.documentTitle}',
-          overflow: TextOverflow.ellipsis,
+        titleSpacing: AppSpacing.md,
+        toolbarHeight: 68,
+        // The mark travels with the feature. A conversation scoped to one
+        // document names that document and says so underneath, rather than
+        // spending the title on "About …" and leaving the scope to be inferred.
+        title: AssistantIdentity(
+          title: widget.documentTitle,
+          subtitle: widget.documentTitle == null
+              ? 'Answers from your own documents'
+              : 'Answers from this document',
         ),
         actions: <Widget>[
           if (recent.isNotEmpty && !busy)

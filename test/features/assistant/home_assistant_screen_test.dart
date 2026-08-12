@@ -1,4 +1,4 @@
-﻿import 'package:docuai/src/features/assistant/domain/entities/assistant_intent.dart';
+import 'package:docuai/src/features/assistant/domain/entities/assistant_intent.dart';
 import 'package:docuai/src/features/assistant/presentation/providers/assistant_providers.dart';
 import 'package:docuai/src/features/assistant/presentation/screens/assistant_screen.dart';
 import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
@@ -137,6 +137,8 @@ void main() {
     ) async {
       await pumpHomeAssistant(tester);
 
+      await tester.ensureVisible(find.text('Summarize my latest document'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Summarize my latest document'));
       await tester.pumpAndSettle();
 
@@ -153,6 +155,8 @@ void main() {
     ) async {
       await pumpHomeAssistant(tester);
 
+      await tester.ensureVisible(find.text('Explain my latest document'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Explain my latest document'));
       await tester.pumpAndSettle();
 

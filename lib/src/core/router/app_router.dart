@@ -12,6 +12,7 @@ import '../../features/documents/presentation/screens/extracted_text_screen.dart
 import '../../features/documents/presentation/screens/manage_pages_screen.dart';
 import '../../features/documents/presentation/screens/page_viewer_screen.dart';
 import '../../features/documents/presentation/screens/text_editor_screen.dart';
+import '../../features/help/presentation/screens/help_screen.dart';
 import '../../features/scanner/presentation/screens/scan_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -189,6 +190,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.scanName,
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const ScanScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.help,
+        name: AppRoutes.helpName,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const HelpScreen(),
       ),
     ],
   );

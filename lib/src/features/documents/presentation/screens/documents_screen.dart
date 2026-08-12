@@ -11,7 +11,7 @@ import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_card.dart';
-import '../widgets/document_thumbnail.dart';
+import '../widgets/library_actions.dart';
 import '../widgets/library_header.dart';
 import '../widgets/new_document_sheet.dart';
 
@@ -101,6 +101,18 @@ enum _LibraryFilter {
   };
 }
 
+/// The library, in the order someone reads it.
+///
+/// Search, then how to add something, then the tools, then what you already
+/// have. That order is the change: the screen used to open with a search field
+/// and a row of filter chips over a flat list, so the four ways of getting a
+/// document *in* were behind a single "+" and the things you could do with one
+/// were invisible until you opened it.
+///
+/// Recent documents appear once. There used to be a horizontal "Recent" strip
+/// above an "All documents" list that began with the same five documents —
+/// the newest documents rendered twice, a few hundred pixels apart, which is
+/// two answers to "what was I last working on".
 class _Library extends StatelessWidget {
   const _Library({
     required this.documents,
@@ -112,17 +124,10 @@ class _Library extends StatelessWidget {
   final _LibraryFilter filter;
   final ValueChanged<_LibraryFilter> onFilter;
 
-  /// Recent is only worth a row of its own when the list below is long enough
-  /// that the newest documents are not already the first thing visible.
-  static const int _recentThreshold = 4;
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final visible = documents.where(filter.matches).toList(growable: false);
-
-    final showRecent =
-        filter == _LibraryFilter.all && documents.length >= _recentThreshold;
-    final recent = documents.take(5).toList(growable: false);
 
     return CustomScrollView(
       slivers: <Widget>[
@@ -132,7 +137,7 @@ class _Library extends StatelessWidget {
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,
-              AppSpacing.md,
+              AppSpacing.lg,
             ),
             // Not a working field: it is the Search tab's field, in the place
             // the eye already goes, and tapping it lands there with the
@@ -144,31 +149,42 @@ class _Library extends StatelessWidget {
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: _Filters(selected: filter, onSelected: onFilter),
+        const SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          sliver: SliverToBoxAdapter(child: LibraryPrimaryActions()),
         ),
-        if (showRecent) ...<Widget>[
-          const SliverToBoxAdapter(child: AppSectionHeader(label: 'Recent')),
-          SliverToBoxAdapter(child: _RecentRow(documents: recent)),
-        ],
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(child: LibraryTools()),
+        ),
         SliverToBoxAdapter(
           child: AppSectionHeader(
+            // Named for what it is only when it *is* that. Under a filter the
+            // list is no longer "recent anything" — it is every favourite, or
+            // everything written — and a heading that said otherwise would be
+            // describing a list the user is not looking at.
             label: filter == _LibraryFilter.all
-                ? 'All documents'
+                ? 'Recent documents'
                 : filter.label,
             action: Text(
               '${visible.length}',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
         ),
+        SliverToBoxAdapter(
+          child: _Filters(selected: filter, onSelected: onFilter),
+        ),
+        AppSpacing.gapMd.asSliver,
         if (visible.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _NothingInFilter(filter: filter),
-          )
+          SliverToBoxAdapter(child: _NothingInFilter(filter: filter))
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -187,6 +203,11 @@ class _Library extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Puts a plain widget in a sliver list without a wrapper at every call site.
+extension on Widget {
+  Widget get asSliver => SliverToBoxAdapter(child: this);
 }
 
 class _Filters extends StatelessWidget {
@@ -213,78 +234,6 @@ class _Filters extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// The five most recently touched, as pages rather than as rows.
-///
-/// Shown large enough to be recognised by sight. The whole reason to repeat
-/// documents that are also in the list below is that a thumbnail you can
-/// actually see is faster to find than a title you have to read.
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.documents});
-
-  final List<Document> documents;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      height: 176,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        itemCount: documents.length,
-        separatorBuilder: (context, index) => AppSpacing.gapHorizontalMd,
-        itemBuilder: (context, index) {
-          final document = documents[index];
-
-          return SizedBox(
-            width: 108,
-            child: InkWell(
-              borderRadius: AppRadius.card,
-              onTap: () => context.pushNamed(
-                AppRoutes.documentDetailName,
-                pathParameters: <String, String>{'id': document.id},
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Stack(
-                    children: <Widget>[
-                      DocumentThumbnail(
-                        page: document.coverPage,
-                        width: 108,
-                        height: 130,
-                        borderRadius: AppRadius.md,
-                      ),
-                      if (document.isFavorite)
-                        Positioned(
-                          top: AppSpacing.xs,
-                          right: AppSpacing.xs,
-                          child: Icon(
-                            Icons.star,
-                            size: 16,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                        ),
-                    ],
-                  ),
-                  AppSpacing.gapSm,
-                  Text(
-                    document.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(height: 1.2),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }
