@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 
@@ -6,8 +6,8 @@ import '../../../../core/theme/app_spacing.dart';
 /// knew any of them.
 ///
 /// Written for the person who has just installed the app, which rules out most
-/// of the vocabulary the app is built from. No "OCR" â€” the app *reads the text
-/// on a page*. No "retrieval" or "index" â€” the assistant *looks through your
+/// of the vocabulary the app is built from. No "OCR" — the app *reads the text
+/// on a page*. No "retrieval" or "index" — the assistant *looks through your
 /// documents*. Nothing here explains how anything works, because a first-run
 /// guide that explains the machinery is a guide for the person who wrote it.
 ///
@@ -26,7 +26,7 @@ class HelpScreen extends StatelessWidget {
         // The list always scrolled; what it did not do was leave room for the
         // system navigation. `bootstrap()` puts the app in
         // `SystemUiMode.edgeToEdge`, so the window extends under the gesture
-        // bar â€” and a scroll view whose content ends at its own padding ends
+        // bar — and a scroll view whose content ends at its own padding ends
         // *underneath* it. The last section could be scrolled to and still not
         // be readable, which on a phone reads as text simply missing.
         //
@@ -108,7 +108,7 @@ class HelpScreen extends StatelessWidget {
             icon: Icons.edit_note_outlined,
             title: 'Create a document',
             body:
-                'Write something yourself â€” notes, a list, a draft. You can '
+                'Write something yourself — notes, a list, a draft. You can '
                 'make text bold, add headings and bullet points, and drop in '
                 'pictures from your phone.\n\n'
                 'It saves as you type, so there is no save button to remember.',
@@ -117,7 +117,7 @@ class HelpScreen extends StatelessWidget {
             icon: Icons.auto_awesome_outlined,
             title: 'Assistant',
             body:
-                'Ask about your documents in your own words â€” "what is this '
+                'Ask about your documents in your own words — "what is this '
                 'about?", "how much do I owe?", "what dates are mentioned?".\n\n'
                 'Every answer comes from your own pages and shows you which '
                 'document and page it came from, so you can check it. If the '

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/error/failure.dart';
@@ -35,7 +35,7 @@ class _MergePdfsScreenState extends ConsumerState<MergePdfsScreen> {
   /// Adds one PDF to the end of the list.
   ///
   /// One at a time because the platform picker this app uses returns one path.
-  /// There is deliberately no cap on how many times this can be pressed â€” the
+  /// There is deliberately no cap on how many times this can be pressed — the
   /// only limit is the page budget the merge itself enforces, which is about
   /// what the device can hold rather than a number chosen to look safe.
   Future<void> _add() async {
@@ -82,8 +82,8 @@ class _MergePdfsScreenState extends ConsumerState<MergePdfsScreen> {
   /// screen is pushed on the *root* navigator; the document detail route is
   /// nested inside the documents branch of the `StatefulShellRoute`. Replacing
   /// one with the other leaves GoRouter building a page list that contains the
-  /// `/documents` page twice â€” once as the shell branch already underneath, and
-  /// once as the parent of the detail route being pushed on top â€” and
+  /// `/documents` page twice — once as the shell branch already underneath, and
+  /// once as the parent of the detail route being pushed on top — and
   /// `Navigator._debugCheckDuplicatedPageKeys` asserts on exactly that.
   ///
   /// The merge itself had already finished by then, which is why the document
@@ -136,7 +136,7 @@ class _MergePdfsScreenState extends ConsumerState<MergePdfsScreen> {
         body: PdfToolResult(
           title: 'Merged into one document',
           summary:
-              '${outcome.sourceCount} PDFs Â· ${outcome.pageCount} '
+              '${outcome.sourceCount} PDFs · ${outcome.pageCount} '
               '${outcome.pageCount == 1 ? 'page' : 'pages'}',
           detail: outcome.truncated
               ? 'Saved as "${outcome.document.title}". Only the first '
@@ -202,7 +202,7 @@ class _MergePdfsScreenState extends ConsumerState<MergePdfsScreen> {
                         Expanded(
                           child: Text(
                             '${_sources.length} '
-                            '${_sources.length == 1 ? 'PDF' : 'PDFs'} Â· drag to '
+                            '${_sources.length == 1 ? 'PDF' : 'PDFs'} · drag to '
                             'reorder',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
@@ -367,7 +367,7 @@ class _Working extends StatelessWidget {
     final label = progress?.label ?? '';
 
     return AppStateView.busy(
-      title: label.isEmpty ? 'Mergingâ€¦' : 'Reading $labelâ€¦',
+      title: label.isEmpty ? 'Merging…' : 'Reading $label…',
       progress: progress?.fraction,
     );
   }

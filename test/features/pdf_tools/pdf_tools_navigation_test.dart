@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:docuai/src/core/error/failure.dart';
@@ -33,7 +33,7 @@ import '../../helpers/fakes.dart';
 ///
 /// while the merged document was created successfully and appeared in Recents.
 ///
-/// The assertion is `Navigator._debugCheckDuplicatedPageKeys` â€” two pages in
+/// The assertion is `Navigator._debugCheckDuplicatedPageKeys` — two pages in
 /// one `Navigator.pages` list carrying the same key. The merge screen is pushed
 /// on the **root** navigator; the document detail route lives inside the
 /// documents branch of the `StatefulShellRoute`. Replacing the former with the
@@ -43,8 +43,8 @@ import '../../helpers/fakes.dart';
 ///
 /// **A fake router would not have caught this**, because the bug is entirely in
 /// how GoRouter composes the real route tree. So these tests build the app's
-/// own `appRouterProvider` and reach the tools the way the app does â€” from the
-/// library, by pushing â€” which is the only arrangement in which the stack has a
+/// own `appRouterProvider` and reach the tools the way the app does — from the
+/// library, by pushing — which is the only arrangement in which the stack has a
 /// `/documents` page for the new one to collide with.
 void main() {
   late Directory tempDir;
@@ -283,7 +283,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('This could not be made smaller'), findsOneWidget);
-      // Kept, shareable, and discardable â€” rather than silently thrown away
+      // Kept, shareable, and discardable — rather than silently thrown away
       // after the user waited for it.
       expect(find.text('View'), findsOneWidget);
       expect(find.text('Share'), findsOneWidget);
