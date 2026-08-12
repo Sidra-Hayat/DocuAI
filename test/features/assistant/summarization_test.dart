@@ -405,21 +405,55 @@ Payment may be made by direct debit or bank transfer.
       expect(answer.citations.first.documentId, 'lease');
     });
 
-    test('naming none asks for one rather than guessing', () async {
+    // Previously answered "open the document you want", which made a reasonable
+    // sentence typed on the Assistant tab a dead end while the Summarise button
+    // did the job. Naming nothing is not the same as naming nothing *usable*:
+    // "this document" from the library means the one just being worked on.
+    test('naming none summarises the document last worked on', () async {
       documents
-        ..seed(bill(id: 'a', title: 'One'))
-        ..seed(bill(id: 'b', title: 'Two'));
+        ..seed(bill(id: 'a', title: 'One').copyWith(
+          updatedAt: DateTime.utc(2026, 8, 1),
+        ))
+        ..seed(bill(id: 'b', title: 'Two').copyWith(
+          updatedAt: DateTime.utc(2026, 8, 9),
+        ));
 
       final answer =
           (await repository.ask('Summarise this document')
               as Success<AssistantAnswer>)
           .value;
 
-      expect(answer.kind, AnswerKind.needsDocument);
+      expect(answer.kind, AnswerKind.summary);
+      expect(answer.citations.first.documentId, 'b');
       expect(
-        answer.citations,
-        isEmpty,
-        reason: 'summarising an arbitrary document would be worse than asking',
+        answer.text,
+        contains('Two'),
+        reason: 'the answer must say which document it summarised',
+      );
+    });
+
+    test('"my latest document" is a document, not a word to search for',
+        () async {
+      documents
+        ..seed(bill(id: 'a', title: 'One').copyWith(
+          updatedAt: DateTime.utc(2026, 8, 1),
+        ))
+        ..seed(bill(id: 'b', title: 'Two').copyWith(
+          updatedAt: DateTime.utc(2026, 8, 9),
+        ));
+
+      final answer =
+          (await repository.ask('Summarize my latest document')
+              as Success<AssistantAnswer>)
+          .value;
+
+      expect(answer.kind, AnswerKind.summary);
+      expect(answer.citations.first.documentId, 'b');
+      expect(
+        answer.text,
+        isNot(contains('latest')),
+        reason: 'searching for the literal word answered "I could not find a '
+            'document matching \\"latest\\""',
       );
     });
 
@@ -599,14 +633,28 @@ Payment may be made by direct debit or bank transfer.
       );
     });
 
-    test('the library-wide offer still names documents', () async {
+    test('the library-wide offer still names the user’s own document', () async {
       documents.seed(bill());
 
       final suggestions =
           (await repository.suggestedQuestions() as Success<List<String>>)
           .value;
 
-      expect(suggestions.single, contains('Electricity bill'));
+      // An example naming a document the user does not have cannot be tapped,
+      // so the "about" prompt is built from their newest document rather than
+      // from an invented one.
+      expect(
+        suggestions.any((question) => question.contains('Electricity bill')),
+        isTrue,
+        reason: 'suggestions: $suggestions',
+      );
+      expect(suggestions, contains(LibraryQuestions.summariseLatest));
     });
+
+    // "every suggestion actually answers" lives in global_assistant_test.dart,
+    // against a real BM25 index. It cannot be asserted here: the fake search
+    // returns nothing unless a test wires it, so a suggestion that resolves a
+    // document by name would fail for want of an index rather than for any
+    // reason a user would ever meet.
   });
 }

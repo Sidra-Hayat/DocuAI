@@ -129,7 +129,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
         ),
         SummarizeDocument(:final brief) => await _onOneDocument(
           documentId,
-          (document) async => _composeSummary(
+          (document, chosen) async => _composeSummary(
             document,
             PassageExtractor.extract(document),
             brief: brief,
@@ -301,7 +301,15 @@ class RetrievalAssistantRepository implements AssistantRepository {
     if (retrieved is Success<AssistantAnswer> &&
         retrieved.value.kind == AnswerKind.noMatch) {
       final target = documentId ?? await _bestMatchFor(analyzed);
-      if (target != null) return _onOneDocument(target, _explainDocument);
+      if (target != null) {
+        // Named by the user rather than open in front of them, so the answer
+        // says which document it read. "This document" is only unambiguous on
+        // a screen that is showing one.
+        return _onOneDocument(
+          target,
+          (document, _) => _explainDocument(document, documentId == null),
+        );
+      }
     }
 
     return retrieved;
@@ -317,20 +325,42 @@ class RetrievalAssistantRepository implements AssistantRepository {
 
   /// Runs [body] against the document the conversation is about.
   ///
-  /// The document-shaped actions — summarise, explain — need one document and
-  /// cannot invent one. Saying so beats answering about whichever document
-  /// happened to rank first.
+  /// Summarising and explaining genuinely need one document — there is no such
+  /// thing as the summary of a library — but "needs one document" is not the
+  /// same as "needs the user to go and open one". Asked from the Assistant tab,
+  /// "what is this document about?" used to answer
+  ///
+  /// ```
+  /// Open the document you want first — this works on one document at a time.
+  /// ```
+  ///
+  /// which is the app declining to answer a question it has everything it needs
+  /// to answer. The user is on the Assistant screen precisely because they were
+  /// not thinking in terms of which document holds what.
+  ///
+  /// So when the conversation names no document, the most recently updated
+  /// readable one is used — the document they were last working on, which is
+  /// what "this document" means to someone who has just come from the library.
+  /// The answer then *names* what it read, so a wrong guess is visible in the
+  /// first line rather than mistaken for a fact about something else.
+  ///
+  /// [body] is told which happened, because an answer about the document on
+  /// screen should not announce a title the user is already looking at.
   Future<Result<AssistantAnswer>> _onOneDocument(
     String? documentId,
-    Future<AssistantAnswer> Function(Document document) body,
+    Future<AssistantAnswer> Function(Document document, bool chosen) body,
   ) async {
     if (documentId == null) {
-      return const Success(
-        AssistantAnswer(
-          text: openADocumentMessage,
-          kind: AnswerKind.needsDocument,
-        ),
-      );
+      final chosen = await _mostRecentReadable();
+      if (chosen case Failed(:final failure)) return Failed(failure);
+
+      final document = (chosen as Success<Document?>).value;
+      // Nothing readable to fall back to. `_emptyHanded` tells an empty library
+      // apart from one whose text has not been recognised, which send the user
+      // to completely different places.
+      if (document == null) return Success(await _emptyHanded());
+
+      return Success(await body(document, true));
     }
 
     final loaded = await _documents.getDocument(documentId);
@@ -347,7 +377,27 @@ class RetrievalAssistantRepository implements AssistantRepository {
       );
     }
 
-    return Success(await body(document));
+    return Success(await body(document, false));
+  }
+
+  /// The document the user was last working on, or null if none can be read.
+  ///
+  /// Sorted here rather than trusted from the repository. `readAll` does return
+  /// newest-first today, but "which document did the assistant pick" is a
+  /// user-visible decision, and one that quietly depended on a sort order
+  /// declared in another layer would be one refactor away from picking the
+  /// oldest document instead.
+  FutureResult<Document?> _mostRecentReadable() async {
+    final loaded = await _documents.getDocuments();
+    if (loaded case Failed(:final failure)) return Failed(failure);
+
+    final readable =
+        (loaded as Success<List<Document>>).value
+            .where((document) => document.hasText)
+            .toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    return Success<Document?>(readable.isEmpty ? null : readable.first);
   }
 
   /// Stage one: narrow the library to the documents worth reading.
@@ -698,7 +748,10 @@ class RetrievalAssistantRepository implements AssistantRepository {
   /// describing the document in their own words. It reads like the document's
   /// table of contents plus the facts it carries — which is a genuine answer to
   /// "what is this?", and unlike a paraphrase it cannot be wrong.
-  Future<AssistantAnswer> _explainDocument(Document document) async {
+  Future<AssistantAnswer> _explainDocument(
+    Document document, [
+    bool chosen = false,
+  ]) async {
     final passages = PassageExtractor.extract(document);
     final outline = DocumentTopics.of(document);
 
@@ -713,13 +766,19 @@ class RetrievalAssistantRepository implements AssistantRepository {
     final topics = outline.topics;
     final lines = <String>[];
 
+    // Which document is being described. "This document" is right when the user
+    // is looking at one and wrong when the assistant picked it — there, naming
+    // it is the difference between an answer and a claim about something
+    // unidentified.
+    final subject = chosen ? '“${document.title}”' : 'This document';
+
     if (outline.fromHeadings) {
       // A document that divided itself into sections has already answered the
       // question. Listing those sections in one sentence is the closest an
       // extractive assistant honestly gets to describing a document — and every
       // word of it was typed by whoever wrote the thing.
       lines.add(
-        'This document covers '
+        '$subject covers '
         '${AnswerPhrasing.list(topics.map((topic) => topic.text))}.',
       );
     } else {
@@ -727,7 +786,7 @@ class RetrievalAssistantRepository implements AssistantRepository {
       // than paraphrased, because paraphrasing it would mean inventing the
       // paraphrase.
       lines.add(
-        'This document is about '
+        '$subject is about '
         '“${AnswerPhrasing.withoutTrailingStop(topics.first.text)}”.',
       );
 
@@ -1001,11 +1060,26 @@ class RetrievalAssistantRepository implements AssistantRepository {
         return _findInformation(_kindFor(question.intent), null);
       }
 
-      // Summarising and explaining genuinely do need one document — there is no
-      // such thing as the summary of a library — so this says which documents
-      // there are to choose from rather than asking the user to guess the
-      // wording that would have worked.
-      return Success(await _askWhichDocument(question));
+      // Something was named and matched nothing. Falling back to the newest
+      // document here would answer about the wrong one under a title the user
+      // never asked for, so this reports the miss instead.
+      if (question.subjectTerms.isNotEmpty) {
+        return Success(await _askWhichDocument(question));
+      }
+
+      // Nothing was named at all — "summarise my latest document", "what are
+      // the important points?". That is a whole-document request about the
+      // document the user was last working on, and answering it is what
+      // [_onOneDocument] does. Only a summary reaches here: the listing modes
+      // went library-wide above, and explain never enters this method.
+      return _onOneDocument(
+        null,
+        (target, chosen) async => _composeSummary(
+          target,
+          PassageExtractor.extract(target),
+          brief: question.brief,
+        ),
+      );
     }
 
     if (!document.hasText) {
@@ -1236,33 +1310,15 @@ class RetrievalAssistantRepository implements AssistantRepository {
       final loaded = await _documents.getDocuments();
       if (loaded case Failed(:final failure)) return Failed(failure);
 
-      final documents = (loaded as Success<List<Document>>).value
-          .where((document) => document.hasText)
-          .take(4)
-          .toList(growable: false);
+      final readable =
+          (loaded as Success<List<Document>>).value
+              .where((document) => document.hasText)
+              .toList()
+            ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-      if (documents.isEmpty) return const Success(<String>[]);
+      if (readable.isEmpty) return const Success(<String>[]);
 
-      final suggestions = <String>[];
-      for (final document in documents) {
-        final text = document.extractedText;
-        final title = document.title;
-
-        // Ask about what the page demonstrably contains. A suggestion that
-        // returns nothing is worse than no suggestion — it teaches the user
-        // the assistant does not work.
-        if (PassageSignals.hasAmount(text)) {
-          suggestions.add('How much is the $title?');
-        } else if (PassageSignals.hasDate(text)) {
-          suggestions.add('When is the $title due?');
-        } else if (PassageSignals.hasContact(text)) {
-          suggestions.add('What is the contact for the $title?');
-        } else {
-          suggestions.add('What does the $title say?');
-        }
-      }
-
-      return Success(List<String>.unmodifiable(suggestions.take(4)));
+      return Success(_questionsAboutTheLibrary(readable));
     } catch (error, stackTrace) {
       return Failed(
         AssistantFailure(
@@ -1272,6 +1328,33 @@ class RetrievalAssistantRepository implements AssistantRepository {
         ),
       );
     }
+  }
+
+  /// What is worth asking of the library as a whole.
+  ///
+  /// [readable] arrives newest-first and every entry has recognised text.
+  ///
+  /// Each suggestion is checked against the library before it is offered, using
+  /// the same signals that will answer it — so the names chip appears only if a
+  /// name survives the conservative filter that the answer will apply, and the
+  /// dates chip only if a date is written somewhere. The two openers need no
+  /// check: any readable document can be summarised, and any can be described.
+  static List<String> _questionsAboutTheLibrary(List<Document> readable) {
+    // Read once. `extractedText` walks every page of every document, and asking
+    // four separate questions of it would walk the library four times.
+    final corpus = readable
+        .map((document) => document.extractedText)
+        .join('\n');
+
+    return List<String>.unmodifiable(
+      <String>[
+        LibraryQuestions.summariseLatest,
+        LibraryQuestions.about(readable.first.title),
+        if (PassageSignals.hasDate(corpus)) LibraryQuestions.dates,
+        if (PassageSignals.hasProperName(corpus)) LibraryQuestions.names,
+        if (PassageSignals.hasAmount(corpus)) LibraryQuestions.amounts,
+      ].take(4),
+    );
   }
 
   /// What is worth asking of one particular document.

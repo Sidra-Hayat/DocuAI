@@ -451,6 +451,14 @@ abstract final class Markup {
   /// Whether one line is a picture reference and nothing else.
   static bool isImageLine(String line) => _image.hasMatch(line);
 
+  /// Whether one line is a heading.
+  ///
+  /// Exposed for the same reason [isImageLine] is: a consumer scanning raw page
+  /// text a line at a time needs to know what kind of line it is on, and the
+  /// alternative — re-deriving the rule from the `#` character — would be a
+  /// second definition of a heading to keep in step with this one.
+  static bool isHeadingLine(String line) => _heading.hasMatch(line);
+
   /// The file a picture line names, or null if it is not one.
   static String? imageNameIn(String line) =>
       _image.firstMatch(line)?.group(2)?.trim();

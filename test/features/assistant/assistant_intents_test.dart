@@ -261,11 +261,48 @@ void main() {
       expect(answer.text, isNot(contains('This passage says')));
     });
 
-    test('asks for a document when the conversation is about none', () async {
+    test('an empty library is reported as empty, not as a missing scope',
+        () async {
       final answer = await run(const ExplainDocument());
 
-      expect(answer.kind, AnswerKind.needsDocument);
+      expect(answer.kind, AnswerKind.emptyLibrary);
       expect(answer.citations, isEmpty);
+    });
+
+    // This used to answer "Open the document you want first", which is the app
+    // declining a question it has everything it needs to answer. Explaining
+    // needs *a* document, not the user's help finding one.
+    test('with no document open, explains the one last worked on', () async {
+      documents
+        ..seed(
+          buildDocument(
+            id: 'old',
+            title: 'Older scan',
+            updatedAt: DateTime.utc(2026, 8, 1),
+            pages: <DocumentPage>[
+              buildPage(
+                id: 'old-p0',
+                index: 0,
+                text: 'An older statement about nothing in particular.',
+                ocrStatus: OcrStatus.completed,
+              ),
+            ],
+          ),
+        )
+        ..seed(
+          bill().copyWith(updatedAt: DateTime.utc(2026, 8, 9)),
+        );
+
+      final answer = await run(const ExplainDocument());
+
+      expect(answer.kind, AnswerKind.explanation);
+      expect(answer.citations.first.documentId, 'bill');
+      expect(
+        answer.text,
+        contains(bill().title),
+        reason: 'a document the assistant chose must be named in the answer, '
+            'so a wrong guess is visible rather than mistaken for a fact',
+      );
     });
   });
 
