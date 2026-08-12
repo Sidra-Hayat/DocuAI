@@ -91,6 +91,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the last section clears the system navigation bar', (
+    tester,
+  ) async {
+    // The bug reported from a phone: the guide scrolled, but its content ended
+    // at its own padding — and `bootstrap()` puts the app in edge-to-edge, so
+    // the window runs *under* the gesture bar. The final section could be
+    // scrolled to and still not be readable.
+    const gestureBar = 48.0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const MediaQuery(
+          data: MediaQueryData(
+            padding: EdgeInsets.only(bottom: gestureBar),
+          ),
+          child: HelpScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('PDF and sharing'),
+      300,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+
+    // Scroll to the very end and check the last words of the guide sit above
+    // where the system bar starts, rather than behind it.
+    await tester.fling(scrollable, const Offset(0, -2000), 2000);
+    await tester.pumpAndSettle();
+
+    final lastText = find.textContaining('sent as a Word file');
+    expect(lastText, findsOneWidget);
+
+    final bottomOfText = tester.getBottomLeft(lastText).dy;
+    final screenBottom = tester.getSize(find.byType(HelpScreen)).height;
+
+    expect(
+      bottomOfText,
+      lessThanOrEqualTo(screenBottom - gestureBar),
+      reason: 'the last paragraph is underneath the system navigation bar',
+    );
+  });
+
   testWidgets('renders in dark mode', (tester) async {
     await pumpHelp(tester, brightness: Brightness.dark);
 

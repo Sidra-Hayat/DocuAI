@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_action_sheet.dart';
-import '../../../export/presentation/widgets/share_sheet.dart';
 import 'new_document_sheet.dart';
 import 'pick_document_sheet.dart';
 
@@ -138,8 +137,8 @@ class LibraryTools extends ConsumerWidget {
         Expanded(
           child: _Tool(
             icon: Icons.picture_as_pdf_outlined,
-            label: 'Export PDF',
-            onPressed: () => _exportPdf(context, ref),
+            label: 'PDF tools',
+            onPressed: () => context.pushNamed(AppRoutes.pdfToolsName),
           ),
         ),
         AppSpacing.gapHorizontalSm,
@@ -200,24 +199,6 @@ class LibraryTools extends ConsumerWidget {
         ),
       ],
     );
-  }
-
-  /// Picks a document, then hands it to the share sheet the detail screen uses.
-  ///
-  /// Deliberately the same flow rather than a second export path: the sheet
-  /// already knows how to compose a PDF, offer the Word alternative and explain
-  /// why a document holding a picture cannot be one.
-  Future<void> _exportPdf(BuildContext context, WidgetRef ref) async {
-    final document = await pickDocument(
-      context,
-      title: 'Which document?',
-      emptyMessage:
-          'There is nothing to export yet. Scan or write a document first.',
-      where: (document) => document.hasPages,
-    );
-
-    if (document == null || !context.mounted) return;
-    await showShareSheet(context, ref, document);
   }
 
   /// Picks a document and opens its text.

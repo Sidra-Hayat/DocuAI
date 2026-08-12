@@ -23,11 +23,22 @@ class HelpScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('How DocuAI works')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        // The list always scrolled; what it did not do was leave room for the
+        // system navigation. `bootstrap()` puts the app in
+        // `SystemUiMode.edgeToEdge`, so the window extends under the gesture
+        // bar â€” and a scroll view whose content ends at its own padding ends
+        // *underneath* it. The last section could be scrolled to and still not
+        // be readable, which on a phone reads as text simply missing.
+        //
+        // Taken from the view rather than assumed: the inset is a three-button
+        // bar on one phone, a gesture pill on another, and zero in landscape on
+        // a third. Nothing here is a fixed height, and nothing was made smaller
+        // to fit.
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.sm,
           AppSpacing.lg,
-          AppSpacing.xxl,
+          AppSpacing.xxl + MediaQuery.paddingOf(context).bottom,
         ),
         children: <Widget>[
           // The promise first. It is the reason someone would keep their

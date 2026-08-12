@@ -22,9 +22,18 @@ class PdfPageRasterizer {
   const PdfPageRasterizer({
     ImageNormalizer normalizer = normalizeInIsolate,
     this.dpi = 150,
+    this.pageLimit = maxPages,
   }) : _normalize = normalizer;
 
   final ImageNormalizer _normalize;
+
+  /// How many pages *this* rasterizer will read.
+  ///
+  /// Defaults to [maxPages], which is what a single import has always allowed.
+  /// Merging needs to spend one budget across several files — a hundred-page
+  /// PDF followed by a two-page one must not each get their own sixty — so the
+  /// cap became a field the caller can lower per call.
+  final int pageLimit;
 
   /// Rendering resolution.
   ///
@@ -53,8 +62,10 @@ class PdfPageRasterizer {
     final pages = <String>[];
     var index = 0;
 
+    if (pageLimit <= 0) return pages;
+
     await for (final raster in Printing.raster(bytes, dpi: dpi.toDouble())) {
-      if (index >= maxPages) break;
+      if (index >= pageLimit) break;
 
       // Rendered as PNG, stored as JPEG. Every page in the app is a JPEG —
       // `AppConstants.pageFileNameFor` says so, the PDF export assumes it, and

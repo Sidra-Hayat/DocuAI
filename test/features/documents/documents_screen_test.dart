@@ -218,8 +218,11 @@ void main() {
         documents: Stream.value(<Document>[buildDocument(id: 'a')]),
       );
 
+      // "PDF tools" rather than the "Export PDF" this tile used to say. The
+      // narrower name was honest while sharing was all it did; now that merge
+      // and compress sit behind it, the broader one is the accurate one.
       for (final label in <String>[
-        'Export PDF',
+        'PDF tools',
         'Read text',
         'Assistant',
         'More',

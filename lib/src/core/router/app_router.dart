@@ -13,6 +13,9 @@ import '../../features/documents/presentation/screens/manage_pages_screen.dart';
 import '../../features/documents/presentation/screens/page_viewer_screen.dart';
 import '../../features/documents/presentation/screens/text_editor_screen.dart';
 import '../../features/help/presentation/screens/help_screen.dart';
+import '../../features/pdf_tools/presentation/screens/compress_pdf_screen.dart';
+import '../../features/pdf_tools/presentation/screens/merge_pdfs_screen.dart';
+import '../../features/pdf_tools/presentation/screens/pdf_tools_screen.dart';
 import '../../features/scanner/presentation/screens/scan_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -196,6 +199,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRoutes.helpName,
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const HelpScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.pdfTools,
+        name: AppRoutes.pdfToolsName,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PdfToolsScreen(),
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoutes.mergePdfs,
+            name: AppRoutes.mergePdfsName,
+            parentNavigatorKey: _rootNavigatorKey,
+            builder: (context, state) => const MergePdfsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.compressPdf,
+            name: AppRoutes.compressPdfName,
+            parentNavigatorKey: _rootNavigatorKey,
+            builder: (context, state) => const CompressPdfScreen(),
+          ),
+        ],
       ),
     ],
   );
