@@ -1,16 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Window background shown while the process starts, before Flutter draws.
+  The splash on Android 11 and below.
 
-  Brand ink in both light and dark, rather than following the system theme.
-  Committing to one colour means the first frame is always DocuAI instead of
-  always the OS, and it removes the white flash a light splash gives dark-mode
-  users.
+  Android 12 composes its own splash from `windowSplashScreenBackground` and
+  `windowSplashScreenAnimatedIcon` (see values-v31/styles.xml) and ignores this
+  drawable entirely. Everything before it shows exactly what is here, and what
+  was here was the brand ink and nothing else — so on Android 7 to 11, a third
+  of the devices this app supports, the first thing DocuAI showed was an
+  unbranded dark rectangle.
 
-  On Android 12 and above this is largely superseded: the platform composes the
-  splash itself from `windowSplashScreenBackground` and the launcher icon. See
-  values/styles.xml.
+  This draws the same two things the platform splash draws: the ink, and the
+  mark centred on it. Not an approximation of the newer behaviour — the same
+  colour and the same artwork — so the app looks like itself from API 24
+  upwards rather than only on recent phones.
+
+  The mark is given an explicit size and centred rather than left to fill the
+  window: a bitmap in a `windowBackground` with no gravity is stretched to the
+  whole screen, which is how a launcher icon becomes a full-page smear.
+
+  128dp is chosen against the source artwork rather than by eye. The foreground
+  is authored on a 108dp canvas, so 128dp is a 1.2x upscale — large enough to
+  read as a splash mark, small enough to stay crisp. It sits close to the
+  ~192dp the platform splash shows on Android 12, without the upscaling blur a
+  literal match would cost.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/brand_ink" />
+    <item
+        android:width="128dp"
+        android:height="128dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
 </layer-list>

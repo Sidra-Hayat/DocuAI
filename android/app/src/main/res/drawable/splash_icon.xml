@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The mark as Android 12's splash screen wants it.
+
+  Referenced only from values-v31, because `windowSplashScreenAnimatedIcon` is
+  an API 31 attribute.
+
+  Why this exists rather than letting the system use the launcher icon: it
+  would, and it would come out too small. The platform places a splash icon on
+  a 288dp canvas and shows the inner 192dp — a third masked away, exactly like
+  an adaptive icon. Our adaptive icon *already* insets its foreground by 17% to
+  survive that same mask on the home screen, so handing the system the launcher
+  icon insets the artwork twice and the mark lands at roughly half the size it
+  should be.
+
+  This starts from the raw full-bleed foreground and applies the inset once.
+  17% on each side scales the artwork into the central 66% — the same arithmetic
+  as the adaptive icon, for the same reason, applied to artwork that has not had
+  it applied already.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground"
+    android:inset="17%" />

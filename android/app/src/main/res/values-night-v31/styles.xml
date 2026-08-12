@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Android 12 and above, with the OS in dark mode.
+
+      The same ink and the same mark as the light variant, for the reason given
+      in values-night/styles.xml: the splash is brand rather than chrome. This
+      file exists because Android resolves `values-night` and `values-v31`
+      independently — a device that is both dark *and* on API 31 would
+      otherwise fall to one of them and lose whatever the other added, which is
+      how a dark-mode phone ends up with the platform's default splash icon.
+    -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/brand_ink</item>
+        <item name="android:windowSplashScreenBackground">@color/brand_ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The splash from Android 12 onwards.
+
+      From API 31 the platform composes the splash itself and ignores
+      `windowBackground` entirely, so the branding has to be restated in the
+      attributes it does read. These live here rather than in values/styles.xml
+      — where `windowSplashScreenBackground` used to sit and be silently ignored
+      by every device below 31 — so that each file says only what applies to the
+      versions it covers.
+
+      Three things are set and nothing else:
+
+        * the ink, so the first frame is DocuAI rather than the platform default;
+        * the mark, sized for the platform's own masking — see
+          drawable/splash_icon.xml for why the launcher icon cannot be used
+          directly here;
+        * the window background behind it, so the moment Flutter takes over
+          there is no flash of a different colour between the two.
+
+      Deliberately absent: `windowSplashScreenAnimationDuration`, because the
+      icon does not animate, and `windowSplashScreenIconBackgroundColor`,
+      because the mark is a silhouette on the ink and a circle behind it would
+      be a second shape competing with the one that means something.
+
+      Nothing here delays startup. The platform dismisses this the moment the
+      first frame is drawn, and DocuAI draws its first frame as soon as Hive and
+      the documents directory are open.
+    -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/brand_ink</item>
+        <item name="android:windowSplashScreenBackground">@color/brand_ink</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>
