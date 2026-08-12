@@ -7,15 +7,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/storage/storage_paths.dart';
-import '../../../../core/text/markup_editing.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
+import '../../domain/entities/document_block.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_actions.dart';
-import '../widgets/markup_editing_controller.dart';
+import '../widgets/document_block_controller.dart';
+import '../widgets/document_block_editor.dart';
 import '../widgets/markup_toolbar.dart';
+import 'image_editor_screen.dart';
 
 /// Writes one page of a document.
 ///
@@ -45,8 +47,15 @@ class TextEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
-  final MarkupEditingController _editor = MarkupEditingController();
-  final FocusNode _focus = FocusNode();
+  /// The page as rows: text fields with pictures between them.
+  ///
+  /// It used to be a single [MarkupEditingController] over the whole page,
+  /// which is why a picture could only be shown as its own reference — a
+  /// `WidgetSpan` measures one character and `![Image](a.jpg)` measures
+  /// seventeen, and a span list that disagrees with its text desynchronises the
+  /// caret from what is painted. The stored format is unchanged; only the
+  /// editor's view of it is.
+  final DocumentBlockController _editor = DocumentBlockController();
 
   /// How long the typing has to stop before the text is written.
   ///
@@ -80,12 +89,19 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
     _editor
       ..removeListener(_onChanged)
       ..dispose();
-    _focus.dispose();
     super.dispose();
   }
 
   void _onChanged() {
     if (!_loaded) return;
+
+    // The controller notifies on selection changes too, which the toolbar needs
+    // for its active-format readout but which are not edits. Only a genuine
+    // change arms the autosave.
+    if (!_editor.isDirty) {
+      setState(() {});
+      return;
+    }
 
     _autosave?.cancel();
     _autosave = Timer(_autosaveDelay, () {
@@ -99,18 +115,20 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
   void _load(DocumentPage page) {
     if (_loaded) return;
 
-    // Assign *before* marking loaded. Setting `text` notifies listeners
-    // synchronously, and this runs from `build`: with the flag already set,
-    // `_onChanged` would treat the page's own stored text as an unsaved edit
-    // and call `setState` mid-build.
-    _editor.text = page.text;
+    // Loaded *before* the flag is set. `load` notifies listeners synchronously
+    // and this runs from `build`: with the flag already set, `_onChanged` would
+    // treat the page's own stored text as an unsaved edit and call `setState`
+    // mid-build.
+    _editor.load(page.text);
     _loaded = true;
 
     // An empty page is one the user came here to write on, so put the caret in
     // it rather than making them tap first.
     if (page.text.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focus.requestFocus();
+        if (!mounted) return;
+        final first = _editor.blocks.whereType<TextBlock>().firstOrNull;
+        if (first != null) _editor.focusNodeFor(first).requestFocus();
       });
     }
   }
@@ -126,10 +144,13 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
     final result = await ref.read(editPageTextProvider)(
       documentId: widget.documentId,
       pageId: widget.pageId,
-      text: _editor.text,
+      // The blocks joined back into the one string a page has always stored.
+      text: _editor.serialize(),
     );
 
     if (!mounted) return result is Success<Document>;
+
+    if (result is Success<Document>) _editor.markSaved();
 
     setState(() {
       _saving = false;
@@ -172,11 +193,10 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
 
     switch (result) {
       case Success(:final value):
-        _editor.apply((edit) => MarkupEditing.insertImage(edit, value));
-        // Straight back to writing: a picture is placed mid-sentence, and
-        // having to tap the page again to carry on would be a step nobody
-        // asked for.
-        if (mounted) _focus.requestFocus();
+        // Splits the block the caret is in and puts the picture between the
+        // halves, leaving the caret in the text underneath so writing carries
+        // on where it left off.
+        _editor.insertImageAtCaret(value);
       case Failed(:final failure):
         // Dismissing the picker is not a failure worth reporting — the user
         // knows they backed out.
@@ -185,38 +205,65 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
     }
   }
 
-  /// Shows the picture the caret is on, full size.
+  /// Opens the picture editor for a block, and applies whatever comes back.
   ///
-  /// The answer to not being able to draw it in the text field: the placeholder
-  /// says a picture is here, and this says which.
-  Future<void> _previewImage(String imageName) async {
-    final path = ref
-        .read(storagePathsProvider)
-        .inlineImagePath(widget.documentId, imageName);
+  /// The picture is the control: tapping it is how it is edited, which is the
+  /// gesture people already have from every other app that puts pictures in
+  /// documents. There is no separate selection step and no action bar.
+  Future<void> _editImage(ImageBlock block) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final paths = ref.read(storagePathsProvider);
+    final path = paths.inlineImagePath(widget.documentId, block.imageName);
 
     if (!File(path).existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      // A picture whose file has gone cannot be edited, but it can be taken
+      // out — which is the only useful thing left to do with it.
+      _editor.removeImage(block.id);
+      messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'That picture is no longer on this device. Remove it from the page '
-            'and add it again.',
+            'That picture was no longer on this device, so it has been removed '
+            'from the page.',
           ),
         ),
       );
       return;
     }
 
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.all(AppSpacing.lg),
-        clipBehavior: Clip.antiAlias,
-        child: InteractiveViewer(
-          maxScale: 5,
-          child: Image.file(File(path), fit: BoxFit.contain),
-        ),
+    final outcome = await Navigator.of(context).push<ImageEditorResult>(
+      MaterialPageRoute<ImageEditorResult>(
+        builder: (context) => ImageEditorScreen(imagePath: path),
       ),
     );
+
+    if (outcome == null || !mounted) return;
+
+    switch (outcome) {
+      case ImageEditDeleted():
+        _editor.removeImage(block.id);
+
+      case ImageEditApplied(:final edit):
+        // Nothing to do, and nothing to re-encode for.
+        if (edit.isIdentity) return;
+
+        final edited = await ref.read(editInlineImageProvider)(
+          documentId: widget.documentId,
+          imageName: block.imageName,
+          edit: edit,
+        );
+
+        if (!mounted) return;
+
+        switch (edited) {
+          case Success(:final value):
+            // A new file rather than an overwrite — see [EditInlineImage].
+            // Pointing the block at it is what makes the change appear, and
+            // the next save sweeps the file it replaced.
+            _editor.replaceImage(blockId: block.id, imageName: value);
+          case Failed(:final failure):
+            messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+        }
+    }
   }
 
   Future<void> _done() async {
@@ -338,57 +385,24 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
                     // Long lines are hard to write in for the same reason they
                     // are hard to read.
                     constraints: const BoxConstraints(maxWidth: 640),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.xl,
-                        vertical: AppSpacing.md,
-                      ),
-                      child: TextField(
-                        controller: _editor,
-                        focusNode: _focus,
-                        // Unbounded: this is a page of a document, and a fixed
-                        // number of lines would put a scrollbar inside a
-                        // scrollbar.
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        keyboardType: TextInputType.multiline,
-                        textCapitalization: TextCapitalization.sentences,
-                        style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          filled: false,
-                          contentPadding: EdgeInsets.zero,
-                          hintText: 'Start writing…',
-                          hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
+                    child: DocumentBlockEditor(
+                      controller: _editor,
+                      documentId: widget.documentId,
+                      onEditImage: _editImage,
                     ),
                   ),
                 ),
               ),
-              // What to do with the picture the caret is on. It sits above the
-              // toolbar rather than on the line itself: a tap inside a text
-              // field places the caret and never reaches a gesture recogniser
-              // on a span, so the actions have to live somewhere the tap can
-              // actually land.
-              if (_editor.imageAtCaret case final imageName?)
-                _ImageActions(
-                  onPreview: () => _previewImage(imageName),
-                  onRemove: () {
-                    _editor.apply(MarkupEditing.removeImageAt);
-                    _focus.requestFocus();
-                  },
-                ),
-              // Below the field and above the keyboard, which is where a
+              // The action bar that used to sit here is gone with the thing it
+              // existed for. A picture was a line of text the caret could land
+              // on but no tap could reach, so View and Remove had to live in a
+              // bar above the toolbar; now the picture is a widget and tapping
+              // it opens the editor, which is where both of those actions are.
+              //
+              // Below the fields and above the keyboard, which is where a
               // formatting bar is reached from without covering what is being
               // formatted.
-              MarkupToolbar(controller: _editor, onInsertImage: _insertImage),
+              _Toolbar(controller: _editor, onInsertImage: _insertImage),
             ],
           ),
         ),
@@ -397,79 +411,35 @@ class _TextEditorScreenState extends ConsumerState<TextEditorScreen> {
   }
 }
 
-/// What can be done with the picture the caret is on.
+/// The formatting bar, pointed at whichever field the caret is in.
 ///
-/// Deliberately two actions and no more. A picture in a written note is either
-/// something you want to look at or something you want gone; anything else —
-/// resize, align, caption — is a document editor, which this is not.
-class _ImageActions extends StatelessWidget {
-  const _ImageActions({required this.onPreview, required this.onRemove});
+/// The toolbar itself is unchanged — every button is still a toggle over an
+/// ordinary `MarkupEditingController`. What the block editor changed is that
+/// there is now more than one such controller on screen, so this rebuilds as
+/// focus moves and hands the toolbar the active one.
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({required this.controller, required this.onInsertImage});
 
-  final VoidCallback onPreview;
-  final VoidCallback onRemove;
+  final DocumentBlockController controller;
+  final Future<void> Function() onInsertImage;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final active = controller.activeController;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.sm,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.xs,
-          AppSpacing.sm,
-          AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          // The same teal the placeholder in the text is tinted with, so the
-          // bar reads as belonging to the line the caret is on rather than as
-          // another toolbar that happened to appear.
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: AppRadius.card,
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              Icons.image_outlined,
-              size: 18,
-              color: theme.colorScheme.onSecondaryContainer,
-            ),
-            AppSpacing.gapHorizontalSm,
-            Expanded(
-              child: Text(
-                'Picture on this line',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: onPreview,
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.onSecondaryContainer,
-              ),
-              child: const Text('View'),
-            ),
-            TextButton(
-              onPressed: onRemove,
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-              ),
-              child: const Text('Remove'),
-            ),
-          ],
-        ),
-      ),
+        // A page always parses to at least one text block, so this is
+        // defensive rather than expected — and an absent toolbar is a better
+        // failure than one whose buttons write into nothing.
+        if (active == null) return const SizedBox.shrink();
+
+        return MarkupToolbar(
+          controller: active,
+          onInsertImage: onInsertImage,
+        );
+      },
     );
   }
 }
