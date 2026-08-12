@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
 
-/// One paragraph of recognised text, with any search matches emphasised.
+import '../../../../core/text/markup.dart';
+import 'markup_view.dart';
+
+/// One line of a document, rendered as what it is.
 ///
-/// Split out of the reader so the highlight arithmetic is testable on its own
-/// and so the list item stays cheap to rebuild while a query is being typed.
+/// It used to hand its text straight to a `Text`, which is why a page saved
+/// with a heading was read back as `## Deposit` and a bold total as
+/// `**248.60**`. It now parses the line and delegates to [MarkupBlockView] —
+/// the same renderer the page viewer and the document preview use, and the
+/// Flutter counterpart of what the PDF composer has always done.
+///
+/// The name and the API are kept because the reader is built around them, and
+/// because "a paragraph of the document, with matches emphasised" is still
+/// exactly what this is.
 class ReaderParagraph extends StatelessWidget {
   const ReaderParagraph({
     required this.text,
     required this.query,
     required this.scale,
+    this.documentId = '',
     super.key,
   });
 
+  /// One line of the page, in its stored form — markers and all.
   final String text;
 
   /// Empty when nothing is being searched for.
@@ -20,69 +32,30 @@ class ReaderParagraph extends StatelessWidget {
   /// Reader font scale, applied on top of whatever the system asked for.
   final double scale;
 
+  /// Only needed for a line that turns out to be a picture; the reader draws
+  /// those itself, so in practice this is never reached with one.
+  final String documentId;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final blocks = Markup.parse(text);
 
-    final base = theme.textTheme.bodyLarge!.copyWith(
-      fontSize: (theme.textTheme.bodyLarge?.fontSize ?? 16) * scale,
-      // Generous leading: recognised text has no typographic structure of its
-      // own, so line spacing is what stops a page of it reading as a wall.
-      height: 1.62,
+    // A line that is entirely whitespace parses to nothing. Rendering an empty
+    // box for it keeps the caller from having to check first.
+    if (blocks.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (final block in blocks)
+          MarkupBlockView(
+            block: block,
+            documentId: documentId,
+            query: query,
+            scale: scale,
+          ),
+      ],
     );
-
-    if (query.isEmpty) {
-      return Text(text, style: base);
-    }
-
-    return Text.rich(
-      TextSpan(children: _spans(text, query, theme, base)),
-      style: base,
-    );
-  }
-
-  /// Splits [text] on every case-insensitive occurrence of [query].
-  ///
-  /// Offsets come from a lower-cased copy but every slice is taken from the
-  /// original, so the text rendered is exactly the text recognised — matching
-  /// must never alter what the user sees.
-  static List<TextSpan> _spans(
-    String text,
-    String query,
-    ThemeData theme,
-    TextStyle base,
-  ) {
-    final spans = <TextSpan>[];
-    final haystack = text.toLowerCase();
-    final needle = query.toLowerCase();
-
-    final highlight = base.copyWith(
-      backgroundColor: theme.colorScheme.primaryContainer,
-      color: theme.colorScheme.onPrimaryContainer,
-      fontWeight: FontWeight.w600,
-    );
-
-    var start = 0;
-    var index = haystack.indexOf(needle);
-
-    while (index >= 0) {
-      if (index > start) {
-        spans.add(TextSpan(text: text.substring(start, index)));
-      }
-      spans.add(
-        TextSpan(
-          text: text.substring(index, index + needle.length),
-          style: highlight,
-        ),
-      );
-      start = index + needle.length;
-      index = haystack.indexOf(needle, start);
-    }
-
-    if (start < text.length) {
-      spans.add(TextSpan(text: text.substring(start)));
-    }
-
-    return spans;
   }
 }

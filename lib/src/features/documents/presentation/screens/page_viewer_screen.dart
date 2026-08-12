@@ -10,6 +10,7 @@ import '../../../../core/widgets/app_empty_state.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
+import '../widgets/markup_view.dart';
 import '../widgets/page_edit_actions.dart';
 
 /// A document's pages, full screen.
@@ -319,10 +320,11 @@ class _WrittenPage extends StatelessWidget {
       child: SelectionArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 88, 24, 24),
-          child: Text(
-            page.text,
-            style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
-          ),
+          // Rendered rather than printed. This handed `page.text` straight to a
+          // `Text`, so a written page was read back as its own markup — heading
+          // hashes, bold asterisks and, worst of all, the file name of every
+          // picture in it.
+          child: MarkupView(text: page.text, documentId: document.id),
         ),
       ),
     );

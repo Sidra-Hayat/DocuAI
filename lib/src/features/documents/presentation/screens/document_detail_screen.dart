@@ -19,6 +19,7 @@ import '../widgets/document_action_bar.dart';
 import '../widgets/document_actions.dart';
 import '../widgets/document_thumbnail.dart';
 import '../widgets/edit_tags_sheet.dart';
+import '../widgets/markup_view.dart';
 
 /// One document: its pages, and the three things you can do with them.
 ///
@@ -469,7 +470,7 @@ class _PageHero extends ConsumerWidget {
                     },
                   ),
                   child: page.imagePath == null
-                      ? _WrittenPagePreview(page: page)
+                      ? _WrittenPagePreview(page: page, documentId: document.id)
                       : ClipRRect(
                           borderRadius: AppRadius.card,
                           child: Container(
@@ -521,9 +522,10 @@ class _PageHero extends ConsumerWidget {
 
 /// A page that was written rather than captured, shown as what it is.
 class _WrittenPagePreview extends StatelessWidget {
-  const _WrittenPagePreview({required this.page});
+  const _WrittenPagePreview({required this.page, required this.documentId});
 
   final DocumentPage page;
+  final String documentId;
 
   @override
   Widget build(BuildContext context) {
@@ -538,11 +540,27 @@ class _WrittenPagePreview extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: page.hasText
-          ? Text(
-              page.text,
-              maxLines: 10,
-              overflow: TextOverflow.fade,
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+          // Rendered, and clipped rather than ellipsised: this is a glance at
+          // the page, and it used to be a glance at its markup — heading
+          // hashes, bold asterisks and the file name of every picture.
+          //
+          // Pictures are named rather than drawn here. The preview is a card a
+          // few hundred pixels tall behind a page carousel; a thumbnail at that
+          // size shows nothing, and the full-screen viewer one tap away shows
+          // it properly.
+          // Laid out unbounded and then clipped, rather than squeezed into the
+          // card's height. A `Column` given a height smaller than its children
+          // overflows — the yellow-and-black stripe — where a scroll view with
+          // scrolling switched off gives it the room to lay out and trims what
+          // does not fit.
+          ? SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: MarkupView(
+                text: page.text,
+                documentId: documentId,
+                maxBlocks: 8,
+                showImages: false,
+              ),
             )
           : Center(
               child: Column(

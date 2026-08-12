@@ -92,6 +92,20 @@ abstract class Document with _$Document {
       .where((text) => text.trim().isNotEmpty)
       .join('\n\n');
 
+  /// [extractedText] as a person would read it, with the markup taken out.
+  ///
+  /// For anywhere the text *leaves* the app — copied to the clipboard, shared
+  /// to another application — where `## Total` and `**248.60**` would arrive as
+  /// the syntax rather than as the words. The reader strips at the point of
+  /// drawing; this is the same rule for text that is handed to somebody else.
+  ///
+  /// Deliberately a second getter rather than a change to [extractedText].
+  /// That one feeds the search index and the assistant, both of which tokenise
+  /// on non-alphanumerics and have therefore always seen `**total**` and
+  /// `total` as the same word — changing what they are given would be changing
+  /// retrieval to fix a display problem.
+  String get readableText => Markup.toPlainText(extractedText);
+
   bool get hasText => pages.any((page) => page.hasText);
 
   /// Aggregate OCR state, resolved most-blocking-first: anything still running
