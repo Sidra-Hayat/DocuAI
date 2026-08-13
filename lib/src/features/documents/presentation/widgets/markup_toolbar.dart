@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/text/markup.dart';
 import '../../../../core/text/markup_editing.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 import 'markup_editing_controller.dart';
 
 /// Formatting buttons above the keyboard.
@@ -76,13 +78,7 @@ class MarkupToolbar extends StatelessWidget {
                         controller.apply(MarkupEditing.toggleItalic),
                   ),
                   const _Divider(),
-                  _Button(
-                    icon: Icons.title,
-                    tooltip: 'Heading',
-                    active: active.contains(MarkupFormat.heading),
-                    onPressed: () =>
-                        controller.apply(MarkupEditing.toggleHeading),
-                  ),
+                  _StyleMenu(controller: controller),
                   _Button(
                     icon: Icons.format_list_bulleted,
                     tooltip: 'Bullet list',
@@ -123,6 +119,122 @@ class MarkupToolbar extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Normal text, Heading 1 or Heading 2 — the one control here that is a choice
+/// rather than a switch.
+///
+/// A line is exactly one of these, so a row of toggles would be the wrong
+/// shape: it would let a user press Heading 1 and Heading 2 and leave them
+/// wondering which won. A menu that says what the current line *is* also
+/// answers the question a toggle cannot — whether this heading is the big one
+/// or the small one.
+///
+/// Deliberately three entries. Heading 3 exists in the format so that an
+/// imported document keeps its structure, but a third level is a nesting depth
+/// nobody writing a note reaches for, and this is not a word processor.
+class _StyleMenu extends StatelessWidget {
+  const _StyleMenu({required this.controller});
+
+  final MarkupEditingController controller;
+
+  static const Map<MarkupBlockKind, String> _labels =
+      <MarkupBlockKind, String>{
+        MarkupBlockKind.heading1: 'Heading 1',
+        MarkupBlockKind.heading2: 'Heading 2',
+        MarkupBlockKind.heading3: 'Heading 3',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final kind = controller.activeBlockKind;
+    final heading = AppTypography.isHeading(kind);
+
+    return PopupMenuButton<MarkupBlockKind>(
+      tooltip: 'Text style',
+      position: PopupMenuPosition.over,
+      onSelected: (chosen) => controller.apply(
+        (edit) => switch (chosen) {
+          MarkupBlockKind.heading1 =>
+            MarkupEditing.setHeading(edit, level: 1),
+          MarkupBlockKind.heading2 =>
+            MarkupEditing.setHeading(edit, level: 2),
+          _ => MarkupEditing.setParagraph(edit),
+        },
+      ),
+      itemBuilder: (context) => <PopupMenuEntry<MarkupBlockKind>>[
+        _entry(context, MarkupBlockKind.paragraph, 'Normal text', kind),
+        _entry(context, MarkupBlockKind.heading1, 'Heading 1', kind),
+        _entry(context, MarkupBlockKind.heading2, 'Heading 2', kind),
+      ],
+      child: Container(
+        constraints: const BoxConstraints(
+          minHeight: AppAccessibility.minTouchTarget,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              // The current style, named. A lone "T" icon says a style menu is
+              // here but not which style you are in.
+              heading ? _labels[kind]! : 'Normal',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: heading
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: heading ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<MarkupBlockKind> _entry(
+    BuildContext context,
+    MarkupBlockKind value,
+    String label,
+    MarkupBlockKind current,
+  ) {
+    final theme = Theme.of(context);
+    // Heading 3 is not offered, but a line that already is one should still
+    // show as something rather than as "Normal".
+    final selected = value == current ||
+        (value == MarkupBlockKind.paragraph &&
+            !AppTypography.isHeading(current));
+
+    return PopupMenuItem<MarkupBlockKind>(
+      value: value,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                // Each entry set at the size it produces, so the menu shows
+                // the outcome rather than describing it.
+                fontSize: AppTypography.sizeFor(value),
+                fontWeight: AppTypography.isHeading(value)
+                    ? FontWeight.w700
+                    : FontWeight.w400,
+              ),
+            ),
+          ),
+          if (selected)
+            Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+        ],
       ),
     );
   }

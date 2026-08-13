@@ -1,5 +1,9 @@
 import 'markup.dart';
 
+/// Whether a line operation is adding its marker or taking it off, when that is
+/// decided by the caller rather than by what the line already carries.
+enum _Apply { add, remove }
+
 /// A text field's contents and where the selection sits in it.
 ///
 /// Plain integers rather than Flutter's `TextSelection`, so every toolbar
@@ -50,6 +54,33 @@ abstract final class MarkupEditing {
         prefixFor: (_) => '${'#' * level.clamp(1, 3)} ',
         already: _headingPrefix,
       );
+
+  /// Makes the touched lines a heading of [level], whatever they were.
+  ///
+  /// Distinct from [toggleHeading] because a *style picker* is not a toggle:
+  /// choosing "Heading 1" on a line that is already Heading 1 should leave it a
+  /// heading, where pressing a toggle twice is how you take one off. The
+  /// toolbar offers both shapes for the same reason a word processor does —
+  /// bold is a switch, paragraph style is a choice.
+  static TextEdit setHeading(TextEdit edit, {required int level}) =>
+      _toggleLinePrefix(
+        edit,
+        prefixFor: (_) => '${'#' * level.clamp(1, 3)} ',
+        already: _headingPrefix,
+        force: _Apply.add,
+      );
+
+  /// Returns the touched lines to ordinary text.
+  ///
+  /// Clears whichever block marker each line carries — heading, bullet, number
+  /// or quote — which is what "Normal" has to mean when the line it is applied
+  /// to could be any of them.
+  static TextEdit setParagraph(TextEdit edit) => _toggleLinePrefix(
+    edit,
+    prefixFor: (_) => '',
+    already: _headingPrefix,
+    force: _Apply.remove,
+  );
 
   static TextEdit toggleBullet(TextEdit edit) =>
       _toggleLinePrefix(edit, prefixFor: (_) => '- ', already: _bulletPrefix);
@@ -204,6 +235,7 @@ abstract final class MarkupEditing {
     TextEdit edit, {
     required String Function(int index) prefixFor,
     required RegExp already,
+    _Apply? force,
   }) {
     final lineStart = _startOfLine(edit.text, edit.start);
     final lineEnd = _endOfLine(edit.text, edit.end);
@@ -219,7 +251,14 @@ abstract final class MarkupEditing {
     //
     // Toggling off only when *every* touched line already has it: a mixed
     // selection means the user is asking for the style, not to lose it.
-    final removing = lines.every(already.hasMatch);
+    //
+    // [force] overrides that reasoning for the callers that are choices rather
+    // than switches — see [setHeading] and [setParagraph].
+    final removing = switch (force) {
+      _Apply.add => false,
+      _Apply.remove => true,
+      null => lines.every(already.hasMatch),
+    };
 
     final rewritten = <String>[];
     for (var i = 0; i < lines.length; i++) {

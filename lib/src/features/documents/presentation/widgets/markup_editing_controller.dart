@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/text/markup.dart';
 import '../../../../core/text/markup_editing.dart';
+import '../../../../core/theme/app_typography.dart';
 
 /// A formatting the toolbar can switch on or off.
 ///
@@ -66,18 +67,22 @@ class MarkupEditingController extends TextEditingController {
     final size = base.fontSize ?? 16;
 
     final block = switch (token.block) {
+      // Sizes come from [AppTypography] rather than from multipliers chosen
+      // here, so a heading is the same size in the editor as it is in the
+      // reader. Scaled relative to the base rather than used raw, so a system
+      // text-size setting still moves the whole document together.
       MarkupBlockKind.heading1 => base.copyWith(
-        fontSize: size * 1.5,
+        fontSize: _scaled(AppTypography.heading1, size),
         fontWeight: FontWeight.w700,
-        height: 1.3,
+        height: AppTypography.headingHeight,
       ),
       MarkupBlockKind.heading2 => base.copyWith(
-        fontSize: size * 1.28,
+        fontSize: _scaled(AppTypography.heading2, size),
         fontWeight: FontWeight.w700,
-        height: 1.3,
+        height: AppTypography.headingHeight,
       ),
       MarkupBlockKind.heading3 => base.copyWith(
-        fontSize: size * 1.12,
+        fontSize: _scaled(AppTypography.heading3, size),
         fontWeight: FontWeight.w600,
       ),
       MarkupBlockKind.quote => base.copyWith(
@@ -110,6 +115,34 @@ class MarkupEditingController extends TextEditingController {
       fontWeight: token.bold ? FontWeight.w700 : block.fontWeight,
       fontStyle: token.italic ? FontStyle.italic : block.fontStyle,
     );
+  }
+
+  /// [target] — an absolute size from [AppTypography] — expressed against
+  /// whatever size the field is actually set in.
+  ///
+  /// The scale is a ratio rather than the number itself because [base] carries
+  /// the reader's text-size preference and the system font scale. Using 24
+  /// directly would give a heading that ignores both, on a screen where the
+  /// body text around it does not.
+  static double _scaled(double target, double base) =>
+      target / AppTypography.body * base;
+
+  /// What kind of line the caret is on.
+  ///
+  /// Drives the paragraph-style picker, which needs to know *which* heading
+  /// rather than merely that there is one — [activeFormats] answers "is this a
+  /// heading" and cannot tell Heading 1 from Heading 2.
+  MarkupBlockKind get activeBlockKind {
+    if (text.isEmpty) return MarkupBlockKind.paragraph;
+
+    final caret = selection.baseOffset < 0
+        ? text.length
+        : selection.baseOffset.clamp(0, text.length);
+
+    for (final token in Markup.tokenize(text)) {
+      if (caret >= token.start && caret <= token.end) return token.block;
+    }
+    return MarkupBlockKind.paragraph;
   }
 
   /// The formats in force where the caret is.

@@ -53,19 +53,48 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Opens the paragraph-style menu and picks an entry.
+  ///
+  /// The single "Heading" toggle became a choice of Normal / Heading 1 /
+  /// Heading 2: a line is exactly one of those, so a toggle could not say which
+  /// heading it had made, and pressing two of them left the user guessing which
+  /// won.
+  Future<void> chooseStyle(WidgetTester tester, String label) async {
+    await tester.tap(find.byTooltip('Text style'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('every button is present', (tester) async {
     await pumpEditor(tester);
 
     for (final tooltip in <String>[
       'Bold',
       'Italic',
-      'Heading',
+      'Text style',
       'Bullet list',
       'Numbered list',
       'Quote',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
     }
+  });
+
+  testWidgets('the style menu offers exactly Normal, Heading 1 and Heading 2', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+
+    await tester.tap(find.byTooltip('Text style'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Normal text'), findsOneWidget);
+    expect(find.text('Heading 1'), findsOneWidget);
+    expect(find.text('Heading 2'), findsOneWidget);
+    // Deliberately not offered: a third heading level is a nesting depth
+    // nobody writing a note reaches for, and this is not a word processor.
+    expect(find.text('Heading 3'), findsNothing);
   });
 
   testWidgets('bold wraps the selection', (tester) async {
@@ -93,14 +122,83 @@ void main() {
     expect(controller.text, 'paid *late*');
   });
 
-  testWidgets('heading marks the line', (tester) async {
+  testWidgets('Heading 2 marks the line', (tester) async {
     await pumpEditor(tester);
     controller.text = 'Tenancy agreement';
     controller.selection = const TextSelection.collapsed(offset: 3);
 
-    await press(tester, 'Heading');
+    await chooseStyle(tester, 'Heading 2');
 
     expect(controller.text, '## Tenancy agreement');
+  });
+
+  testWidgets('Heading 1 marks the line', (tester) async {
+    await pumpEditor(tester);
+    controller.text = 'Tenancy agreement';
+    controller.selection = const TextSelection.collapsed(offset: 3);
+
+    await chooseStyle(tester, 'Heading 1');
+
+    expect(controller.text, '# Tenancy agreement');
+  });
+
+  testWidgets('choosing a style twice leaves it applied', (tester) async {
+    await pumpEditor(tester);
+    controller.text = 'Tenancy agreement';
+    controller.selection = const TextSelection.collapsed(offset: 3);
+
+    await chooseStyle(tester, 'Heading 1');
+    await chooseStyle(tester, 'Heading 1');
+
+    // A picker is not a toggle. Choosing "Heading 1" on a line that is already
+    // Heading 1 leaves it a heading; a toggle would have taken it off.
+    expect(controller.text, '# Tenancy agreement');
+  });
+
+  testWidgets('switching between heading levels replaces rather than stacks', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    controller.text = 'Tenancy agreement';
+    controller.selection = const TextSelection.collapsed(offset: 3);
+
+    await chooseStyle(tester, 'Heading 1');
+    await chooseStyle(tester, 'Heading 2');
+
+    expect(controller.text, '## Tenancy agreement');
+  });
+
+  testWidgets('Normal text clears whatever the line carried', (tester) async {
+    await pumpEditor(tester);
+
+    for (final start in <String>[
+      '## A heading',
+      '- A bullet',
+      '1. A numbered item',
+      '> A quotation',
+    ]) {
+      controller.text = start;
+      controller.selection = const TextSelection.collapsed(offset: 4);
+
+      await chooseStyle(tester, 'Normal text');
+
+      expect(
+        controller.text.startsWith(RegExp(r'[#\-\d>]')),
+        isFalse,
+        reason: '"$start" kept its marker',
+      );
+    }
+  });
+
+  testWidgets('the menu names the style the caret is in', (tester) async {
+    await pumpEditor(tester);
+    controller.text = '# Big heading';
+    controller.selection = const TextSelection.collapsed(offset: 5);
+    await tester.pumpAndSettle();
+
+    // The label is the readout: a lone icon says a style menu is here but not
+    // which style you are in.
+    expect(find.text('Heading 1'), findsOneWidget);
   });
 
   testWidgets('bullet and numbered apply across selected lines', (
@@ -169,7 +267,6 @@ void main() {
     for (final tooltip in <String>[
       'Bold',
       'Italic',
-      'Heading',
       'Bullet list',
       'Numbered list',
       'Quote',
@@ -177,6 +274,12 @@ void main() {
       controller.value = TextEditingValue.empty;
       await press(tester, tooltip);
       expect(tester.takeException(), isNull, reason: tooltip);
+    }
+
+    for (final style in <String>['Heading 1', 'Heading 2', 'Normal text']) {
+      controller.value = TextEditingValue.empty;
+      await chooseStyle(tester, style);
+      expect(tester.takeException(), isNull, reason: style);
     }
   });
 
