@@ -55,10 +55,10 @@ Future<void> bootstrap() async {
 
       // Must complete first: `initFlutter` resolves Hive's own directory, and
       // adapters have to be registered before any box holding them is opened.
-      final settingsBox = await HiveInitializer.init();
-      trace.mark('hive init + settings box');
+      await HiveInitializer.prepare();
+      trace.mark('hive init');
 
-      // Opened concurrently rather than one after another. These four were
+      // All four opened at once rather than one after another. They were
       // strictly sequential, so a cold start paid the sum of four file reads
       // and four deserialisations; started together it pays the slowest one.
       //
@@ -67,16 +67,25 @@ Future<void> bootstrap() async {
       // deferring them outright would be a further win — but both are injected
       // into synchronous providers, and making those asynchronous is a change
       // to the shape of two features rather than to startup. See the report.
+      //
+      // Safe to overlap: Hive holds one open-box future per name and the four
+      // names are distinct, so each gets its own file, its own lock file and
+      // its own backend. A box that fails to open still aborts the boot the way
+      // it did when these ran one after another — the difference is only that
+      // the ones after it were already in flight.
+      final settingsFuture = HiveInitializer.openSettingsBox();
       final documentsFuture = openDocumentsBox();
       final searchIndexFuture = openSearchIndexBox();
       final chatHistoryFuture = openChatHistoryBox();
 
+      final settingsBox = await settingsFuture;
+      trace.mark('settings box');
       final documentsBox = await documentsFuture;
-      trace.mark('documents box');
+      trace.mark('documents box', () => '${documentsBox.length} documents');
       final searchIndexBox = await searchIndexFuture;
-      trace.mark('search index box');
+      trace.mark('search index box', () => '${searchIndexBox.length} entries');
       final chatHistoryBox = await chatHistoryFuture;
-      trace.mark('chat history box');
+      trace.mark('chat history box', () => '${chatHistoryBox.length} messages');
 
       final storagePaths = await storagePathsFuture;
       trace
@@ -137,23 +146,44 @@ Future<void> _configureSystemChrome() async {
 /// large enough to be worth deferring off this path entirely.
 class _StartupTrace {
   final Stopwatch _watch = Stopwatch()..start();
-  final List<(String, int)> _marks = <(String, int)>[];
+  final List<(String, int, String)> _marks = <(String, int, String)>[];
   int _last = 0;
 
-  void mark(String label) {
+  /// [detail] carries how much work the step actually had to do — the number of
+  /// records in the box it opened. A duration on its own says a step was slow;
+  /// a duration beside "1,842 entries" says *why*, and whether the fix is to
+  /// defer the step or to stop the box growing.
+  ///
+  /// A callback rather than a string so that a release build never builds one.
+  /// `'${box.length} entries'` at the call site would be interpolated on every
+  /// cold start of the shipped app to be handed to a method that discards it.
+  void mark(String label, [String Function()? detail]) {
     if (kReleaseMode) return;
     final now = _watch.elapsedMilliseconds;
-    _marks.add((label, now - _last));
+    _marks.add((label, now - _last, detail?.call() ?? ''));
     _last = now;
   }
 
   void report() {
     if (kReleaseMode) return;
+
     final lines = _marks
-        .map((mark) => '  ${mark.$2.toString().padLeft(5)}ms  ${mark.$1}')
+        .map(
+          (mark) =>
+              '  ${mark.$2.toString().padLeft(5)}ms  ${mark.$1}'
+              '${mark.$3.isEmpty ? '' : '  (${mark.$3})'}',
+        )
         .join('\n');
+
     debugPrint(
-      'DocuAI startup — ${_watch.elapsedMilliseconds}ms to first frame\n$lines',
+      'DocuAI startup — ${_watch.elapsedMilliseconds}ms of Dart work before '
+      'runApp\n$lines\n'
+      // Said in the log because it is the first thing anyone reading this
+      // number needs to know: a debug build carries the JIT and the observatory
+      // and starts several times slower than the AOT build a user installs.
+      // Optimising against a debug figure is optimising against the toolchain.
+      '  NOTE: debug build. Measure a release build before drawing '
+      'conclusions.',
     );
   }
 }
