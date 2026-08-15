@@ -15,6 +15,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 
+import 'helpers/fakes.dart';
+
 /// Phase 0 widget tests: routing, shell chrome and theming.
 ///
 /// These are deliberately **read-only** with respect to storage. `testWidgets`
@@ -70,6 +72,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Puts one document in the box, for the tests that need the floating button.
+  ///
+  /// The library hides it while it is empty, and the new-document sheet is what
+  /// that button opens — so reaching the sheet at all now requires a library.
+  /// Written through `runAsync` because a Hive write is real file I/O, which
+  /// the note above explains never completes inside the fake-async zone.
+  Future<void> seedOneDocument(WidgetTester tester) async {
+    await tester.runAsync(
+      () => documentsBox.put(
+        'doc-1',
+        DocumentModel.fromEntity(buildDocument(id: 'doc-1')),
+      ),
+    );
+    addTearDown(() => tester.runAsync(documentsBox.clear));
+  }
+
   testWidgets('boots to the documents screen with its shell chrome', (
     tester,
   ) async {
@@ -77,10 +95,11 @@ void main() {
 
     expect(find.text('DocuAI'), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(
-      find.widgetWithText(FloatingActionButton, 'New document'),
-      findsOneWidget,
-    );
+    // This box is empty, and an empty library hides the floating button: its
+    // own Scan / Import / Write buttons are the offer, and the floating one
+    // would repeat it. See `documents_screen_test.dart`.
+    expect(find.text('No documents yet'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
   });
 
   testWidgets('navigates between all three shell branches', (tester) async {
@@ -101,6 +120,7 @@ void main() {
   });
 
   testWidgets('pushes the scan route above the shell', (tester) async {
+    await seedOneDocument(tester);
     await pumpApp(tester);
 
     // Scanning is now one of two ways to start a document, so it is reached
@@ -118,6 +138,7 @@ void main() {
   });
 
   testWidgets('offers every way to start a document', (tester) async {
+    await seedOneDocument(tester);
     await pumpApp(tester);
 
     await tester.tap(find.widgetWithText(FloatingActionButton, 'New document'));

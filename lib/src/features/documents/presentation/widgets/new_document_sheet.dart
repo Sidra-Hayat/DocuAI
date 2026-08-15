@@ -156,6 +156,38 @@ Future<void> importFileAsDocument(BuildContext context) async {
   }
 }
 
+/// Asks whether "Import" means a photo or a file, then does that.
+///
+/// The empty library offers one Import button where the library proper offers
+/// two separate ones, and it used to mean photos only — so a first-run user
+/// with a PDF had nowhere to go, the file importer being reachable only from
+/// the New document sheet that the empty state deliberately hides.
+///
+/// A choice rather than a fourth button: the empty state is three actions and
+/// a sentence, and a fourth would make the first thing anyone sees a menu.
+/// Both branches call the same functions the sheet calls — there is one photo
+/// import and one file import in this app, and this adds neither.
+Future<void> chooseImportSource(BuildContext context) {
+  return showAppActionSheet(
+    context,
+    title: 'Import',
+    actions: <AppSheetAction>[
+      AppSheetAction(
+        icon: Icons.photo_library_outlined,
+        label: 'Photo',
+        description: 'Choose a photo from your gallery',
+        onSelected: () => importPhotosAsDocument(context),
+      ),
+      AppSheetAction(
+        icon: Icons.folder_open_outlined,
+        label: 'File',
+        description: 'Import a PDF, DOCX or text file',
+        onSelected: () => importFileAsDocument(context),
+      ),
+    ],
+  );
+}
+
 /// Imported documents are named after the day they were brought in.
 ///
 /// Not asked for up front: the photos are already chosen by then, and stopping

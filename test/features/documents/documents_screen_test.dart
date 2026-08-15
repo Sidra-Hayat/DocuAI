@@ -59,7 +59,97 @@ void main() {
       find.widgetWithText(FilledButton, 'Scan a document'),
       findsOneWidget,
     );
+    expect(find.widgetWithText(FilledButton, 'Import'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Write one'), findsOneWidget);
     expect(find.byType(DocumentCard), findsNothing);
+  });
+
+  group('the empty library asks once', () {
+    testWidgets('each action says what it does', (tester) async {
+      await pumpLibrary(tester, documents: Stream.value(const <Document>[]));
+
+      // "Import" and "Write one" name themselves but not what follows: whether
+      // Import means photos or files, whether Write one opens a keyboard.
+      expect(find.text('Capture a page with your camera'), findsOneWidget);
+      // Not "from your gallery" any more: this button asks which kind of
+      // import is meant, because it is the only door to the file importer
+      // while the library is empty.
+      expect(find.text('Bring in a photo or a file'), findsOneWidget);
+      expect(find.text('Type a document yourself'), findsOneWidget);
+    });
+
+    testWidgets('the New document button is not offered as well', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, documents: Stream.value(const <Document>[]));
+
+      // The three buttons in the middle of the screen already are this offer.
+      expect(find.byType(FloatingActionButton), findsNothing);
+      expect(find.text('New document'), findsNothing);
+    });
+
+    testWidgets('a library with something in it keeps its New document button',
+        (tester) async {
+      await pumpLibrary(
+        tester,
+        documents: Stream.value(<Document>[buildDocument(id: 'a')]),
+      );
+
+      expect(
+        find.widgetWithText(FloatingActionButton, 'New document'),
+        findsOneWidget,
+      );
+    });
+
+  });
+
+  group('scanning explains the camera first', () {
+    testWidgets('tapping Scan says what the camera is for before opening it', (
+      tester,
+    ) async {
+      await pumpLibrary(tester, documents: Stream.value(const <Document>[]));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Scan a document'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.textContaining('only used to scan document pages'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('not uploaded'), findsOneWidget);
+
+      // Nothing opened. This harness has no router, so a push would have thrown
+      // — the absence of an exception is the proof that the explanation comes
+      // first rather than alongside.
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('declining leaves the library where it was', (tester) async {
+      await pumpLibrary(tester, documents: Stream.value(const <Document>[]));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Scan a document'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Not now'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('No documents yet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('the app asks the system for no camera permission of its own', () {
+      // The explanation is a sentence, not a permission request. Scanning runs
+      // inside Play services' own scanner, which asks under its own name when
+      // it opens; DocuAI declares nothing, so nothing can be requested at
+      // startup or anywhere else.
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+
+      expect(manifest, isNot(contains('android.permission.CAMERA')));
+      expect(manifest, isNot(contains('uses-permission')));
+    });
   });
 
   testWidgets('renders a row per document', (tester) async {
@@ -148,6 +238,11 @@ void main() {
     // A skeleton shaped like the list, rather than a spinner: the layout does
     // not shift when the documents arrive.
     expect(find.byType(AppListSkeleton), findsOneWidget);
+    expect(
+      find.byType(FloatingActionButton),
+      findsNothing,
+      reason: 'there is no library to add to until one has loaded',
+    );
     expect(
       find.bySemanticsLabel('Loading'),
       findsOneWidget,
@@ -326,6 +421,40 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the empty state and its captions survive it too', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            storagePathsProvider.overrideWithValue(StoragePaths(tempDir)),
+            documentsProvider.overrideWith(
+              (ref) => Stream.value(const <Document>[]),
+            ),
+          ],
+          child: MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                textScaler: TextScaler.linear(AppAccessibility.maxTextScale),
+              ),
+              child: const DocumentsScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Three buttons each with a line of explanation under them, at the
+      // largest text the app allows, on the narrowest phone it supports. The
+      // captions are capped in width and wrap; nothing here has a fixed height.
+      expect(tester.takeException(), isNull);
+      expect(find.text('Capture a page with your camera'), findsOneWidget);
     });
   });
 }

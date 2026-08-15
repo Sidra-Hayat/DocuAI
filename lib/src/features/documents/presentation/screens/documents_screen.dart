@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -66,12 +68,25 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       // somewhere to put a new document. It is deliberately not in the shell:
       // there is nothing to create on Search, and what the assistant creates is
       // a conversation.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showNewDocumentSheet(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New document'),
-        tooltip: 'Scan, import or write a document',
-      ),
+      //
+      // Withheld until there is a library. The empty state already offers Scan,
+      // Import and Write as full-sized buttons in the middle of the screen, and
+      // a floating "+ New document" over them makes the same offer twice — on
+      // the one screen where the user has not yet done anything and the choice
+      // should be as small as possible.
+      //
+      // `?? false` covers loading and failure as well as empty: while the
+      // skeleton is up there is no library to add to yet, and when storage
+      // could not be read, offering to write to it is offering something that
+      // will not work.
+      floatingActionButton: (documents.value?.isNotEmpty ?? false)
+          ? FloatingActionButton.extended(
+              onPressed: () => showNewDocumentSheet(context),
+              icon: const Icon(Icons.add),
+              label: const Text('New document'),
+              tooltip: 'Scan, import or write a document',
+            )
+          : null,
     );
   }
 }
@@ -288,23 +303,115 @@ class _EmptyLibrary extends StatelessWidget {
         runSpacing: AppSpacing.md,
         alignment: WrapAlignment.center,
         children: <Widget>[
-          FilledButton.icon(
-            onPressed: () => context.pushNamed(AppRoutes.scanName),
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: const Text('Scan a document'),
+          _EmptyAction(
+            caption: 'Capture a page with your camera',
+            child: FilledButton.icon(
+              onPressed: () => _scanAfterExplainingTheCamera(context),
+              icon: const Icon(Icons.document_scanner_outlined),
+              label: const Text('Scan a document'),
+            ),
           ),
-          FilledButton.tonalIcon(
-            onPressed: () => importPhotosAsDocument(context),
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('Import'),
+          _EmptyAction(
+            // The caption no longer names photos: this button now asks which
+            // kind of import is meant, because the file importer's only other
+            // door is the New document sheet that this screen hides.
+            caption: 'Bring in a photo or a file',
+            child: FilledButton.tonalIcon(
+              onPressed: () => chooseImportSource(context),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Import'),
+            ),
           ),
-          FilledButton.tonalIcon(
-            onPressed: () => createAndOpenTextDocument(context),
-            icon: const Icon(Icons.edit_note_outlined),
-            label: const Text('Write one'),
+          _EmptyAction(
+            caption: 'Type a document yourself',
+            child: FilledButton.tonalIcon(
+              onPressed: () => createAndOpenTextDocument(context),
+              icon: const Icon(Icons.edit_note_outlined),
+              label: const Text('Write one'),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+/// One empty-state button with a line underneath saying what it does.
+///
+/// Three buttons named "Scan a document", "Import" and "Write one" say what
+/// they are but not what happens next — whether Import means photos or files,
+/// or whether Write one opens a keyboard or a template. The caption answers
+/// that before the tap rather than after it.
+class _EmptyAction extends StatelessWidget {
+  const _EmptyAction({required this.child, required this.caption});
+
+  final Widget child;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ConstrainedBox(
+      // A ceiling, not a height. The caption wraps to as many lines as it needs
+      // and the column grows with it, so the largest system font size makes
+      // this taller rather than making it overflow — and the panel this sits in
+      // scrolls, so taller is always available.
+      constraints: const BoxConstraints(maxWidth: 176),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          child,
+          AppSpacing.gapXs,
+          Text(
+            caption,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Says what the camera is for, immediately before anything opens it.
+///
+/// DocuAI declares no camera permission of its own: scanning runs inside Play
+/// services' document scanner, which asks for the camera under its own name at
+/// the moment it opens. That is exactly the moment this is worth explaining —
+/// a system dialog naming Google Play services, arriving with no warning after
+/// a tap on "Scan a document", is the point at which a privacy-first app looks
+/// like it is doing something else.
+///
+/// Nothing is requested here and nothing is requested any earlier than before:
+/// this is a sentence and a button, and declining it simply does not scan.
+Future<void> _scanAfterExplainingTheCamera(BuildContext context) async {
+  final proceed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: const Icon(Icons.photo_camera_outlined),
+      title: const Text('Scan with the camera'),
+      content: const Text(
+        'The camera is only used to scan document pages. Your photos are not '
+        'uploaded — every page stays on this device.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+
+  if (proceed != true || !context.mounted) return;
+  // Nothing here waits for the scanner to come back; the library redraws from
+  // storage when a document lands in it.
+  unawaited(context.pushNamed(AppRoutes.scanName));
 }
