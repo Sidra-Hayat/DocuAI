@@ -527,6 +527,15 @@ class _WrittenPagePreview extends StatelessWidget {
   final DocumentPage page;
   final String documentId;
 
+  /// How tall a picture may be inside the preview card.
+  ///
+  /// The card is [_PageHero._height] tall and loses its own padding twice
+  /// over, leaving a little under 300 logical pixels. A picture allowed the
+  /// full-page 360 would be the only thing in the card and the writing after it
+  /// would never appear; at 140 a page reads as what it is — words, then the
+  /// photograph, then more words.
+  static const double _previewImageHeight = 140;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -544,10 +553,15 @@ class _WrittenPagePreview extends StatelessWidget {
           // the page, and it used to be a glance at its markup — heading
           // hashes, bold asterisks and the file name of every picture.
           //
-          // Pictures are named rather than drawn here. The preview is a card a
-          // few hundred pixels tall behind a page carousel; a thumbnail at that
-          // size shows nothing, and the full-screen viewer one tap away shows
-          // it properly.
+          // Pictures are drawn, not named. They were captioned here on the
+          // reasoning that a thumbnail in a card this size shows nothing and
+          // the full-screen viewer is one tap away. On a real phone that reads
+          // as a document that lost its photograph: the preview is where you
+          // look to check what you just saved, and a "Picture" chip where the
+          // picture should be looks like the picture is gone. Smaller than on a
+          // full page, so the writing around it still shows — see
+          // [_previewImageHeight].
+          //
           // Laid out unbounded and then clipped, rather than squeezed into the
           // card's height. A `Column` given a height smaller than its children
           // overflows — the yellow-and-black stripe — where a scroll view with
@@ -559,7 +573,7 @@ class _WrittenPagePreview extends StatelessWidget {
                 text: page.text,
                 documentId: documentId,
                 maxBlocks: 8,
-                showImages: false,
+                imageMaxHeight: _previewImageHeight,
               ),
             )
           : Center(

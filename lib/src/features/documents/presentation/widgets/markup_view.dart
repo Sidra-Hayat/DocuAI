@@ -36,7 +36,7 @@ class MarkupView extends StatelessWidget {
     this.query = '',
     this.scale = 1,
     this.maxBlocks,
-    this.showImages = true,
+    this.imageMaxHeight = ReaderImage.defaultMaxHeight,
     super.key,
   });
 
@@ -55,9 +55,13 @@ class MarkupView extends StatelessWidget {
   /// Stops after this many blocks — for a preview that has to fit a card.
   final int? maxBlocks;
 
-  /// False where a picture cannot be drawn at the size available, and a note
-  /// saying one is here reads better than a thumbnail nobody can see.
-  final bool showImages;
+  /// How tall a picture may be drawn here.
+  ///
+  /// A surface with less room asks for less; it never asks for the picture to
+  /// be left out. A document that contains a photograph has to *look* like one
+  /// everywhere it is shown, and a caption saying a picture is here reads as a
+  /// picture that has gone missing.
+  final double imageMaxHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +80,7 @@ class MarkupView extends StatelessWidget {
             documentId: documentId,
             query: query,
             scale: scale,
-            showImages: showImages,
+            imageMaxHeight: imageMaxHeight,
           ),
       ],
     );
@@ -94,7 +98,7 @@ class MarkupBlockView extends StatelessWidget {
     required this.documentId,
     this.query = '',
     this.scale = 1,
-    this.showImages = true,
+    this.imageMaxHeight = ReaderImage.defaultMaxHeight,
     super.key,
   });
 
@@ -102,7 +106,7 @@ class MarkupBlockView extends StatelessWidget {
   final String documentId;
   final String query;
   final double scale;
-  final bool showImages;
+  final double imageMaxHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -112,12 +116,14 @@ class MarkupBlockView extends StatelessWidget {
       final name = block.imageName;
       if (name == null) return const SizedBox.shrink();
 
-      return showImages
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: ReaderImage(documentId: documentId, imageName: name),
-            )
-          : _PictureNote(theme: theme);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: ReaderImage(
+          documentId: documentId,
+          imageName: name,
+          maxHeight: imageMaxHeight,
+        ),
+      );
     }
 
     final size = AppTypography.sizeFor(block.kind) * scale;
@@ -304,37 +310,6 @@ class _ListItem extends StatelessWidget {
   }
 }
 
-/// Stands in for a picture where one cannot be drawn.
-class _PictureNote extends StatelessWidget {
-  const _PictureNote({required this.theme});
-
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            Icons.image_outlined,
-            size: 15,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          AppSpacing.gapHorizontalXs,
-          Text(
-            'Picture',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// A picture in a document, read-only.
 ///
 /// The reading counterpart of the editor's `InlineImageBlock`: the same file,
@@ -345,9 +320,14 @@ class ReaderImage extends ConsumerWidget {
   const ReaderImage({
     required this.documentId,
     required this.imageName,
-    this.maxHeight = 360,
+    this.maxHeight = defaultMaxHeight,
     super.key,
   });
+
+  /// As tall as a picture gets on a full page. Named because the preview asks
+  /// for a smaller one, and two surfaces disagreeing about the default is how
+  /// a picture ends up a different size in each of them.
+  static const double defaultMaxHeight = 360;
 
   final String documentId;
   final String imageName;

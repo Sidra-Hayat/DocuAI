@@ -356,6 +356,168 @@ void main() {
     });
   });
 
+  group('the saved-document preview draws its pictures', () {
+    // Reported from a phone, on the release build: write a note, insert a
+    // photograph, tap Done, reopen it — and the preview showed the words with a
+    // "Picture" chip where the photograph belonged. The photograph appeared
+    // only after tapping through to the full-screen page. It had never been
+    // lost; the preview was asked not to draw it.
+    //
+    // Five blocks, so nothing here is lost to the preview's eight-block limit
+    // and a failure means what it says.
+    const saved =
+        '# My notes\n'
+        'First paragraph.\n'
+        '![Image]($imageName)\n'
+        'Second paragraph.\n'
+        '![Image]($imageName)';
+
+    Finder previewImages() => find.descendant(
+      of: find.byType(DocumentDetailScreen),
+      matching: find.byType(ReaderImage),
+    );
+
+    Future<void> pumpPreview(WidgetTester tester, {String text = saved}) => pump(
+      tester,
+      surfaces['document detail']!,
+      document: written(text: text),
+    );
+
+    testWidgets('the pictures are drawn rather than named', (tester) async {
+      await pumpPreview(tester);
+
+      expect(previewImages(), findsNWidgets(2));
+      expect(
+        find.text('Picture'),
+        findsNothing,
+        reason: 'the caption that stood in for the photograph is back',
+      );
+    });
+
+    testWidgets('what is drawn is the file stored for this document', (
+      tester,
+    ) async {
+      await pumpPreview(tester);
+
+      final images = tester
+          .widgetList<Image>(
+            find.descendant(
+              of: find.byType(ReaderImage),
+              matching: find.byType(Image),
+            ),
+          )
+          .toList(growable: false);
+
+      expect(images, hasLength(2));
+      for (final image in images) {
+        // Not merely *an* image: the one the editor wrote into this document's
+        // own `inline/` folder.
+        expect(
+          (image.image as FileImage).file.path,
+          StoragePaths(tempDir).inlineImagePath(documentId, imageName),
+        );
+      }
+    });
+
+    testWidgets('the file name and the path stay off the screen', (
+      tester,
+    ) async {
+      await pumpPreview(tester);
+
+      final text = rendered(tester);
+
+      expect(text, isNot(contains(imageName)));
+      expect(text, isNot(contains('.jpg')));
+      expect(text, isNot(contains('inline')));
+      expect(text, isNot(contains('![Image]')));
+    });
+
+    testWidgets('text, picture, text, picture keep their order', (tester) async {
+      await pumpPreview(tester);
+
+      double topOf(Finder finder) => tester.getTopLeft(finder).dy;
+      final images = previewImages();
+
+      expect(topOf(find.text('My notes')), lessThan(topOf(find.text('First paragraph.'))));
+      expect(topOf(find.text('First paragraph.')), lessThan(topOf(images.at(0))));
+      expect(topOf(images.at(0)), lessThan(topOf(find.text('Second paragraph.'))));
+      expect(
+        topOf(find.text('Second paragraph.')),
+        lessThan(topOf(images.at(1))),
+        reason: 'the second picture rose above the paragraph written before it',
+      );
+    });
+
+    testWidgets('a picture in the card is smaller than one on a full page', (
+      tester,
+    ) async {
+      await pumpPreview(tester);
+
+      // The card is a little under 300 logical pixels tall. A picture given the
+      // full-page height would be the only thing in it, and the writing after
+      // it would never appear — which is a different way of not showing the
+      // document.
+      expect(
+        tester.widget<ReaderImage>(previewImages().first).maxHeight,
+        lessThan(ReaderImage.defaultMaxHeight),
+      );
+    });
+
+    testWidgets('the reader still draws pictures at full page size', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        surfaces['reader']!,
+        document: written(text: saved),
+      );
+
+      final images = tester.widgetList<ReaderImage>(find.byType(ReaderImage));
+
+      expect(images, hasLength(2));
+      for (final image in images) {
+        expect(image.maxHeight, ReaderImage.defaultMaxHeight);
+      }
+    });
+
+    testWidgets('a scanned page still shows its scan', (tester) async {
+      await pump(
+        tester,
+        surfaces['document detail']!,
+        document: buildDocument(
+          id: documentId,
+          title: 'Electricity bill',
+          pages: <DocumentPage>[
+            // The commonest page in the library: captured, with an image path
+            // of its own. It never reaches the written-page preview at all, and
+            // this change must not give it inline pictures it does not have.
+            buildPage(id: 'p0', index: 0, ocrStatus: OcrStatus.completed,
+              text: 'Total amount due: 248.60 EUR'),
+          ],
+        ),
+      );
+
+      expect(find.byType(ReaderImage), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a written page of recognised text is unchanged', (
+      tester,
+    ) async {
+      await pumpPreview(
+        tester,
+        text: 'Northwind Utilities quarterly electricity statement.\n'
+            'Account number: NW-4471902',
+      );
+
+      expect(
+        find.text('Northwind Utilities quarterly electricity statement.'),
+        findsOneWidget,
+      );
+      expect(find.byType(ReaderImage), findsNothing);
+    });
+  });
+
   group('searching the rendered text', () {
     Future<void> searchFor(WidgetTester tester, String query) async {
       await tester.tap(find.byIcon(Icons.search));
