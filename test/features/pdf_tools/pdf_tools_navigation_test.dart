@@ -272,9 +272,11 @@ void main() {
       );
     });
 
-    testWidgets('a result that saved nothing still offers the copy', (
+    testWidgets('a result that saved nothing says so and offers no copy', (
       tester,
     ) async {
+      // The case reported from a phone: 742 KB in, 765 KB out, and the larger
+      // copy saved into the library anyway.
       tools.compressedBytes = 9000;
       tools.originalBytes = 4000;
 
@@ -282,9 +284,45 @@ void main() {
       await compressAFile(tester);
 
       expect(tester.takeException(), isNull);
-      expect(find.text('This could not be made smaller'), findsOneWidget);
-      // Kept, shareable, and discardable — rather than silently thrown away
-      // after the user waited for it.
+      expect(
+        find.text('This document is already optimized'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('would not be smaller'),
+        findsOneWidget,
+      );
+
+      // Nothing was written, so there is nothing to view, send or throw away.
+      expect(find.text('View'), findsNothing);
+      expect(find.text('Share'), findsNothing);
+      expect(find.text('Delete this copy'), findsNothing);
+      expect(find.text('Done'), findsOneWidget);
+    });
+
+    testWidgets('an equal-size result is treated the same way', (tester) async {
+      // The boundary: "smaller" means strictly smaller.
+      tools.originalBytes = 5000;
+      tools.compressedBytes = 5000;
+
+      await openCompressScreen(tester);
+      await compressAFile(tester);
+
+      expect(
+        find.text('This document is already optimized'),
+        findsOneWidget,
+      );
+      expect(find.text('View'), findsNothing);
+    });
+
+    testWidgets('a smaller result is still saved and offered', (tester) async {
+      tools.originalBytes = 8000;
+      tools.compressedBytes = 2000;
+
+      await openCompressScreen(tester);
+      await compressAFile(tester);
+
+      expect(find.textContaining('Saved 75%'), findsOneWidget);
       expect(find.text('View'), findsOneWidget);
       expect(find.text('Share'), findsOneWidget);
       expect(find.text('Delete this copy'), findsOneWidget);
@@ -389,7 +427,11 @@ class _FakePdfTools implements PdfToolsRepository {
           originalBytes: originalBytes,
           compressedBytes: compressedBytes,
           level: level,
-          document: buildDocument(id: 'compressed-1', title: '$label (small)'),
+          // Null exactly when the real repository would have written nothing,
+          // so a screen that mishandled the no-saving case could not pass here.
+          document: compressedBytes < originalBytes
+              ? buildDocument(id: 'compressed-1', title: '$label (small)')
+              : null,
           sourceLabel: label,
         ),
       );

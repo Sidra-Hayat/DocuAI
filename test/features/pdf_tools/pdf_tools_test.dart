@@ -354,6 +354,7 @@ void main() {
     Future<Document> documentWithPages({
       required String id,
       required List<int> pageBytes,
+      String title = 'Scan',
     }) async {
       final dir = await paths.documentDir(id);
       final pages = <DocumentPage>[];
@@ -373,7 +374,7 @@ void main() {
         );
       }
 
-      final document = buildDocument(id: id, title: 'Scan', pages: pages);
+      final document = buildDocument(id: id, title: title, pages: pages);
       documents.seed(document);
       return document;
     }
@@ -416,8 +417,8 @@ void main() {
 
       final outcome = (result as Success<CompressionOutcome>).value;
 
-      expect(outcome.document.id, isNot(document.id));
-      expect(outcome.document.title, 'Scan (compressed)');
+      expect(outcome.document!.id, isNot(document.id));
+      expect(outcome.document!.title, 'Scan (compressed)');
 
       // The document the user chose is untouched: still in the store, still
       // the same pages, still the same bytes on disk.
@@ -429,8 +430,7 @@ void main() {
       );
     });
 
-    test('an already-compressed document reports honestly and keeps the copy',
-        () async {
+    test('a larger result is reported and not saved', () async {
       final document = await documentWithPages(
         id: 'tight',
         pageBytes: <int>[1000],
@@ -438,7 +438,8 @@ void main() {
       final before = documents.store.length;
 
       // The stub gives back a *larger* file, which is what re-encoding an
-      // already-small JPEG really does.
+      // already-small JPEG really does. Reported from a phone: 742 KB in,
+      // 765 KB out, and the larger copy saved anyway.
       final result = await CompressDocument(
         repositoryWith(compressor: PageCompressorStub(ratio: 1.4)),
       )(document: document, level: CompressionLevel.highQuality);
@@ -450,17 +451,55 @@ void main() {
       expect(outcome.compressedBytes, 1400);
       expect(outcome.savedBytes, 0);
 
-      // The copy is kept and the sizes are stated. Discarding it was the old
-      // behaviour and it left a user who had waited for the work with nothing
-      // to show for it — and a page bounded to the level's pixel limit can be
-      // the thing they needed even where the byte count went the wrong way.
-      expect(documents.store.length, before + 1);
-      expect(outcome.document.title, 'Scan (compressed)');
+      // Nothing was written. The sizes still come back, because "it could not
+      // be made smaller" is only useful with the numbers beside it.
+      expect(outcome.document, isNull);
+      expect(documents.store.length, before);
       expect(
         documents.store[document.id]!.pages,
         hasLength(1),
         reason: 'the original is untouched whatever the copy came out at',
       );
+    });
+
+    test('a result of exactly the same size is not saved either', () async {
+      final document = await documentWithPages(
+        id: 'same',
+        pageBytes: <int>[1000],
+      );
+      final before = documents.store.length;
+
+      // The boundary. "Smaller" has to mean strictly smaller, or a copy that
+      // gained nothing still lands in the library.
+      final result = await CompressDocument(
+        repositoryWith(compressor: PageCompressorStub(ratio: 1)),
+      )(document: document, level: CompressionLevel.balanced);
+
+      final outcome = (result as Success<CompressionOutcome>).value;
+
+      expect(outcome.compressedBytes, outcome.originalBytes);
+      expect(outcome.reduced, isFalse);
+      expect(outcome.document, isNull);
+      expect(documents.store.length, before);
+    });
+
+    test('compressing a compressed document does not stack the suffix',
+        () async {
+      final document = await documentWithPages(
+        id: 'again',
+        title: 'Scan (compressed)',
+        pageBytes: <int>[2000],
+      );
+
+      final result = await CompressDocument(
+        repositoryWith(compressor: PageCompressorStub(ratio: 0.5)),
+      )(document: document, level: CompressionLevel.smallerSize);
+
+      final outcome = (result as Success<CompressionOutcome>).value;
+
+      // Not "Scan (compressed) (compressed)". The suffix says what the document
+      // is, and it is no more true twice than once.
+      expect(outcome.document!.title, 'Scan (compressed)');
     });
 
     test('a written document has nothing to compress, and says so', () async {
@@ -566,8 +605,8 @@ void main() {
 
       final outcome = (result as Success<CompressionOutcome>).value;
 
-      expect(outcome.document.title, 'bank statement (compressed)');
-      expect(outcome.document.pages, hasLength(3));
+      expect(outcome.document!.title, 'bank statement (compressed)');
+      expect(outcome.document!.pages, hasLength(3));
       expect(outcome.sourceLabel, 'bank statement');
     });
 

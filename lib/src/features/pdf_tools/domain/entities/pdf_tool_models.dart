@@ -108,14 +108,17 @@ class MergeOutcome {
 /// Carries both sizes whether or not it saved anything, because "it could not
 /// be made smaller" is only a useful answer when it comes with the numbers.
 ///
-/// **The result is always kept.** It used to be discarded when it came out no
-/// smaller, on the reasoning that a larger duplicate helps nobody. On a real
-/// device that turned out to be the wrong call twice over: the user had waited
-/// for the work and had nothing to show for it, and a copy that is larger in
-/// bytes can still be the one they need — a page bounded to 1200px is what
-/// fits an upload form, whatever the file size did. So the copy is saved, the
-/// numbers are stated plainly, and discarding it is offered rather than
-/// decided. The original is never touched either way.
+/// **A copy is kept only when it is smaller.** This has been both ways. It
+/// used to be discarded, then it was always kept — on the reasoning that the
+/// user had waited for the work and deserved something for it, and that pages
+/// bounded to 1200px can be what an upload form needs whatever the byte count
+/// did. Real-device use settled it the other way: a 742 KB document came back
+/// as a 765 KB "(compressed)" copy, and a library filling with larger
+/// duplicates of the same document — each one named "(compressed)" again — is
+/// a worse outcome than being told plainly that there was nothing to gain.
+///
+/// So [document] is null when the copy came out no smaller, and nothing was
+/// written. The original is never touched either way.
 class CompressionOutcome {
   const CompressionOutcome({
     required this.originalBytes,
@@ -133,15 +136,31 @@ class CompressionOutcome {
 
   final CompressionLevel level;
 
-  /// The document that was saved. Always present: see the note above.
-  final Document document;
+  /// The document that was saved, or null when nothing was.
+  ///
+  /// Null exactly when [reduced] is false — the two always agree, because the
+  /// size comparison is the only thing that decides whether a copy is written.
+  final Document? document;
 
   /// What was compressed, for an answer that names its subject.
   final String sourceLabel;
 
   /// False when re-encoding produced no saving, which is a normal outcome for
-  /// a PDF that has already been through this once.
+  /// a PDF that has already been through this once. Nothing is saved when this
+  /// is false — see [document].
   bool get reduced => compressedBytes < originalBytes;
+
+  /// The title a compressed copy of [sourceTitle] should carry.
+  ///
+  /// A document that is already "X (compressed)" stays "X (compressed)" rather
+  /// than becoming "X (compressed) (compressed)". The suffix says what the
+  /// document *is*, and it is no more true twice than once.
+  static const String compressedSuffix = ' (compressed)';
+
+  static String titleFor(String sourceTitle) =>
+      sourceTitle.trimRight().endsWith(compressedSuffix.trim())
+      ? sourceTitle
+      : '$sourceTitle$compressedSuffix';
 
   /// How much was saved, as a fraction between 0 and 1.
   double get savedFraction {

@@ -311,7 +311,7 @@ class PdfToolsRepositoryImpl implements PdfToolsRepository {
         sourcePaths: sourcePaths,
         scratch: scratch,
         originalBytes: originalBytes,
-        title: '${document.title} (compressed)',
+        title: CompressionOutcome.titleFor(document.title),
         sourceLabel: document.title,
         level: level,
         onProgress: onProgress,
@@ -380,7 +380,7 @@ class PdfToolsRepositoryImpl implements PdfToolsRepository {
         // "how big this PDF is" — not the size of the pages we rendered from
         // it, which is an implementation detail of how DocuAI reads a PDF.
         originalBytes: source.sizeBytes,
-        title: '${source.name} (compressed)',
+        title: CompressionOutcome.titleFor(source.name),
         sourceLabel: source.name,
         level: level,
         onProgress: onProgress,
@@ -455,12 +455,34 @@ class PdfToolsRepositoryImpl implements PdfToolsRepository {
       compressedBytes += await File(path).length();
     }
 
-    onProgress?.call(ToolProgress(done: total, total: total, label: 'Saving'));
+    // Nothing is written when the copy came out no smaller. The re-encoded
+    // pages stay in the scratch directory, which is cleared on the next run —
+    // so a document the user already compressed once cannot fill their library
+    // with larger duplicates of itself.
+    final willSave = compressedBytes < originalBytes;
 
-    // Saved whether or not it came out smaller. A run that produced nothing
-    // after a minute of work is a worse answer than one that produced a copy
-    // and said honestly that it saved nothing — and the caller offers to throw
-    // it away rather than deciding on the user's behalf.
+    // The bar reaches the end either way. A job that stops at nine tenths reads
+    // as one that broke, whatever the screen after it goes on to say.
+    onProgress?.call(
+      ToolProgress(
+        done: total,
+        total: total,
+        label: willSave ? 'Saving' : 'Comparing sizes',
+      ),
+    );
+
+    if (!willSave) {
+      return Success(
+        CompressionOutcome(
+          originalBytes: originalBytes,
+          compressedBytes: compressedBytes,
+          level: level,
+          document: null,
+          sourceLabel: sourceLabel,
+        ),
+      );
+    }
+
     final created = await _documents.createFromImages(
       title: title,
       sourceImagePaths: compressed,

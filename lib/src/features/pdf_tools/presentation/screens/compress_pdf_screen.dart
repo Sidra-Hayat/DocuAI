@@ -167,13 +167,13 @@ class _CompressPdfScreenState extends ConsumerState<CompressPdfScreen> {
 
   /// Throws away a copy the user does not want to keep.
   ///
-  /// Offered rather than done automatically — see [CompressionOutcome]. Only
-  /// ever removes the *copy*; whatever was compressed is untouched by the
-  /// compression and untouched by this.
-  Future<void> _discard(CompressionOutcome outcome) async {
+  /// Only reachable for a copy that *was* smaller and therefore saved — one
+  /// that came out no smaller was never written. Only ever removes the copy;
+  /// whatever was compressed is untouched by the compression and by this.
+  Future<void> _discard(Document saved) async {
     final messenger = ScaffoldMessenger.of(context);
 
-    final result = await ref.read(deleteDocumentProvider)(outcome.document.id);
+    final result = await ref.read(deleteDocumentProvider)(saved.id);
 
     if (!mounted) return;
 
@@ -206,36 +206,50 @@ class _CompressPdfScreenState extends ConsumerState<CompressPdfScreen> {
     }
 
     if (outcome != null) {
+      final saved = outcome.document;
+
+      // Nothing was written, so there is nothing to view, share or delete. The
+      // result is a sentence and a way out — offering View here would offer the
+      // document the user already has under a name suggesting it is new.
+      if (saved == null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Compressed')),
+          body: AppStateView(
+            icon: Icons.check_circle_outline,
+            title: 'This document is already optimized',
+            message:
+                'The compressed version would not be smaller — '
+                '${formatBytes(outcome.originalBytes)} against '
+                '${formatBytes(outcome.compressedBytes)} at '
+                '${outcome.level.label.toLowerCase()}. Nothing was saved, and '
+                '"${outcome.sourceLabel}" is unchanged. Try "Smaller size" for '
+                'a bigger reduction.',
+            action: FilledButton(
+              onPressed: () => setState(() => _outcome = null),
+              child: const Text('Done'),
+            ),
+          ),
+        );
+      }
+
       final percent = (outcome.savedFraction * 100).round();
 
       return Scaffold(
         appBar: AppBar(title: const Text('Compressed')),
         body: PdfToolResult(
-          title: outcome.reduced
-              ? 'Saved $percent%'
-              : 'This could not be made smaller',
+          title: 'Saved $percent%',
           summary:
               'Original ${formatBytes(outcome.originalBytes)}  →  '
               'Compressed ${formatBytes(outcome.compressedBytes)}',
-          detail: outcome.reduced
-              ? 'Saved as "${outcome.document.title}". '
-                    '"${outcome.sourceLabel}" is unchanged.'
-              : '"${outcome.sourceLabel}" is already about as small as it '
-                    'goes at ${outcome.level.label.toLowerCase()}, so the copy '
-                    'came out no smaller. It has still been saved as '
-                    '"${outcome.document.title}" — its pages are bounded to '
-                    '${outcome.level.maxEdge}px, which may be what you need '
-                    'even where the file size is not. The original is '
-                    'unchanged. Try "Smaller size" for a bigger reduction.',
-          tone: outcome.reduced
-              ? PdfToolResultTone.success
-              : PdfToolResultTone.caution,
-          document: outcome.document,
+          detail:
+              'Saved as "${saved.title}". '
+              '"${outcome.sourceLabel}" is unchanged.',
+          document: saved,
           onDone: () => setState(() => _outcome = null),
           extraActions: <Widget>[
             AppSpacing.gapSm,
             TextButton.icon(
-              onPressed: () => _discard(outcome),
+              onPressed: () => _discard(saved),
               icon: const Icon(Icons.delete_outline, size: 18),
               label: const Text('Delete this copy'),
               style: TextButton.styleFrom(
