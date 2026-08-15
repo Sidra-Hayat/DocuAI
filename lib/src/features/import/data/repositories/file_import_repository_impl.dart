@@ -130,10 +130,12 @@ class FileImportRepositoryImpl implements FileImportRepository {
 
       switch (extension) {
         case 'pdf':
+          var truncated = false;
           final pages = await _rasterizer.rasterize(
             bytes: bytes,
             targetDirectory: directory,
             prefix: prefix,
+            onPageLimitReached: () => truncated = true,
           );
 
           if (pages.isEmpty) {
@@ -150,6 +152,7 @@ class FileImportRepositoryImpl implements FileImportRepository {
               name: name,
               kind: ImportedFileKind.pages,
               imagePaths: pages,
+              truncatedAt: truncated ? pages.length : null,
             ),
           );
 

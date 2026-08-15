@@ -65,7 +65,9 @@ class ImportFileAsDocument {
 
     return switch (created) {
       Failed(:final failure) => Failed(failure),
-      Success(:final value) => Success(ImportResult(document: value)),
+      Success(:final value) => Success(
+        ImportResult(document: value, truncatedAt: file.truncatedAt),
+      ),
     };
   }
 

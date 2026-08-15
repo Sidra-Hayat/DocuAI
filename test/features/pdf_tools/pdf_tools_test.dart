@@ -699,12 +699,17 @@ class _FakeRasterizer extends PdfPageRasterizer {
     required Uint8List bytes,
     required Directory targetDirectory,
     required String prefix,
+    void Function()? onPageLimitReached,
   }) async {
     if (fails) return const <String>[];
 
     // The helper encodes the page count in the first byte and the source name
     // in the rest.
     final pages = bytes.isEmpty ? 1 : bytes.first;
+
+    // Reported the way the real one reports it, so a double that truncates
+    // silently cannot make a caller look correct.
+    if (pages > pageLimit) onPageLimitReached?.call();
     final name = String.fromCharCodes(bytes.skip(1));
     final written = <String>[];
 

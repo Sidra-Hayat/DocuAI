@@ -54,10 +54,17 @@ class PdfPageRasterizer {
   /// which the caller reports as a file it could not open — deliberately not an
   /// exception, because "this PDF is an image-only scan the renderer refused"
   /// is a fact about the file, not a fault in the app.
+  ///
+  /// [onPageLimitReached] fires once if the file turned out to have more pages
+  /// than [pageLimit] allows. A callback rather than a richer return type
+  /// because the PDF tools call this too and neither of them needs the signal:
+  /// merging counts its own budget across several files, and compressing a
+  /// single PDF is bounded by the same limit its source already was.
   Future<List<String>> rasterize({
     required Uint8List bytes,
     required Directory targetDirectory,
     required String prefix,
+    void Function()? onPageLimitReached,
   }) async {
     final pages = <String>[];
     var index = 0;
@@ -65,7 +72,14 @@ class PdfPageRasterizer {
     if (pageLimit <= 0) return pages;
 
     await for (final raster in Printing.raster(bytes, dpi: dpi.toDouble())) {
-      if (index >= pageLimit) break;
+      if (index >= pageLimit) {
+        // Reached only by receiving a page past the limit, so this is proof
+        // there were more rather than a guess from a full-looking result. A
+        // file of exactly [pageLimit] pages lost nothing and must not be told
+        // it did.
+        onPageLimitReached?.call();
+        break;
+      }
 
       // Rendered as PNG, stored as JPEG. Every page in the app is a JPEG —
       // `AppConstants.pageFileNameFor` says so, the PDF export assumes it, and
