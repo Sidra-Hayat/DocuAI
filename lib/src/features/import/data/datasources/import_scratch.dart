@@ -27,11 +27,18 @@ abstract final class ImportScratch {
   static const String directoryName = 'docuai_import';
 
   /// An empty directory to normalise into.
+  ///
+  /// [name] lets a second flow have scratch space of its own. Clearing on entry
+  /// is what makes this safe to call at the start of any job — and what makes
+  /// two jobs sharing one folder unsafe, since the second would delete the
+  /// first's working files out from under it. The PDF tools pass their own name
+  /// for exactly that reason.
   static Future<Directory> prepare({
     Future<Directory> Function()? temporaryDirectory,
+    String name = directoryName,
   }) async {
     final root = await (temporaryDirectory ?? getTemporaryDirectory)();
-    final scratch = Directory(p.join(root.path, directoryName));
+    final scratch = Directory(p.join(root.path, name));
 
     // Anything still here belongs to an import that has already finished, and
     // whatever it produced was copied into the document store at the time.

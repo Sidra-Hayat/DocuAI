@@ -8,13 +8,22 @@ import '../repositories/image_import_repository.dart';
 
 /// What an import produced, once the pages exist.
 class ImportResult {
-  const ImportResult({required this.document, this.rejected = const []});
+  const ImportResult({
+    required this.document,
+    this.rejected = const [],
+    this.truncatedAt,
+  });
 
   final Document document;
 
   /// Files the picker offered that could not be decoded. Non-empty here is a
   /// *partial* success: the document was created from everything else.
   final List<String> rejected;
+
+  /// How many pages were kept, when the source had more than the importer
+  /// reads. Null in the ordinary case. The second kind of partial success,
+  /// alongside [rejected], and reported to the user for the same reason.
+  final int? truncatedAt;
 }
 
 /// Builds a document out of photos already on the device.

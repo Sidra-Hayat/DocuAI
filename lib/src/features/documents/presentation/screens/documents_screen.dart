@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +13,7 @@ import '../../../../core/widgets/app_state_view.dart';
 import '../../domain/entities/document.dart';
 import '../providers/document_providers.dart';
 import '../widgets/document_card.dart';
-import '../widgets/document_thumbnail.dart';
+import '../widgets/library_actions.dart';
 import '../widgets/library_header.dart';
 import '../widgets/new_document_sheet.dart';
 
@@ -66,12 +68,25 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       // somewhere to put a new document. It is deliberately not in the shell:
       // there is nothing to create on Search, and what the assistant creates is
       // a conversation.
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showNewDocumentSheet(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New document'),
-        tooltip: 'Scan, import or write a document',
-      ),
+      //
+      // Withheld until there is a library. The empty state already offers Scan,
+      // Import and Write as full-sized buttons in the middle of the screen, and
+      // a floating "+ New document" over them makes the same offer twice — on
+      // the one screen where the user has not yet done anything and the choice
+      // should be as small as possible.
+      //
+      // `?? false` covers loading and failure as well as empty: while the
+      // skeleton is up there is no library to add to yet, and when storage
+      // could not be read, offering to write to it is offering something that
+      // will not work.
+      floatingActionButton: (documents.value?.isNotEmpty ?? false)
+          ? FloatingActionButton.extended(
+              onPressed: () => showNewDocumentSheet(context),
+              icon: const Icon(Icons.add),
+              label: const Text('New document'),
+              tooltip: 'Scan, import or write a document',
+            )
+          : null,
     );
   }
 }
@@ -101,6 +116,18 @@ enum _LibraryFilter {
   };
 }
 
+/// The library, in the order someone reads it.
+///
+/// Search, then how to add something, then the tools, then what you already
+/// have. That order is the change: the screen used to open with a search field
+/// and a row of filter chips over a flat list, so the four ways of getting a
+/// document *in* were behind a single "+" and the things you could do with one
+/// were invisible until you opened it.
+///
+/// Recent documents appear once. There used to be a horizontal "Recent" strip
+/// above an "All documents" list that began with the same five documents —
+/// the newest documents rendered twice, a few hundred pixels apart, which is
+/// two answers to "what was I last working on".
 class _Library extends StatelessWidget {
   const _Library({
     required this.documents,
@@ -112,17 +139,10 @@ class _Library extends StatelessWidget {
   final _LibraryFilter filter;
   final ValueChanged<_LibraryFilter> onFilter;
 
-  /// Recent is only worth a row of its own when the list below is long enough
-  /// that the newest documents are not already the first thing visible.
-  static const int _recentThreshold = 4;
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final visible = documents.where(filter.matches).toList(growable: false);
-
-    final showRecent =
-        filter == _LibraryFilter.all && documents.length >= _recentThreshold;
-    final recent = documents.take(5).toList(growable: false);
 
     return CustomScrollView(
       slivers: <Widget>[
@@ -132,7 +152,7 @@ class _Library extends StatelessWidget {
               AppSpacing.lg,
               AppSpacing.sm,
               AppSpacing.lg,
-              AppSpacing.md,
+              AppSpacing.lg,
             ),
             // Not a working field: it is the Search tab's field, in the place
             // the eye already goes, and tapping it lands there with the
@@ -144,31 +164,42 @@ class _Library extends StatelessWidget {
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: _Filters(selected: filter, onSelected: onFilter),
+        const SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          sliver: SliverToBoxAdapter(child: LibraryPrimaryActions()),
         ),
-        if (showRecent) ...<Widget>[
-          const SliverToBoxAdapter(child: AppSectionHeader(label: 'Recent')),
-          SliverToBoxAdapter(child: _RecentRow(documents: recent)),
-        ],
+        const SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(child: LibraryTools()),
+        ),
         SliverToBoxAdapter(
           child: AppSectionHeader(
+            // Named for what it is only when it *is* that. Under a filter the
+            // list is no longer "recent anything" — it is every favourite, or
+            // everything written — and a heading that said otherwise would be
+            // describing a list the user is not looking at.
             label: filter == _LibraryFilter.all
-                ? 'All documents'
+                ? 'Recent documents'
                 : filter.label,
             action: Text(
               '${visible.length}',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
         ),
+        SliverToBoxAdapter(
+          child: _Filters(selected: filter, onSelected: onFilter),
+        ),
+        AppSpacing.gapMd.asSliver,
         if (visible.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _NothingInFilter(filter: filter),
-          )
+          SliverToBoxAdapter(child: _NothingInFilter(filter: filter))
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
@@ -187,6 +218,11 @@ class _Library extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Puts a plain widget in a sliver list without a wrapper at every call site.
+extension on Widget {
+  Widget get asSliver => SliverToBoxAdapter(child: this);
 }
 
 class _Filters extends StatelessWidget {
@@ -213,78 +249,6 @@ class _Filters extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// The five most recently touched, as pages rather than as rows.
-///
-/// Shown large enough to be recognised by sight. The whole reason to repeat
-/// documents that are also in the list below is that a thumbnail you can
-/// actually see is faster to find than a title you have to read.
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.documents});
-
-  final List<Document> documents;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      height: 176,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        itemCount: documents.length,
-        separatorBuilder: (context, index) => AppSpacing.gapHorizontalMd,
-        itemBuilder: (context, index) {
-          final document = documents[index];
-
-          return SizedBox(
-            width: 108,
-            child: InkWell(
-              borderRadius: AppRadius.card,
-              onTap: () => context.pushNamed(
-                AppRoutes.documentDetailName,
-                pathParameters: <String, String>{'id': document.id},
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Stack(
-                    children: <Widget>[
-                      DocumentThumbnail(
-                        page: document.coverPage,
-                        width: 108,
-                        height: 130,
-                        borderRadius: AppRadius.md,
-                      ),
-                      if (document.isFavorite)
-                        Positioned(
-                          top: AppSpacing.xs,
-                          right: AppSpacing.xs,
-                          child: Icon(
-                            Icons.star,
-                            size: 16,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                        ),
-                    ],
-                  ),
-                  AppSpacing.gapSm,
-                  Text(
-                    document.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(height: 1.2),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -339,23 +303,115 @@ class _EmptyLibrary extends StatelessWidget {
         runSpacing: AppSpacing.md,
         alignment: WrapAlignment.center,
         children: <Widget>[
-          FilledButton.icon(
-            onPressed: () => context.pushNamed(AppRoutes.scanName),
-            icon: const Icon(Icons.document_scanner_outlined),
-            label: const Text('Scan a document'),
+          _EmptyAction(
+            caption: 'Capture a page with your camera',
+            child: FilledButton.icon(
+              onPressed: () => _scanAfterExplainingTheCamera(context),
+              icon: const Icon(Icons.document_scanner_outlined),
+              label: const Text('Scan a document'),
+            ),
           ),
-          FilledButton.tonalIcon(
-            onPressed: () => importPhotosAsDocument(context),
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('Import'),
+          _EmptyAction(
+            // The caption no longer names photos: this button now asks which
+            // kind of import is meant, because the file importer's only other
+            // door is the New document sheet that this screen hides.
+            caption: 'Bring in a photo or a file',
+            child: FilledButton.tonalIcon(
+              onPressed: () => chooseImportSource(context),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Import'),
+            ),
           ),
-          FilledButton.tonalIcon(
-            onPressed: () => createAndOpenTextDocument(context),
-            icon: const Icon(Icons.edit_note_outlined),
-            label: const Text('Write one'),
+          _EmptyAction(
+            caption: 'Type a document yourself',
+            child: FilledButton.tonalIcon(
+              onPressed: () => createAndOpenTextDocument(context),
+              icon: const Icon(Icons.edit_note_outlined),
+              label: const Text('Write one'),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+/// One empty-state button with a line underneath saying what it does.
+///
+/// Three buttons named "Scan a document", "Import" and "Write one" say what
+/// they are but not what happens next — whether Import means photos or files,
+/// or whether Write one opens a keyboard or a template. The caption answers
+/// that before the tap rather than after it.
+class _EmptyAction extends StatelessWidget {
+  const _EmptyAction({required this.child, required this.caption});
+
+  final Widget child;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return ConstrainedBox(
+      // A ceiling, not a height. The caption wraps to as many lines as it needs
+      // and the column grows with it, so the largest system font size makes
+      // this taller rather than making it overflow — and the panel this sits in
+      // scrolls, so taller is always available.
+      constraints: const BoxConstraints(maxWidth: 176),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          child,
+          AppSpacing.gapXs,
+          Text(
+            caption,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Says what the camera is for, immediately before anything opens it.
+///
+/// DocuAI declares no camera permission of its own: scanning runs inside Play
+/// services' document scanner, which asks for the camera under its own name at
+/// the moment it opens. That is exactly the moment this is worth explaining —
+/// a system dialog naming Google Play services, arriving with no warning after
+/// a tap on "Scan a document", is the point at which a privacy-first app looks
+/// like it is doing something else.
+///
+/// Nothing is requested here and nothing is requested any earlier than before:
+/// this is a sentence and a button, and declining it simply does not scan.
+Future<void> _scanAfterExplainingTheCamera(BuildContext context) async {
+  final proceed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: const Icon(Icons.photo_camera_outlined),
+      title: const Text('Scan with the camera'),
+      content: const Text(
+        'The camera is only used to scan document pages. Your photos are not '
+        'uploaded — every page stays on this device.',
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+
+  if (proceed != true || !context.mounted) return;
+  // Nothing here waits for the scanner to come back; the library redraws from
+  // storage when a document lands in it.
+  unawaited(context.pushNamed(AppRoutes.scanName));
 }

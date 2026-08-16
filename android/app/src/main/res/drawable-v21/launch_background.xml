@@ -3,10 +3,17 @@
   Identical to drawable/launch_background.xml on purpose.
 
   Flutter's template splits these because theme-attribute references in
-  drawables are unsupported below API 21. Now that both resolve to a literal
-  colour there is nothing to diverge, and keeping them in step means a future
-  edit to one cannot silently miss the other.
+  drawables are unsupported below API 21. Both now resolve to a literal colour
+  and a literal drawable, so there is nothing to diverge — and since this app's
+  minSdk is 24, this is in fact the file every device actually uses. The
+  unqualified one is kept in step so that a future edit to either cannot
+  silently miss the other.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/brand_ink" />
+    <item
+        android:width="128dp"
+        android:height="128dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
 </layer-list>

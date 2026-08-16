@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DocuAI — Privacy Policy</title>
+<meta name="description" content="Privacy policy for the DocuAI Android app (com.sidrahayat.docuai). DocuAI stores your documents on your device and sends them nowhere.">
+<meta name="color-scheme" content="light dark">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, ul, figure { margin: 0; }
+  ul { padding: 0; }
+
+  :root {
+    --ground:        #FCFCFD;
+    --panel-edge:    #DFE4EE;
+    --ink:           #141821;
+    --ink-soft:      #4A5265;
+    --ink-faint:     #6E7689;
+    --rule:          #E2E6EF;
+    --accent:        #2563EB;
+    --seal:          #00696B;
+    --seal-wash:     #E4F2F1;
+    --seal-edge:     #B7DBD8;
+    --mark-wash:     #FBF3E2;
+    --mark-edge:     #E3D3A9;
+    --code-bg:       #EEF1F7;
+
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Source Serif Pro", Georgia, "Times New Roman", serif;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:     #0E1320;
+      --panel-edge: #262E41;
+      --ink:        #E6E9F0;
+      --ink-soft:   #A7AFC2;
+      --ink-faint:  #838CA1;
+      --rule:       #232B3C;
+      --accent:     #8FB0FF;
+      --seal:       #4DD0C7;
+      --seal-wash:  #12262A;
+      --seal-edge:  #23484A;
+      --mark-wash:  #211B0E;
+      --mark-edge:  #4A3D1D;
+      --code-bg:    #141A28;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:     #0E1320;
+    --panel-edge: #262E41;
+    --ink:        #E6E9F0;
+    --ink-soft:   #A7AFC2;
+    --ink-faint:  #838CA1;
+    --rule:       #232B3C;
+    --accent:     #8FB0FF;
+    --seal:       #4DD0C7;
+    --seal-wash:  #12262A;
+    --seal-edge:  #23484A;
+    --mark-wash:  #211B0E;
+    --mark-edge:  #4A3D1D;
+    --code-bg:    #141A28;
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 43rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 6vw, 4.5rem) clamp(1.15rem, 5vw, 2rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
+  }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+    background: var(--ground);
+    color: var(--accent);
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.3rem;
+  }
+  .skip:focus { left: 1rem; top: 1rem; z-index: 10; }
+
+  .masthead { display: flex; flex-direction: column; gap: 0.6rem; }
+
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-size: clamp(1.9rem, 5.5vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+
+  .dateline {
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+  }
+  .dateline b { font-weight: 600; color: var(--ink); }
+
+  .summary {
+    background: var(--seal-wash);
+    border: 1px solid var(--seal-edge);
+    border-radius: 0.5rem;
+    padding: clamp(1.15rem, 3.5vw, 1.6rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .summary h2 {
+    font-family: var(--sans);
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--seal);
+  }
+  .summary .lead { font-size: 1.12rem; line-height: 1.55; }
+
+  section { display: flex; flex-direction: column; gap: 0.85rem; }
+
+  h2.rule {
+    font-family: var(--sans);
+    font-size: 1.16rem;
+    font-weight: 660;
+    letter-spacing: -0.012em;
+    line-height: 1.3;
+    text-wrap: balance;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    gap: 0.7rem;
+    align-items: baseline;
+  }
+  h2.rule .num {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--accent);
+    flex: none;
+    min-width: 1.35rem;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    margin-top: 0.5rem;
+  }
+
+  section > p, section > ul, section > .note, section > .tablewrap, section > h3 { margin-left: 2.05rem; }
+  @media (max-width: 34rem) {
+    section > p, section > ul, section > .note, section > .tablewrap, section > h3 { margin-left: 0; }
+    h2.rule { flex-direction: column; gap: 0.25rem; }
+  }
+
+  ul { padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  li::marker { color: var(--ink-faint); }
+
+  a { color: var(--accent); text-underline-offset: 0.16em; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.12em 0.36em;
+    border-radius: 0.25rem;
+    overflow-wrap: anywhere;
+  }
+
+  .note {
+    font-size: 0.94rem;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--rule);
+    padding-left: 0.95rem;
+  }
+
+  .caution {
+    background: var(--mark-wash);
+    border: 1px solid var(--mark-edge);
+    border-radius: 0.4rem;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.96rem;
+    color: var(--ink);
+  }
+
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.6rem 0.9rem 0.6rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+  td:first-child { font-family: var(--mono); font-size: 0.8rem; padding-right: 1.4rem; overflow-wrap: anywhere; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.4rem;
+    font-family: var(--sans);
+    font-size: 0.84rem;
+    color: var(--ink-faint);
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<a class="skip" href="#policy">Skip to policy</a>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Privacy Policy</p>
+    <h1>DocuAI</h1>
+    <p class="dateline">
+      <span><b>Effective</b> 16 August 2026</span>
+      <span><b>Developer</b> Devzey</span>
+      <span><b>Package</b> <code>com.sidrahayat.docuai</code></span>
+    </p>
+  </header>
+
+  <div class="summary">
+    <h2>In short</h2>
+    <p class="lead"><strong>DocuAI does not collect, transmit, or share your documents.</strong> Your pages, the text read from them, and everything you type stay on your phone.</p>
+    <p>There are no accounts, no advertising, no analytics or crash reporting of ours, and no cloud or AI service. We cannot see your documents, because they never reach us.</p>
+  </div>
+
+  <main id="policy">
+
+  <section>
+    <h2 class="rule"><span class="num">1</span><span>What this policy covers</span></h2>
+    <p>This policy explains how the DocuAI Android application handles information. It applies to the app published by Devzey under the package name <code>com.sidrahayat.docuai</code>.</p>
+    <p>DocuAI is an offline document scanner. It scans pages with your camera, reads the text on them, and lets you search, edit, export and ask questions about your own documents — all on the device itself.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">2</span><span>Information we collect</span></h2>
+    <p><strong>None.</strong> DocuAI has no servers, no accounts, and no network code of its own. The app does not send your documents, page images, recognised text, titles, tags, searches, or Assistant conversations anywhere.</p>
+    <p>We do not collect names, email addresses, phone numbers, device identifiers, advertising identifiers, location, contacts, or usage statistics.</p>
+    <p>One qualification, stated plainly in section 6: Google's ML Kit libraries inside the app include Google's own diagnostics component, which can report information about ML Kit's operation to Google. That is Google's component and it does not carry your documents.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">3</span><span>What the app stores, and where</span></h2>
+    <p>Everything DocuAI creates is written to private storage on your device that only DocuAI can read:</p>
+    <ul>
+      <li><strong>Page images and inline pictures</strong> — scanned, imported, or added to a written document.</li>
+      <li><strong>Recognised text</strong> — the words read from your pages by on-device text recognition.</li>
+      <li><strong>Document details</strong> — titles, dates, tags, page order, and favourites.</li>
+      <li><strong>Search index</strong> — built from your own documents so search works without a connection.</li>
+      <li><strong>Assistant conversations</strong> — the questions you ask and the answers drawn from your pages.</li>
+      <li><strong>Preferences</strong> — such as your theme and reading text size.</li>
+      <li><strong>Exported files</strong> — PDFs and Word files you create, until you delete them.</li>
+    </ul>
+    <p>Android protects this storage from other applications.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">4</span><span>Backup is switched off</span></h2>
+    <p>Android's Auto Backup would normally copy an app's data to your Google Drive. DocuAI opts out explicitly, and it opts out of both transports:</p>
+    <ul>
+      <li><strong>Cloud backup</strong> — your documents and recognised text are never copied to Google Drive.</li>
+      <li><strong>Device-to-device transfer</strong> — they are not carried across when you set up a new phone either. That transfer never touches Google's servers, but a document scanner holding passports and bank statements should move only when you deliberately export it.</li>
+    </ul>
+    <div class="caution">
+      <strong>Because nothing is backed up, your documents exist only on this device.</strong> Uninstalling DocuAI, clearing its storage, or resetting the phone deletes them permanently, and they cannot be recovered. Export anything you need to keep, and move documents to a new phone by exporting and sharing them yourself.
+    </div>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">5</span><span>Permissions and device access</span></h2>
+    <p>DocuAI requests no runtime permissions. It never asks you to grant anything. Camera and photo access happen through Android's own system screens, which hand the app only the single item you choose.</p>
+    <div class="tablewrap">
+      <table>
+        <caption class="note" style="caption-side: bottom; text-align: left; padding-top: 0.7rem; border: 0;">These two permissions appear on the app's Play Store listing. They are not requested by DocuAI's own code.</caption>
+        <thead>
+          <tr><th scope="col">Declared permission</th><th scope="col">Where it comes from</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>INTERNET</td>
+            <td>Added automatically by Google's ML Kit and Play Services libraries, which use it for the diagnostics described in section 6. No DocuAI feature makes network requests.</td>
+          </tr>
+          <tr>
+            <td>ACCESS_NETWORK_STATE</td>
+            <td>Added by the same libraries, so they can tell whether a connection is available.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Camera</h3>
+    <p>Scanning opens Google Play Services' document scanner, which uses the camera under its own permission and returns the captured page to DocuAI. The camera is used only while you are scanning, and the images are saved to your device.</p>
+    <h3>Photos and files</h3>
+    <p>Importing opens Android's system photo picker or file chooser. You pick one item, and Android grants DocuAI access to that item alone. The app cannot browse your gallery or your storage.</p>
+    <h3>Not used</h3>
+    <p>DocuAI does not use the microphone, location, contacts, calendar, Bluetooth, notifications, or any background sensor. It holds no camera or storage permission of its own.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">6</span><span>Google Play Services and ML Kit</span></h2>
+    <p>DocuAI uses two Google components, both of which process your pages on the device:</p>
+    <ul>
+      <li><strong>Document Scanner</strong> — camera capture, edge detection and perspective correction. Delivered as a Google Play Services module, which Play Services downloads in its own process the first time you scan. Images are processed locally.</li>
+      <li><strong>Text Recognition</strong> — reads the text from your pages. The model is bundled inside the app, so it works with no connection at all.</li>
+    </ul>
+    <p>These libraries also include Google's data-transport component, which can send Google information about ML Kit's own operation — such as which features ran and whether they succeeded. This is Google's telemetry about its own software, it is the reason the app carries the <code>INTERNET</code> permission, and it is governed by the <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google Privacy Policy</a>.</p>
+    <p><strong>Your documents, page images, recognised text and questions are not part of that.</strong> Nothing in DocuAI reads them and sends them anywhere.</p>
+    <p>DocuAI contains no analytics, crash reporting, advertising, or tracking libraries of its own.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">7</span><span>The Assistant is not a cloud AI</span></h2>
+    <p>The DocuAI Assistant is not a chatbot connected to an AI service. It answers by searching the text already stored on your device and quoting the pages it came from. There is no language model and no external service involved, and no question you ask is sent to any AI provider.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">8</span><span>When information leaves your device</span></h2>
+    <p>Only when you choose to send it. If you use Share or Export, DocuAI hands the file you selected to Android's share sheet and you choose where it goes — email, messaging, cloud storage, or a printer.</p>
+    <p>From that moment the file is in the hands of the app or service you picked, and that app's own privacy policy applies, not this one. DocuAI never shares anything without you asking.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">9</span><span>Sharing and selling data</span></h2>
+    <p>We do not share, sell, rent, or trade your information with anyone. There is no data to share: none of it reaches us.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">10</span><span>Keeping and deleting your data</span></h2>
+    <p>Your documents stay on your device until you remove them. You are in full control:</p>
+    <ul>
+      <li>Delete a single document inside the app at any time. Its pages and images are removed from storage with it.</li>
+      <li>Clear the app's storage from Android Settings to remove everything at once.</li>
+      <li>Uninstall DocuAI to remove all of its data from your device.</li>
+    </ul>
+    <p>Because DocuAI holds no data about you on any server, there is nothing to request, correct or delete from us.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">11</span><span>Accounts and advertising</span></h2>
+    <p>DocuAI has no sign-in, no user accounts, and no advertising. The app is fully usable the moment it is installed.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">12</span><span>Children</span></h2>
+    <p>DocuAI is not directed at children and collects no personal information from anyone, including children.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">13</span><span>Security</span></h2>
+    <p>Your documents are stored in DocuAI's private application storage, which Android protects from other apps. Keeping your device locked with a PIN, pattern, or biometric is the most effective way to protect what is on it.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">14</span><span>Changes to this policy</span></h2>
+    <p>If a future version of DocuAI changes what it stores or gains network access, this policy will be updated before that version is published, and the change will be visible in the app's permission list on Google Play. Updated versions appear at this address with a new effective date.</p>
+  </section>
+
+  <section>
+    <h2 class="rule"><span class="num">15</span><span>Contact</span></h2>
+    <p>Questions about this policy or about privacy in DocuAI can be sent to:</p>
+    <p><a href="mailto:sidrahayat003@gmail.com">sidrahayat003@gmail.com</a> — Devzey</p>
+  </section>
+
+  </main>
+
+  <footer>
+    DocuAI is an offline application. This policy describes an app that stores your documents on your device and sends them nowhere.
+  </footer>
+
+</div>
+
+</body>
+</html>

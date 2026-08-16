@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_routes.dart';
-import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/text/markup.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_empty_state.dart';
@@ -19,6 +17,7 @@ import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import '../providers/document_providers.dart';
 import '../providers/reader_providers.dart';
+import '../widgets/markup_view.dart';
 import '../widgets/reader_paragraph.dart';
 
 /// A document's recognised text, on its own.
@@ -64,7 +63,9 @@ class _ExtractedTextScreenState extends ConsumerState<ExtractedTextScreen> {
 
   Future<void> _copy(Document document) async {
     final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: document.extractedText));
+    // What was read, not how it is stored — a paste into a message should not
+    // arrive carrying heading hashes and bold asterisks.
+    await Clipboard.setData(ClipboardData(text: document.readableText));
 
     messenger.showSnackBar(
       const SnackBar(content: Text('Text copied to the clipboard.')),
@@ -254,9 +255,14 @@ class _Body extends ConsumerWidget {
                         editable: trimmed.isEmpty,
                       ),
                     if (block.imageName case final imageName?)
-                      _ReaderImage(
-                        documentId: document.id,
-                        imageName: imageName,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: ReaderImage(
+                          documentId: document.id,
+                          imageName: imageName,
+                        ),
                       )
                     else if (block.text.isEmpty)
                       _EmptyPageNote(scale: scale)
@@ -321,12 +327,19 @@ class _Body extends ConsumerWidget {
         final text = paragraph.text.trim();
         if (text.isEmpty) continue;
 
+        // Counted against what the reader will *show* rather than against what
+        // is stored. A line saved as `**Total** due` is read as "Total due", so
+        // a search for "total due" has to match it — and the count under the
+        // search field has to agree with the highlights the user can see.
+        final shown = Markup.toPlainText(text);
+        if (shown.trim().isEmpty) continue;
+
         if (query.isEmpty) {
           blocks.add(_Block(text: text, pageIndex: page.index, matches: 0));
           continue;
         }
 
-        final matches = _countMatches(text.toLowerCase(), lower);
+        final matches = _countMatches(shown.toLowerCase(), lower);
         if (matches > 0) {
           blocks.add(
             _Block(text: text, pageIndex: page.index, matches: matches),
@@ -483,63 +496,6 @@ class _Block {
 
   /// Set when this block is a picture rather than words.
   final String? imageName;
-}
-
-/// A picture, where the writing put it.
-///
-/// This is where "see the image in its correct position" is actually
-/// delivered: the editor can only show that one is there, and this shows which.
-class _ReaderImage extends ConsumerWidget {
-  const _ReaderImage({required this.documentId, required this.imageName});
-
-  final String documentId;
-  final String imageName;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final path = ref
-        .read(storagePathsProvider)
-        .inlineImagePath(documentId, imageName);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: ClipRRect(
-        borderRadius: AppRadius.card,
-        child: Image.file(
-          File(path),
-          fit: BoxFit.contain,
-          // Said rather than left blank. A picture that silently renders as
-          // nothing looks like a document that lost it, which is exactly the
-          // impression this app must never give.
-          errorBuilder: (context, error, stackTrace) => Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.errorContainer,
-              borderRadius: AppRadius.card,
-            ),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  Icons.broken_image_outlined,
-                  color: theme.colorScheme.onErrorContainer,
-                ),
-                AppSpacing.gapHorizontalMd,
-                Expanded(
-                  child: Text(
-                    'This picture is no longer on this device.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// The header above each page's text.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/router/app_routes.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_action_sheet.dart';
 import '../../../import/presentation/providers/import_providers.dart';
 import '../../domain/usecases/create_text_document.dart';
@@ -101,8 +104,12 @@ Future<void> importPhotosAsDocument(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
   final router = GoRouter.of(context);
 
-  final result = await container.read(importImagesAsDocumentProvider)(
-    title: _importTitle(),
+  final result = await _whileImporting(
+    context,
+    message: 'Importing your photos…',
+    work: () => container.read(importImagesAsDocumentProvider)(
+      title: _importTitle(),
+    ),
   );
 
   switch (result) {
@@ -141,10 +148,28 @@ Future<void> importFileAsDocument(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
   final router = GoRouter.of(context);
 
-  final result = await container.read(importFileAsDocumentProvider)();
+  final result = await _whileImporting(
+    context,
+    message: 'Importing your document…',
+    work: () => container.read(importFileAsDocumentProvider)(),
+  );
 
   switch (result) {
     case Success(:final value):
+      // Said before the document opens, and left up longer than a normal
+      // message, because it is the one thing about this import the user cannot
+      // see for themselves: the document looks complete either way.
+      if (value.truncatedAt case final kept?) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'That PDF is longer than DocuAI can import. The first $kept '
+              'pages were brought in; the rest were not.',
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
       await router.pushNamed<void>(
         AppRoutes.documentDetailName,
         pathParameters: <String, String>{'id': value.document.id},
@@ -153,6 +178,121 @@ Future<void> importFileAsDocument(BuildContext context) async {
       // Backing out of the picker is not a failure worth reporting.
       if (failure is ImportFailure && failure.cancelled) return;
       messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+  }
+}
+
+/// Asks whether "Import" means a photo or a file, then does that.
+///
+/// The empty library offers one Import button where the library proper offers
+/// two separate ones, and it used to mean photos only — so a first-run user
+/// with a PDF had nowhere to go, the file importer being reachable only from
+/// the New document sheet that the empty state deliberately hides.
+///
+/// A choice rather than a fourth button: the empty state is three actions and
+/// a sentence, and a fourth would make the first thing anyone sees a menu.
+/// Both branches call the same functions the sheet calls — there is one photo
+/// import and one file import in this app, and this adds neither.
+Future<void> chooseImportSource(BuildContext context) {
+  return showAppActionSheet(
+    context,
+    title: 'Import',
+    actions: <AppSheetAction>[
+      AppSheetAction(
+        icon: Icons.photo_library_outlined,
+        label: 'Photo',
+        description: 'Choose a photo from your gallery',
+        onSelected: () => importPhotosAsDocument(context),
+      ),
+      AppSheetAction(
+        icon: Icons.folder_open_outlined,
+        label: 'File',
+        description: 'Import a PDF, DOCX or text file',
+        onSelected: () => importFileAsDocument(context),
+      ),
+    ],
+  );
+}
+
+/// Holds a progress dialog up for as long as an import takes.
+///
+/// **Why it is raised before the picker rather than after it.** Both imports
+/// are a single call that opens the system picker *and* then does the work —
+/// normalising every photo, or rasterising every page of a PDF, then copying
+/// the results into storage. There is no moment in between for this to hook
+/// on to without threading a callback down through the use case and the
+/// repository into the data source.
+///
+/// It does not need one. The picker is a separate Android activity that covers
+/// this app's window entirely, so a dialog raised now is behind it and unseen;
+/// the first frame the user sees it in is the one after the picker closes,
+/// which is exactly when the work starts. Backing out of the picker shows it
+/// for the moment it takes the cancellation to travel back.
+///
+/// No percentage. Neither import reports how far through it is — the photo
+/// picker hands over everything at once and the page loop is inside the
+/// repository — and a bar that advances on a timer is a lie about how long is
+/// left. The PDF tools do show one, because their pipeline genuinely counts
+/// pages as it goes.
+Future<T> _whileImporting<T>(
+  BuildContext context, {
+  required String message,
+  required Future<T> Function() work,
+}) async {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  var showing = true;
+
+  unawaited(
+    showDialog<void>(
+      context: context,
+      // Neither the barrier nor the back button dismisses it: the work carries
+      // on regardless, and a screen with no sign of it is how the same import
+      // gets started twice.
+      barrierDismissible: false,
+      builder: (context) => _ImportingDialog(message: message),
+    ).whenComplete(() => showing = false),
+  );
+
+  try {
+    return await work();
+  } finally {
+    // In a `finally` so that success, failure and cancellation all take it
+    // down. Guarded because the route may already be gone — the whole point of
+    // `showing` is that this must never pop somebody else's route.
+    if (showing && navigator.mounted) navigator.pop();
+  }
+}
+
+/// The dialog itself: a spinner, a sentence, and no way to dismiss it.
+class _ImportingDialog extends StatelessWidget {
+  const _ImportingDialog({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        content: Semantics(
+          // Announced when it appears, so the wait is stated rather than shown.
+          liveRegion: true,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              AppSpacing.gapHorizontalMd,
+              Expanded(child: Text(message, style: theme.textTheme.bodyMedium)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

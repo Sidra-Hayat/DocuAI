@@ -10,6 +10,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/usecases/ask_assistant.dart';
 import '../providers/assistant_providers.dart';
 import '../widgets/answer_view.dart';
+import '../widgets/assistant_identity.dart';
 import '../widgets/assistant_quick_actions.dart';
 import '../widgets/question_chips.dart';
 import '../widgets/thinking_indicator.dart';
@@ -212,11 +213,16 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.documentTitle == null
-              ? 'Assistant'
-              : 'About ${widget.documentTitle}',
-          overflow: TextOverflow.ellipsis,
+        titleSpacing: AppSpacing.md,
+        toolbarHeight: 68,
+        // The mark travels with the feature. A conversation scoped to one
+        // document names that document and says so underneath, rather than
+        // spending the title on "About …" and leaving the scope to be inferred.
+        title: AssistantIdentity(
+          title: widget.documentTitle,
+          subtitle: widget.documentTitle == null
+              ? 'Answers from your own documents'
+              : 'Answers from this document',
         ),
         actions: <Widget>[
           if (recent.isNotEmpty && !busy)
@@ -333,8 +339,20 @@ class _Introduction extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Suggestions are a convenience: a document or library that cannot produce
     // any still gets the actions, never an error.
-    final suggestions =
+    final suggested =
         ref.watch(suggestedQuestionsProvider(scope)).value ?? const <String>[];
+
+    // An example that repeats a button sitting inches above it is the same
+    // offer made twice. Both are wanted — the button is the short way, the
+    // example teaches that the question can simply be typed — but only one of
+    // them should be on screen.
+    final offered = <String>{
+      for (final action in AssistantActions.headline(scope != null))
+        action.label.toLowerCase(),
+    };
+    final suggestions = suggested
+        .where((question) => !offered.contains(question.toLowerCase()))
+        .toList(growable: false);
 
     // A library with nothing readable in it cannot answer anything, and saying
     // so beats offering four actions that all come back empty.
@@ -357,10 +375,15 @@ class _Introduction extends ConsumerWidget {
       message: scope == null
           // Said plainly on the screen where it is not obvious. Inside a
           // document the scope explains itself; from the Assistant tab the user
-          // has no way of knowing what the question is being asked *of*.
-          ? 'Ask a question about any of your documents. DocuAI searches your '
-                'saved documents and answers only from information it can find.'
-          : 'Every answer comes from this document’s own pages, and shows you '
+          // has no way of knowing what the question is being asked *of* — nor,
+          // before this said so, what kinds of thing were worth asking.
+          ? 'Ask in your own words — what a document is about, what it says, '
+                'or which dates, names and amounts are in it. Every answer '
+                'comes from your own documents and shows you where it came '
+                'from.'
+          : 'Ask in your own words — what this document is about, what it '
+                'says, or which dates, names and amounts are in it. Every '
+                'answer comes from this document’s own pages, and shows you '
                 'where it came from.',
       action: AssistantQuickActions(
         onIntent: onIntent,

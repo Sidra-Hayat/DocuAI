@@ -21,6 +21,21 @@ abstract final class AppRoutes {
   static const String scan = '/scan';
   static const String scanName = 'scan';
 
+  /// The beginner's guide, reached from the question mark on the library.
+  static const String help = '/help';
+  static const String helpName = 'help';
+
+  /// Merge, compress and share — the jobs that take documents and make a file.
+  static const String pdfTools = '/pdf-tools';
+  static const String pdfToolsName = 'pdfTools';
+
+  /// Nested under the hub so Back returns to the tools rather than the library.
+  static const String mergePdfs = 'merge';
+  static const String mergePdfsName = 'mergePdfs';
+
+  static const String compressPdf = 'compress';
+  static const String compressPdfName = 'compressPdf';
+
   /// Detail route is nested under documents so the back stack stays correct.
   static const String documentDetail = 'detail/:id';
   static const String documentDetailName = 'documentDetail';

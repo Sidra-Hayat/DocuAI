@@ -374,8 +374,35 @@ void main() {
 
         final suggestions = (await repository.suggestedQuestions()).valueOrNull!;
 
-        expect(suggestions, contains('How much is the Water bill?'));
-        expect(suggestions, contains('When is the Lease due?'));
+        // The library holds an amount and a date, so both shape prompts are
+        // offered. The discipline is unchanged from when these were phrased
+        // per-document: a chip is shown only where the pages can answer it.
+        expect(suggestions, contains(LibraryQuestions.dates));
+        expect(suggestions, contains(LibraryQuestions.amounts));
+        expect(
+          suggestions,
+          contains(LibraryQuestions.summariseLatest),
+          reason: 'any readable library can be summarised',
+        );
+      });
+
+      test('offers no names chip when no document names anybody', () async {
+        documents.seed(
+          documentWith(
+            id: 'bill',
+            title: 'Water bill',
+            pageTexts: <String>['Total due 84.20 EUR'],
+          ),
+        );
+
+        final suggestions = (await repository.suggestedQuestions()).valueOrNull!;
+
+        expect(
+          suggestions,
+          isNot(contains(LibraryQuestions.names)),
+          reason: 'a chip that comes back empty teaches the user that the '
+              'assistant does not work',
+        );
       });
 
       test('suggests nothing when no document has been read', () async {

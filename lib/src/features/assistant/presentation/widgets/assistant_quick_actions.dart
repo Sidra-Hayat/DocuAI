@@ -40,9 +40,12 @@ class AssistantQuickActions extends StatelessWidget {
 
   /// True in a conversation about one document.
   ///
-  /// Summarise and Explain need something to be about. Offering them on the
-  /// library-wide conversation would be offering an action whose only possible
-  /// answer is "open a document first".
+  /// Changes what the actions are *called*, not which ones are offered. Every
+  /// action now works from either conversation: a document-shaped request made
+  /// with nothing open resolves to the document last worked on and names it in
+  /// the answer. Summarise and Explain used to be hidden here because their
+  /// only possible reply was "open a document first" — which was a fault in the
+  /// engine rather than a reason to withhold the button.
   final bool scoped;
 
   @override
@@ -118,15 +121,16 @@ class AssistantAction {
 abstract final class AssistantActions {
   /// The few worth showing without being asked.
   static List<AssistantAction> headline(bool scoped) => <AssistantAction>[
-    if (scoped) ...<AssistantAction>[_summarize(scoped), _explain(scoped)],
+    _summarize(scoped),
+    _explain(scoped),
     _important,
-    _find(InformationKind.names, Icons.person_outline),
     _find(InformationKind.dates, Icons.event_outlined),
   ];
 
   /// Everything, for the sheet.
   static List<AssistantAction> all(bool scoped) => <AssistantAction>[
-    if (scoped) ...<AssistantAction>[_summarize(scoped), _explain(scoped)],
+    _summarize(scoped),
+    _explain(scoped),
     _important,
     _find(InformationKind.names, Icons.person_outline),
     _find(InformationKind.dates, Icons.event_outlined),
@@ -136,17 +140,22 @@ abstract final class AssistantActions {
     _find(InformationKind.contacts, Icons.alternate_email_outlined),
   ];
 
+  /// The label says which document will be read.
+  ///
+  /// "Summarize a document" was a promise the button could not keep — it named
+  /// no document and the engine then asked the user to go and pick one. Naming
+  /// the rule instead means the button says exactly what pressing it does.
   static AssistantAction _summarize(bool scoped) => AssistantAction(
     icon: Icons.subject_outlined,
-    label: scoped ? 'Summarise this document' : 'Summarize a document',
+    label: scoped ? 'Summarise this document' : 'Summarize my latest document',
     description: 'The main points, in the document’s own words',
     intent: const SummarizeDocument(),
   );
 
   static AssistantAction _explain(bool scoped) => AssistantAction(
     icon: Icons.lightbulb_outline,
-    label: scoped ? 'Explain this document' : 'Explain something',
-    description: 'What this document is and what it covers',
+    label: scoped ? 'Explain this document' : 'Explain my latest document',
+    description: 'What the document is and what it covers',
     intent: const ExplainDocument(),
   );
 

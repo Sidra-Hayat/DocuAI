@@ -22,6 +22,7 @@ class ImportedFile {
     required this.kind,
     this.imagePaths = const <String>[],
     this.text = '',
+    this.truncatedAt,
   });
 
   /// The file's own name, without its extension — the document's title unless
@@ -36,6 +37,14 @@ class ImportedFile {
 
   /// Populated for [ImportedFileKind.text].
   final String text;
+
+  /// How many pages were kept, when the file had more than the importer reads.
+  ///
+  /// Null when nothing was left behind, which is the ordinary case. Carried all
+  /// the way to the screen on purpose: a two-hundred-page statement that
+  /// silently becomes a sixty-page document is one the user believes is
+  /// complete, and they would find out after sending it to somebody.
+  final int? truncatedAt;
 
   bool get isEmpty =>
       kind == ImportedFileKind.pages ? imagePaths.isEmpty : text.trim().isEmpty;

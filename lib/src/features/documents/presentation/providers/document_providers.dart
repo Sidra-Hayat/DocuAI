@@ -12,6 +12,7 @@ import '../../domain/repositories/document_repository.dart';
 import '../../domain/usecases/create_text_document.dart';
 import '../../domain/usecases/delete_document.dart';
 import '../../domain/usecases/edit_document_pages.dart';
+import '../../domain/usecases/edit_inline_image.dart';
 import '../../domain/usecases/edit_page_text.dart';
 import '../../domain/usecases/insert_inline_image.dart';
 import '../../domain/usecases/rename_document.dart';
@@ -138,6 +139,14 @@ final replacePageProvider = Provider<ReplaceDocumentPage>(
     scanner: ref.watch(scannerRepositoryProvider),
     documents: ref.watch(documentRepositoryProvider),
     search: ref.watch(searchRepositoryProvider),
+  ),
+);
+
+/// Rotating and cropping a picture already inside a document.
+final editInlineImageProvider = Provider<EditInlineImage>(
+  (ref) => EditInlineImage(
+    documents: ref.watch(documentRepositoryProvider),
+    paths: ref.watch(storagePathsProvider),
   ),
 );
 

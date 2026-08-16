@@ -11,6 +11,7 @@ import '../../domain/entities/assistant_intent.dart';
 import '../../domain/entities/conversation.dart';
 import '../assistant_intent_codec.dart';
 import '../providers/assistant_providers.dart';
+import '../widgets/assistant_identity.dart';
 
 /// Every thread, newest first.
 ///
@@ -27,7 +28,13 @@ class ConversationsScreen extends ConsumerWidget {
     final conversations = ref.watch(conversationsProvider(null));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Assistant')),
+      appBar: AppBar(
+        titleSpacing: AppSpacing.lg,
+        toolbarHeight: 68,
+        title: const AssistantIdentity(
+          subtitle: 'Answers from your own documents',
+        ),
+      ),
       body: conversations.when(
         loading: () =>
             const AppStateView.busy(title: 'Opening your conversations…'),

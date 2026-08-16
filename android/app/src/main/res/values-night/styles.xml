@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on -->
+    <!--
+      Shown while the process starts, when the OS's Dark Mode setting is on.
+
+      Deliberately the same splash as the light theme: the ink and the mark are
+      brand, not chrome, so they do not follow the system setting. Committing to
+      one colour is also what removes the white flash a light splash gives a
+      dark-mode user.
+
+      Repeated rather than inherited because a values-night style replaces its
+      values counterpart outright rather than merging with it.
+    -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <!-- Show a splash screen on the activity. Automatically removed when
-             the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <!-- Same ink as the light theme. The splash is brand, not chrome, so it
-             does not follow the system setting. Repeated here because a
-             values-night style replaces its values counterpart rather than
-             merging with it. -->
-        <item name="android:windowSplashScreenBackground">@color/brand_ink</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your

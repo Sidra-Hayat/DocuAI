@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
+    <!--
+      Shown while the process starts, when the OS's Dark Mode setting is off.
+
+      The splash is one mechanism expressed two ways, not two mechanisms. Below
+      Android 12 the window background *is* the splash, and it is
+      `@drawable/launch_background`. From Android 12 the platform composes its
+      own and ignores that drawable, so values-v31 restates the same ink and the
+      same mark in the attributes the platform reads. Both paths draw the same
+      two things; neither is a fallback pretending to be the other.
+
+      Flutter removes this theme as soon as the engine paints its first frame —
+      see the NormalTheme meta-data in AndroidManifest.xml. Nothing here holds
+      the app open for longer than it takes to start.
+    -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <!-- Show a splash screen on the activity. Automatically removed when
-             the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <!-- Android 12+ composes the splash itself and ignores windowBackground.
-             Without this it would use the platform default rather than the
-             brand ink. Ignored harmlessly on older releases. -->
-        <item name="android:windowSplashScreenBackground">@color/brand_ink</item>
     </style>
     <!-- Theme applied to the Android Window as soon as the process has started.
          This theme determines the color of the Android Window while your

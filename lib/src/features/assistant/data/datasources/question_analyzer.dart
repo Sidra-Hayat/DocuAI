@@ -1,3 +1,4 @@
+import '../../../../core/text/markup.dart';
 import '../../../search/data/datasources/search_tokenizer.dart';
 import 'synonym_index.dart';
 
@@ -446,6 +447,66 @@ abstract final class QuestionAnalyzer {
     'in short',
   ];
 
+  /// Asks what a thing *is* — its subject rather than its contents.
+  ///
+  /// The category [_aboutPattern] recognises by shape, named here by vocabulary
+  /// so it is reachable without the "what is … about" wording. "What is the
+  /// purpose of this document?" is the same request as "what is this about?",
+  /// and asking it the other way round used to send `purpose` to retrieval as
+  /// though it were a word printed on the page.
+  ///
+  /// **"about" is deliberately absent.** It is a preposition far more often than
+  /// a request — "what do you know about the rent" is an ordinary question, and
+  /// is answered by retrieval. Its request sense is a sentence *shape*, which is
+  /// what [_aboutPattern] exists to match.
+  static const Set<String> _aboutWords = <String>{
+    'purpose',
+    'topic',
+    'topics',
+    'theme',
+    'regarding',
+    'concerning',
+  };
+
+  /// How to answer, rather than what to find.
+  ///
+  /// "Explain it simply" asks for an explanation in plain language. Left in,
+  /// `simply` is the one word that survives the request vocabulary, so the
+  /// question reads as naming something to go and look for — and a library
+  /// containing no page with the word "simply" on it answers that it found
+  /// nothing, to a question that was only ever asking about the document in
+  /// front of the user.
+  static const Set<String> _mannerWords = <String>{
+    'simply',
+    'simple',
+    'plainly',
+    'plain',
+    'easily',
+    'easy',
+    'basically',
+    'layman',
+    'laymans',
+  };
+
+  /// Points at a document by when it was touched rather than by what it says.
+  ///
+  /// "Summarise my latest document" names a document as surely as "summarise
+  /// the tenancy agreement" does — just by recency instead of by title. Treated
+  /// as a search term, `latest` is a word no page contains, and the request came
+  /// back as "I could not find a document matching \"latest\"".
+  ///
+  /// Removing it from the terms is the whole of the fix: a whole-document
+  /// request that names nothing resolves to the most recently updated readable
+  /// document, which is exactly what these words mean.
+  static const Set<String> _recencyWords = <String>{
+    'latest',
+    'newest',
+    'recent',
+    'recently',
+    'last',
+    'current',
+  };
+
   /// Asks what the document *is*, rather than for the points inside it.
   ///
   /// A distinction worth keeping. "What are the main points?" wants the
@@ -668,7 +729,13 @@ abstract final class QuestionAnalyzer {
           !_selfWords.contains(token) &&
           !_qualifierWords.contains(token) &&
           !_explainWords.contains(token) &&
-          !_summaryWords.contains(token),
+          !_summaryWords.contains(token) &&
+          // The three categories added alongside these: a request that asks
+          // what a document is *for*, in plain language, about the newest one,
+          // still names nothing to go and search for.
+          !_aboutWords.contains(token) &&
+          !_mannerWords.contains(token) &&
+          !_recencyWords.contains(token),
     );
   }
 
@@ -698,6 +765,38 @@ abstract final class QuestionAnalyzer {
     return QuestionIntent.general;
   }
 
+  /// True when [token] describes the *request* rather than anything a page
+  /// could contain.
+  ///
+  /// The one predicate the four consumers below share, so they cannot drift.
+  /// Each of them used to restate its own list, which is how `purpose` came to
+  /// be filtered from one and searched for by another.
+  static bool _describesTheRequest(String token) =>
+      _summaryWords.contains(token) ||
+      _explainWords.contains(token) ||
+      _aboutWords.contains(token) ||
+      _mannerWords.contains(token) ||
+      _recencyWords.contains(token) ||
+      _enumerationWords.contains(token) ||
+      _qualifierWords.contains(token) ||
+      _mentionWords.contains(token) ||
+      _selfWords.contains(token);
+
+  /// True when the question points at the document in front of the user rather
+  /// than naming anything in particular.
+  ///
+  /// "Give me the important information from this document" is made entirely of
+  /// a qualifier and two words for "document". That is not a phrase to
+  /// recognise; it is a question with no search terms in it, which is a
+  /// different thing from a question whose search terms are missing from the
+  /// library — and the two deserve different answers.
+  static bool _pointsAtTheDocument(List<String> tokens) => tokens.any(
+    (token) =>
+        _selfWords.contains(token) ||
+        _qualifierWords.contains(token) ||
+        _recencyWords.contains(token),
+  );
+
   /// Which ranker should run.
   ///
   /// Also read from the *unfiltered* tokens, for the same reason as the intent:
@@ -711,6 +810,7 @@ abstract final class QuestionAnalyzer {
     // Checked first: "explain the summary of clause 4" is a request about a
     // passage, not a request to summarise the document.
     if (tokens.any(_explainWords.contains)) return QuestionMode.explain;
+    if (tokens.any(_aboutWords.contains)) return QuestionMode.explain;
     if (_aboutPhrases.any(normalised.contains) ||
         _aboutPattern.hasMatch(normalised.trim())) {
       return QuestionMode.explain;
@@ -718,6 +818,16 @@ abstract final class QuestionAnalyzer {
 
     if (tokens.any(_summaryWords.contains)) return QuestionMode.summary;
     if (_summaryPhrases.any(normalised.contains)) return QuestionMode.summary;
+
+    // "Find the amount on the electricity bill" names which amount, and is a
+    // question with an answer — not a request to list every figure on the
+    // page. Anything left after the request vocabulary is that narrowing.
+    final narrowing = tokens.where(
+      (token) =>
+          !stopwords.contains(token) &&
+          !_describesTheRequest(token) &&
+          !_intentVocabulary.contains(token),
+    );
 
     // Four ways of asking for everything of a kind. The first two are explicit
     // — "find", "list all". The last two are how people actually phrase it:
@@ -727,20 +837,20 @@ abstract final class QuestionAnalyzer {
         _enumerationPhrases.any(normalised.contains) ||
         tokens.any(_pluralShapeWords.contains) ||
         tokens.any(_mentionWords.contains);
-    if (!enumerating) return QuestionMode.answer;
 
-    // "Find the amount on the electricity bill" names which amount, and is a
-    // question with an answer — not a request to list every figure on the
-    // page. Anything left after the request vocabulary is that narrowing.
-    final narrowing = tokens.where(
-      (token) =>
-          !stopwords.contains(token) &&
-          !_enumerationWords.contains(token) &&
-          !_qualifierWords.contains(token) &&
-          !_mentionWords.contains(token) &&
-          !_selfWords.contains(token) &&
-          !_intentVocabulary.contains(token),
-    );
+    // A question with nothing to search for that points at the document itself
+    // is a request for what the document *holds*, and is answered like one.
+    //
+    // Generalised deliberately rather than met with another phrase to match:
+    // "give me the important information", "what does this contain", "anything
+    // useful in here" all reduce to request vocabulary and a word meaning
+    // "document", and there is no page in any library that answers them
+    // literally. Sending them to retrieval is what produced an unrelated
+    // sentence containing the word "information".
+    final asksWhatItHolds = narrowing.isEmpty && _pointsAtTheDocument(tokens);
+
+    if (!enumerating && !asksWhatItHolds) return QuestionMode.answer;
+
     if (narrowing.isNotEmpty) return QuestionMode.answer;
 
     // A shape to recognise on the page. A place is deliberately absent: an
@@ -794,15 +904,7 @@ abstract final class QuestionAnalyzer {
   /// because no page says "documents" or "mention" about itself.
   static List<String> _contentOf(List<String> terms) {
     final content = terms
-        .where(
-          (term) =>
-              !_summaryWords.contains(term) &&
-              !_explainWords.contains(term) &&
-              !_enumerationWords.contains(term) &&
-              !_qualifierWords.contains(term) &&
-              !_mentionWords.contains(term) &&
-              !_selfWords.contains(term),
-        )
+        .where((term) => !_describesTheRequest(term))
         .toList(growable: false);
 
     return content.isEmpty ? terms : content;
@@ -817,13 +919,7 @@ abstract final class QuestionAnalyzer {
   static List<String> _subjectOf(List<String> terms) => terms
       .where(
         (term) =>
-            !_summaryWords.contains(term) &&
-            !_explainWords.contains(term) &&
-            !_enumerationWords.contains(term) &&
-            !_qualifierWords.contains(term) &&
-            !_mentionWords.contains(term) &&
-            !_selfWords.contains(term) &&
-            !_intentVocabulary.contains(term),
+            !_describesTheRequest(term) && !_intentVocabulary.contains(term),
       )
       .toList(growable: false);
 }
@@ -1069,18 +1165,111 @@ abstract final class PassageSignals {
   static List<String> matches(QuestionIntent intent, String text) =>
       locate(intent, text).map((found) => found.$2).toList(growable: false);
 
-  static List<(int, String)> _locateNames(String text) =>
-      List<(int, String)>.unmodifiable(
-        _properName
-            .allMatches(text)
-            .where(
-              (match) => !match
-                  .group(0)!
-                  .split(RegExp(r'\s+'))
-                  .any((word) => _furniture.contains(word.toLowerCase())),
-            )
-            .map((match) => (match.start, match.group(0)!)),
-      );
+  /// Words that end the name of an organisation rather than of a person.
+  ///
+  /// Checked against the *last* word of a capitalised run, which is where the
+  /// legal or sectoral suffix sits: "Northwind Utilities", "Pemberton Holdings",
+  /// "Riverside Hospital". A person is not called Utilities.
+  ///
+  /// Separate from [_furniture], which lists words that disqualify a run
+  /// wherever they appear. Position is the evidence here: "Bank" ends the name
+  /// of a bank, but "Bank Holiday" is neither.
+  static const Set<String> _organisationWords = <String>{
+    'associates',
+    'authority',
+    'bank',
+    'college',
+    'company',
+    'corporation',
+    'council',
+    'energy',
+    'foundation',
+    'group',
+    'holdings',
+    'hospital',
+    'inc',
+    'incorporated',
+    'institute',
+    'insurance',
+    'limited',
+    'llc',
+    'llp',
+    'ltd',
+    'partners',
+    'plc',
+    'school',
+    'services',
+    'society',
+    'solutions',
+    'systems',
+    'technologies',
+    'trust',
+    'university',
+    'utilities',
+  };
+
+  /// Runs of capitalised words that read as a person's name.
+  ///
+  /// Three filters, each answering to evidence on the page rather than to a
+  /// guess about the words:
+  ///
+  ///  * [_furniture] — a run containing "Total", "Account" or a street type is
+  ///    a table header or an address, both capitalised exactly like a name.
+  ///  * [_organisationWords] — a run *ending* in a sectoral or legal suffix is a
+  ///    company. "Northwind Utilities" was being reported as a person on every
+  ///    utility bill in the library.
+  ///  * **Headings** — a document's own section titles are capitalised by
+  ///    convention, so "# Flashlight Controller" was read as somebody called
+  ///    Flashlight Controller. A heading is a structural fact [Markup] already
+  ///    records, which makes this the one exclusion here that rests on how the
+  ///    document is *written* rather than on what the words are.
+  ///
+  /// Conservative on purpose. Capitalisation is a convention, not a fact, which
+  /// is why a name is reported as a partial match where a currency figure is
+  /// reported as a strong one — and why a missed name is the better error.
+  static List<(int, String)> _locateNames(String text) {
+    final headingLines = _headingRangesIn(text);
+
+    bool onAHeading(int offset) =>
+        headingLines.any((range) => offset >= range.$1 && offset < range.$2);
+
+    return List<(int, String)>.unmodifiable(
+      _properName
+          .allMatches(text)
+          .where((match) {
+            final words = match
+                .group(0)!
+                .split(RegExp(r'\s+'))
+                .map((word) => word.toLowerCase())
+                .toList(growable: false);
+
+            if (words.any(_furniture.contains)) return false;
+            if (_organisationWords.contains(words.last)) return false;
+            return !onAHeading(match.start);
+          })
+          .map((match) => (match.start, match.group(0)!)),
+    );
+  }
+
+  /// Character ranges of every heading line in [text], end exclusive.
+  static List<(int, int)> _headingRangesIn(String text) {
+    final ranges = <(int, int)>[];
+
+    var start = 0;
+    while (start <= text.length) {
+      final newline = text.indexOf('\n', start);
+      final end = newline < 0 ? text.length : newline;
+
+      if (Markup.isHeadingLine(text.substring(start, end))) {
+        ranges.add((start, end));
+      }
+
+      if (newline < 0) break;
+      start = newline + 1;
+    }
+
+    return ranges;
+  }
 
   static bool satisfies(QuestionIntent intent, String text) => switch (intent) {
     QuestionIntent.date => hasDate(text),

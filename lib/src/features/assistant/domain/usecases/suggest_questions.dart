@@ -28,6 +28,30 @@ abstract final class DocumentQuestions {
   static const String references = 'Find reference numbers';
 }
 
+/// The same idea for the library-wide conversation.
+///
+/// Separate from [DocumentQuestions] because the wording has to be true of a
+/// library rather than of one page — "Find names" reads as a command inside a
+/// document and as an ambiguity outside it, where the useful question is which
+/// of *your documents* mention anybody.
+///
+/// Every one of these is offered only when the library can actually answer it,
+/// checked with the same signals that will do the answering. A suggestion that
+/// comes back empty is worse than no suggestion: it teaches the user that the
+/// assistant does not work, when in truth they were handed a question about
+/// something their documents do not contain.
+abstract final class LibraryQuestions {
+  static const String summariseLatest = 'Summarize my latest document';
+  static const String dates = 'Find all important dates';
+  static const String names = 'Who is mentioned in my documents?';
+  static const String amounts = 'What amounts are mentioned?';
+
+  /// "What is my electricity bill about?" — with the user's own document in
+  /// place of the example, because a suggestion naming a document they do not
+  /// have is a suggestion that cannot be tapped.
+  static String about(String title) => 'What is the $title about?';
+}
+
 /// The last few questions actually asked, newest first.
 ///
 /// Derived from the transcript rather than stored separately — the history is

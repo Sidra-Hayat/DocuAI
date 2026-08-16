@@ -14,7 +14,9 @@ class ShareExtractedText {
   final ExportRepository _export;
 
   FutureResult<void> call(Document document) {
-    final text = document.extractedText.trim();
+    // The readable form, not the stored one: text shared into an email or a
+    // note must arrive as words rather than as `## Total` and `**248.60**`.
+    final text = document.readableText.trim();
 
     if (text.isEmpty) {
       return Future.value(
