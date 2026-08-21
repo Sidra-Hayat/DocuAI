@@ -36,6 +36,15 @@ abstract final class AppRoutes {
   static const String compressPdf = 'compress';
   static const String compressPdfName = 'compressPdf';
 
+  /// Building a ZIP, nested under the hub beside merge and compress.
+  ///
+  /// A sibling of those two rather than a route of its own near [archive].
+  /// Reading an archive is something that happens *to* the app — a file
+  /// arrives, and the browser opens above everything — while making one is a
+  /// job the user came here to do, which is what the hub is for.
+  static const String createZip = 'zip';
+  static const String createZipName = 'createZip';
+
   /// Detail route is nested under documents so the back stack stays correct.
   static const String documentDetail = 'detail/:id';
   static const String documentDetailName = 'documentDetail';

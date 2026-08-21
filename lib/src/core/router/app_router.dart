@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/archives/presentation/screens/archive_screen.dart';
+import '../../features/archives/presentation/screens/create_zip_screen.dart';
 import '../../features/archives/presentation/screens/file_reader_screen.dart';
 import '../../features/assistant/presentation/assistant_intent_codec.dart';
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
@@ -301,6 +302,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: AppRoutes.compressPdfName,
             parentNavigatorKey: _rootNavigatorKey,
             builder: (context, state) => const CompressPdfScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.createZip,
+            name: AppRoutes.createZipName,
+            parentNavigatorKey: _rootNavigatorKey,
+            builder: (context, state) => const CreateZipScreen(),
           ),
         ],
       ),

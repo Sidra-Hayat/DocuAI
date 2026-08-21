@@ -24,6 +24,10 @@ import io.flutter.plugin.common.MethodChannel
  *
  * The third is [ExternalOpener], the way back out: a file inside an archive
  * that DocuAI cannot read is handed to an app that can.
+ *
+ * The fourth is [FilePicker], which is the way *in* for files the user chooses
+ * rather than files another app sends: several at once, through the system
+ * document picker, for building a ZIP out of things that are not in the library.
  */
 class MainActivity : FlutterActivity() {
     private companion object {
@@ -33,6 +37,7 @@ class MainActivity : FlutterActivity() {
 
     private val incoming by lazy { IncomingFiles(applicationContext) }
     private val opener by lazy { ExternalOpener(this) }
+    private val picker by lazy { FilePicker(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -47,6 +52,7 @@ class MainActivity : FlutterActivity() {
 
         incoming.attach(flutterEngine.dartExecutor.binaryMessenger)
         opener.attach(flutterEngine.dartExecutor.binaryMessenger)
+        picker.attach(flutterEngine.dartExecutor.binaryMessenger)
 
         // The cold-start case. This runs inside `onCreate`, so the intent that
         // started the process is already attached and is read here — long
@@ -82,9 +88,25 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
     }
 
+    /**
+     * The document picker's answer comes back here.
+     *
+     * `FlutterActivity` routes this to the registered plugins, and every plugin
+     * that started an activity is looking for its own request code. [FilePicker]
+     * is not a plugin, so it is offered the result first and reports whether it
+     * was the one waiting for it; anything else falls through to `super`
+     * untouched, which is what keeps the image picker and the ML Kit scanner
+     * working.
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (picker.onActivityResult(requestCode, resultCode, data)) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
         incoming.detach()
         opener.detach()
+        picker.detach()
         super.onDestroy()
     }
 

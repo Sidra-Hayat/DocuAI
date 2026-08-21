@@ -5,11 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
 
-/// The three things this app can do to a PDF, on one screen.
+/// The jobs that take documents you already have and produce a file to send.
 ///
-/// A hub rather than three entries scattered around the library, because these
-/// are the same kind of job — take documents you already have and produce a
-/// file — and someone looking for one of them is looking for all three.
+/// A hub rather than entries scattered around the library, because they are the
+/// same kind of job and somebody looking for one of them is looking for all of
+/// them. "Create a ZIP" is here on that test rather than on a stricter reading
+/// of the screen's name: it is not a thing done *to* a PDF, but it is a thing
+/// done to the documents and files this screen already works on, and a second
+/// section holding one tile would be a worse answer than a slightly loose one.
 class PdfToolsScreen extends ConsumerWidget {
   const PdfToolsScreen({super.key});
 
@@ -30,9 +33,9 @@ class PdfToolsScreen extends ConsumerWidget {
         ),
         children: <Widget>[
           Text(
-            'Work with PDF files — including ones that are not in DocuAI yet. '
-            'Everything runs on your phone, nothing is uploaded, and the files '
-            'you choose are never changed.',
+            'Work with documents and files — including ones that are not in '
+            'DocuAI yet. Everything runs on your phone, nothing is uploaded, '
+            'and the files you choose are never changed.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.45,
@@ -54,6 +57,15 @@ class PdfToolsScreen extends ConsumerWidget {
                 'Make a smaller copy, for email or an upload with a size '
                 'limit. Works on any PDF on this phone.',
             onPressed: () => context.pushNamed(AppRoutes.compressPdfName),
+          ),
+          AppSpacing.gapMd,
+          _Tool(
+            icon: Icons.folder_zip_outlined,
+            title: 'Create a ZIP',
+            description:
+                'Put several documents and files into one .zip to send. Any '
+                'file manager or chat app can open it.',
+            onPressed: () => context.pushNamed(AppRoutes.createZipName),
           ),
           AppSpacing.gapXl,
           // Sharing used to be a third tile here, which picked a document from
