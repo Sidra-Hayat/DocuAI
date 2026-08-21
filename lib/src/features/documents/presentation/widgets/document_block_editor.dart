@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/page_image_decoding.dart';
 import '../../domain/entities/document_block.dart';
 import 'document_block_controller.dart';
 
@@ -191,6 +192,8 @@ class InlineImageBlock extends ConsumerWidget {
                     child: Image.file(
                       File(path),
                       fit: BoxFit.contain,
+                      // Capped at [maxHeight] by the box above it.
+                      cacheHeight: pageDecodeExtent(context, maxHeight),
                       // Keyed on the path so that editing a picture — which
                       // writes a new file and points the block at it — is shown
                       // rather than served from the decode cache of the old one.

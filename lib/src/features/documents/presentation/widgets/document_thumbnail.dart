@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/storage_paths.dart';
+import '../../../../core/widgets/page_image_decoding.dart';
 import '../../domain/entities/document_page.dart';
 
 /// Renders a page image from its stored relative path.
@@ -48,6 +49,18 @@ class DocumentThumbnail extends ConsumerWidget {
           final relative => Image.file(
             File(ref.watch(storagePathsProvider).absolutePath(relative)),
             fit: BoxFit.cover,
+            // Decoded at thumbnail size, not at the page's own 2400px. This
+            // is the worst case for the blank-pages bug — one of these exists
+            // per row, so a library of forty documents used to ask for forty
+            // full-size decodes to fill forty boxes the size of a stamp.
+            //
+            // Measured against the *longer* side because the fit is `cover`:
+            // the picture has to fill the box in both directions, and sizing
+            // to the shorter one would leave `cover` upscaling what it got.
+            cacheWidth: pageDecodeExtent(
+              context,
+              width > height ? width : height,
+            ),
             errorBuilder: (context, error, stackTrace) =>
                 _Fallback(theme: theme),
           ),

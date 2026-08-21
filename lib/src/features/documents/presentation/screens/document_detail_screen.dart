@@ -9,6 +9,7 @@ import '../../../../core/router/app_routes.dart';
 import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../../../core/widgets/page_image_decoding.dart';
 import '../../../assistant/presentation/screens/conversations_screen.dart';
 import '../../../assistant/presentation/widgets/summarise_button.dart';
 import '../../../ocr/presentation/providers/ocr_controller.dart';
@@ -479,6 +480,16 @@ class _PageHero extends ConsumerWidget {
                             child: Image.file(
                               File(paths.absolutePath(page.imagePath!)),
                               fit: BoxFit.contain,
+                              // The card is [_PageHero._height] tall and the
+                              // fit is `contain`, so height is what the page
+                              // is scaled to. A thirty-page document keeps
+                              // three of these alive at once in the PageView;
+                              // at full size that was ninety megabytes of
+                              // bitmap for three cards.
+                              cacheHeight: pageDecodeExtent(
+                                context,
+                                _PageHero._height,
+                              ),
                               errorBuilder: (context, error, stackTrace) =>
                                   Center(
                                     child: Icon(
