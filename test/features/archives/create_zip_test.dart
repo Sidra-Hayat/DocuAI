@@ -41,7 +41,7 @@ void main() {
     cache = await Directory(p.join(workspace.path, 'cache')).create();
 
     paths = StoragePaths(documentsRoot);
-    documents = FakeDocumentRepository();
+    documents = FakeDocumentRepository()..archiveRoot = documentsRoot;
     export = _WritingExportRepository(documentsRoot);
   });
 
@@ -202,6 +202,98 @@ void main() {
       final after = documents.store['doc-a']!;
       expect(after.updatedAt, before);
       expect(after.pdfPath, isNotNull, reason: 'the path is still cached');
+    });
+  });
+
+  group('an archive inside an archive', () {
+    test('a saved archive goes in as the .zip it already is', () async {
+      // Found on a device. A saved ZIP is a library item, so the picker offers
+      // it — and it used to take the ordinary document path, where the builder
+      // tries to render a PDF, finds no pages, and drops the entry saying
+      // "That document has nothing in it yet". The archive was not empty; it
+      // simply is not made of pages.
+      final inner = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'inner')],
+        archiveName: 'Inner',
+      );
+      final innerDocument = inner.valueOrNull!.document;
+
+      final outer = await repository().build(
+        sources: <ZipSource>[
+          ZipSource.archive(
+            documentId: innerDocument.id,
+            title: innerDocument.title,
+            sizeBytes: innerDocument.archiveBytes ?? 0,
+          ),
+          pickedFile('b.txt', 'outer'),
+        ],
+        archiveName: 'Outer',
+      );
+
+      final outcome = outer.valueOrNull!;
+
+      expect(outcome.isComplete, isTrue, reason: 'nothing should be skipped');
+      expect(outcome.entryCount, 2);
+      // Named for what it is, rather than "Inner.zip.pdf".
+      expect(namesIn(outcome.path), <String>['Inner.zip', 'b.txt']);
+    });
+
+    test('the nested archive survives byte-for-byte', () async {
+      final inner = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'inner contents')],
+        archiveName: 'Inner',
+      );
+      final innerDocument = inner.valueOrNull!.document;
+      final innerBytes = File(inner.valueOrNull!.path).readAsBytesSync();
+
+      final outer = await repository().build(
+        sources: <ZipSource>[
+          ZipSource.archive(
+            documentId: innerDocument.id,
+            title: innerDocument.title,
+            sizeBytes: innerDocument.archiveBytes ?? 0,
+          ),
+        ],
+        archiveName: 'Outer',
+      );
+
+      final extracted = decode(
+        outer.valueOrNull!.path,
+      ).files.single.readBytes()!;
+
+      expect(extracted, innerBytes);
+      // And the inner archive is still in the library, untouched by being
+      // copied into another one.
+      expect(File(inner.valueOrNull!.path).existsSync(), isTrue);
+    });
+
+    test('an archive whose file has gone says so, and says which', () async {
+      final inner = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'inner')],
+        archiveName: 'Inner',
+      );
+      final innerDocument = inner.valueOrNull!.document;
+      File(inner.valueOrNull!.path).deleteSync();
+
+      final outer = await repository().build(
+        sources: <ZipSource>[
+          ZipSource.archive(
+            documentId: innerDocument.id,
+            title: innerDocument.title,
+            sizeBytes: innerDocument.archiveBytes ?? 0,
+          ),
+          pickedFile('b.txt', 'outer'),
+        ],
+        archiveName: 'Outer',
+      );
+
+      final outcome = outer.valueOrNull!;
+      expect(outcome.entryCount, 1);
+      expect(outcome.skipped.single.name, 'Inner.zip');
+      expect(
+        outcome.skipped.single.reason,
+        contains('no longer on this device'),
+      );
     });
   });
 
@@ -366,13 +458,106 @@ void main() {
   });
 
   group('the archive itself', () {
-    test('is written inside the cache, never anywhere the user chose', () async {
+    test('is kept in the library’s storage, not in the cache', () async {
+      // The change this feature is: an archive used to live in the cache and be
+      // swept after a few hours. It is now a library item, so it has to be
+      // somewhere Android will not reclaim — and nowhere the user chose, which
+      // would need a storage permission this app does not have.
       final result = await repository().build(
         sources: <ZipSource>[pickedFile('a.txt', 'hello')],
         archiveName: 'Archive',
       );
 
-      expect(p.isWithin(cache.path, result.valueOrNull!.path), isTrue);
+      final outcome = result.valueOrNull!;
+
+      expect(File(outcome.path).existsSync(), isTrue);
+      expect(p.isWithin(documentsRoot.path, outcome.path), isTrue);
+      expect(
+        p.isWithin(cache.path, outcome.path),
+        isFalse,
+        reason: 'the cache is where it is built, not where it is kept',
+      );
+    });
+
+    test('leaves nothing of itself in the cache afterwards', () async {
+      // Moved, not copied. A second copy of something that can be hundreds of
+      // megabytes is not a detail on a phone that may be nearly full.
+      final result = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'hello')],
+        archiveName: 'Archive',
+      );
+
+      expect(File(result.valueOrNull!.path).existsSync(), isTrue);
+
+      final root = Directory(
+        p.join(cache.path, ZipBuilderRepositoryImpl.rootDirectory),
+      );
+      final leftInCache = root.existsSync()
+          ? root.listSync(recursive: true).whereType<File>().toList()
+          : <File>[];
+
+      expect(leftInCache, isEmpty);
+    });
+
+    test('becomes a library item that names and measures itself', () async {
+      final result = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'x' * 5000)],
+        archiveName: 'Holiday photos',
+      );
+
+      final document = result.valueOrNull!.document;
+
+      expect(document.isArchive, isTrue);
+      expect(document.source, DocumentSource.archive);
+      expect(document.title, 'Holiday photos.zip');
+      expect(document.archiveBytes, File(result.valueOrNull!.path).lengthSync());
+      // No pages, and therefore nothing outstanding to read — a library card
+      // that said "Text not read yet" on a ZIP would be waiting for ever.
+      expect(document.pages, isEmpty);
+      expect(document.ocrStatus, OcrStatus.completed);
+
+      // And it is in the store, which is what makes it survive a restart.
+      expect(documents.store[document.id], isNotNull);
+    });
+
+    test('two archives on the same day do not overwrite each other', () async {
+      final first = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'one')],
+        archiveName: 'DocuAI 2026-08-21',
+      );
+      final second = await repository().build(
+        sources: <ZipSource>[pickedFile('b.txt', 'two')],
+        archiveName: 'DocuAI 2026-08-21',
+      );
+      final third = await repository().build(
+        sources: <ZipSource>[pickedFile('c.txt', 'three')],
+        archiveName: 'DocuAI 2026-08-21',
+      );
+
+      expect(first.valueOrNull!.fileName, 'DocuAI 2026-08-21.zip');
+      expect(second.valueOrNull!.fileName, 'DocuAI 2026-08-21 (2).zip');
+      expect(third.valueOrNull!.fileName, 'DocuAI 2026-08-21 (3).zip');
+
+      // All three still on disk, each holding what it was given.
+      for (final built in <Result<ZipBuildOutcome>>[first, second, third]) {
+        expect(File(built.valueOrNull!.path).existsSync(), isTrue);
+      }
+      expect(namesIn(first.valueOrNull!.path), <String>['a.txt']);
+      expect(namesIn(third.valueOrNull!.path), <String>['c.txt']);
+    });
+
+    test('a cancelled build leaves no library item behind either', () async {
+      final result = await repository().build(
+        sources: <ZipSource>[pickedFile('a.txt', 'hello')],
+        archiveName: 'Archive',
+        isCancelled: () => true,
+      );
+
+      expect((result.failureOrNull! as ImportFailure).cancelled, isTrue);
+      // The record is written only once there is an archive to point at, so a
+      // stopped build cannot leave a row in the library that opens nothing.
+      expect(documents.store, isEmpty);
+      expect(documents.archivedFrom, isEmpty);
     });
 
     test('opens in the app’s own archive browser', () async {
@@ -408,12 +593,22 @@ void main() {
       expect(outcome.savedFraction, greaterThan(0.5));
     });
 
-    test('an old build is swept, a fresh one is not', () async {
+    test('a saved archive is never swept, however old it gets', () async {
+      // The sweep used to delete finished archives, because that was where they
+      // lived. Now it must not touch one: the library says the ZIP is there
+      // until the user deletes it, and a cleanup that quietly disagreed would
+      // leave a row in the library that opens nothing.
       final first = await repository().build(
         sources: <ZipSource>[pickedFile('a.txt', 'one')],
         archiveName: 'First',
       );
-      final firstRun = Directory(p.dirname(first.valueOrNull!.path));
+
+      // Scratch left behind by a build the system killed part way, which is the
+      // one thing the sweep is still for.
+      final stale = Directory(
+        p.join(cache.path, ZipBuilderRepositoryImpl.rootDirectory, 'run_stale'),
+      )..createSync(recursive: true);
+      File(p.join(stale.path, 'archive.zip.part')).writeAsStringSync('half');
 
       // Time is moved rather than the directory aged: a `Directory` has no
       // settable modification time, and waiting six hours is not a test.
@@ -425,9 +620,14 @@ void main() {
       );
 
       expect(
-        firstRun.existsSync(),
+        File(first.valueOrNull!.path).existsSync(),
+        isTrue,
+        reason: 'a saved archive outlives every sweep',
+      );
+      expect(
+        stale.existsSync(),
         isFalse,
-        reason: 'a build nobody came back for is not kept for ever',
+        reason: 'scratch nobody came back for is not kept for ever',
       );
       expect(File(second.valueOrNull!.path).existsSync(), isTrue);
     });

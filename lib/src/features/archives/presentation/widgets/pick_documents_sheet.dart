@@ -5,6 +5,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
 import '../../../documents/domain/entities/document.dart';
 import '../../../documents/presentation/providers/document_providers.dart';
+import '../../../pdf_tools/domain/entities/pdf_tool_models.dart';
 import '../../domain/entities/zip_build.dart';
 
 /// Chooses documents from the library to put in an archive.
@@ -57,11 +58,17 @@ class _PickDocumentsSheetState extends ConsumerState<_PickDocumentsSheet> {
     final chosen = documents
         .where((document) => _selected.contains(document.id))
         .map(
-          (document) => ZipSource.document(
-            documentId: document.id,
-            title: document.title,
-            pageCount: document.pageCount,
-          ),
+          (document) => document.isArchive
+              ? ZipSource.archive(
+                  documentId: document.id,
+                  title: document.title,
+                  sizeBytes: document.archiveBytes ?? 0,
+                )
+              : ZipSource.document(
+                  documentId: document.id,
+                  title: document.title,
+                  pageCount: document.pageCount,
+                ),
         )
         .toList();
 
@@ -186,6 +193,20 @@ class _PickDocumentsSheetState extends ConsumerState<_PickDocumentsSheet> {
   }
 }
 
+/// What a row says about a library item, under its name.
+///
+/// Pages are the measure of a document and mean nothing for an archive, which
+/// used to read "0 pages" here — a true statement that told the user nothing
+/// and looked like the archive was empty.
+String _subtitleFor(Document document, {required bool alreadyAdded}) {
+  if (alreadyAdded) return 'Already added';
+  if (document.isArchive) {
+    return 'Archive · ${formatBytes(document.archiveBytes ?? 0)}';
+  }
+  return '${document.pageCount} '
+      '${document.pageCount == 1 ? 'page' : 'pages'}';
+}
+
 class _DocumentRow extends StatelessWidget {
   const _DocumentRow({
     required this.document,
@@ -246,10 +267,7 @@ class _DocumentRow extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        alreadyAdded
-                            ? 'Already added'
-                            : '${document.pageCount} '
-                                  '${document.pageCount == 1 ? 'page' : 'pages'}',
+                        _subtitleFor(document, alreadyAdded: alreadyAdded),
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

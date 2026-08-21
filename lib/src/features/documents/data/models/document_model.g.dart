@@ -26,13 +26,15 @@ class DocumentModelAdapter extends TypeAdapter<DocumentModel> {
       pdfPath: fields[6] as String?,
       isFavorite: fields[7] as bool,
       source: fields[8] as String?,
+      archivePath: fields[9] as String?,
+      archiveBytes: (fields[10] as num?)?.toInt(),
     );
   }
 
   @override
   void write(BinaryWriter writer, DocumentModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -50,7 +52,11 @@ class DocumentModelAdapter extends TypeAdapter<DocumentModel> {
       ..writeByte(7)
       ..write(obj.isFavorite)
       ..writeByte(8)
-      ..write(obj.source);
+      ..write(obj.source)
+      ..writeByte(9)
+      ..write(obj.archivePath)
+      ..writeByte(10)
+      ..write(obj.archiveBytes);
   }
 
   @override

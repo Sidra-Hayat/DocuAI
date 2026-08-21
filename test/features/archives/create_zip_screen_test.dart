@@ -6,6 +6,8 @@ import 'package:docuai/src/features/archives/domain/entities/zip_build.dart';
 import 'package:docuai/src/features/archives/domain/repositories/zip_builder_repository.dart';
 import 'package:docuai/src/features/archives/presentation/providers/zip_create_providers.dart';
 import 'package:docuai/src/features/archives/presentation/screens/create_zip_screen.dart';
+import 'package:docuai/src/features/documents/domain/entities/document.dart';
+import 'package:docuai/src/features/documents/domain/entities/document_page.dart';
 import 'package:docuai/src/features/documents/presentation/providers/document_providers.dart';
 import 'package:docuai/src/features/pdf_tools/domain/entities/pdf_tool_models.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
+
+/// The library item a finished archive becomes.
+///
+/// Every outcome in these tests carries one now: an archive is saved the moment
+/// it exists, so there is no such thing as a build result without a document.
+final _archiveDocument = buildDocument(
+  id: 'archive-1',
+  title: 'Bundle.zip',
+  pages: const <DocumentPage>[],
+  source: DocumentSource.archive,
+  archivePath: 'documents/archive-1/Bundle.zip',
+  archiveBytes: 1024,
+);
 
 /// Creating a ZIP, as a user meets it.
 ///
@@ -143,6 +158,42 @@ void main() {
       );
     });
 
+    testWidgets('a chosen archive is labelled as one, not as 0 pages', (
+      tester,
+    ) async {
+      // Found on a device. An archive comes from the library like a document
+      // and has no pages, so the row read "Document · 0 pages" — which makes a
+      // perfectly good ZIP look empty.
+      documents.seed(
+        buildDocument(
+          id: 'zip-1',
+          title: 'DocuAI 2026-08-21.zip',
+          pages: const <DocumentPage>[],
+          source: DocumentSource.archive,
+          archivePath: 'documents/zip-1/DocuAI 2026-08-21.zip',
+          archiveBytes: 5017,
+        ),
+      );
+
+      await pumpScreen(tester);
+
+      await tester.tap(find.text('Add documents'));
+      await tester.pumpAndSettle();
+
+      // The picker says what it is, and how big.
+      expect(find.text('Archive · 4.9 KB'), findsOneWidget);
+      expect(find.textContaining('0 pages'), findsNothing);
+
+      await tester.tap(find.text('DocuAI 2026-08-21.zip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add 1 document'));
+      await tester.pumpAndSettle();
+
+      // And so does the chosen-items list.
+      expect(find.text('Archive · 4.9 KB'), findsOneWidget);
+      expect(find.textContaining('0 pages'), findsNothing);
+    });
+
     testWidgets('a row can be taken back out', (tester) async {
       await pumpScreen(tester);
       await addOneDocument(tester);
@@ -160,8 +211,9 @@ void main() {
       await addOneDocument(tester);
 
       builder.completeWith(
-        const Success(
+        Success(
           ZipBuildOutcome(
+            document: _archiveDocument,
             path: '/cache/docuai_zip/run/Bundle.zip',
             fileName: 'Bundle.zip',
             entryCount: 1,
@@ -176,7 +228,7 @@ void main() {
 
       expect(find.text('Archive ready'), findsOneWidget);
       expect(find.textContaining('Bundle.zip'), findsOneWidget);
-      expect(find.text('Share archive'), findsOneWidget);
+      expect(find.text('Share'), findsOneWidget);
     });
 
     testWidgets('accounts for anything left out', (tester) async {
@@ -184,14 +236,15 @@ void main() {
       await addOneDocument(tester);
 
       builder.completeWith(
-        const Success(
+        Success(
           ZipBuildOutcome(
+            document: _archiveDocument,
             path: '/cache/docuai_zip/run/Bundle.zip',
             fileName: 'Bundle.zip',
             entryCount: 1,
             sizeBytes: 1024,
             sourceBytes: 4096,
-            skipped: <ZipSkippedSource>[
+            skipped: const <ZipSkippedSource>[
               ZipSkippedSource(
                 name: 'holiday.jpg',
                 reason: 'That file is no longer on this device.',
@@ -215,8 +268,9 @@ void main() {
       await addOneDocument(tester);
 
       builder.completeWith(
-        const Success(
+        Success(
           ZipBuildOutcome(
+            document: _archiveDocument,
             path: '/cache/docuai_zip/run/Bundle.zip',
             fileName: 'Bundle.zip',
             entryCount: 1,
@@ -229,7 +283,7 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Share archive'));
+      await tester.tap(find.text('Share'));
       await tester.pumpAndSettle();
 
       expect(builder.shared, <String>['/cache/docuai_zip/run/Bundle.zip']);
@@ -248,8 +302,9 @@ void main() {
       await addOneDocument(tester);
 
       builder.completeWith(
-        const Success(
+        Success(
           ZipBuildOutcome(
+            document: _archiveDocument,
             path: '/cache/docuai_zip/run/Bundle.zip',
             fileName: 'Bundle.zip',
             entryCount: 1,
@@ -263,7 +318,7 @@ void main() {
       await tester.pumpAndSettle();
 
       builder.holdShare = true;
-      await tester.tap(find.text('Share archive'));
+      await tester.tap(find.text('Share'));
       await tester.pump();
 
       expect(find.text('Opening…'), findsOneWidget);
@@ -276,10 +331,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Opening…'), findsNothing);
-      expect(find.text('Share archive'), findsOneWidget);
+      expect(find.text('Share'), findsOneWidget);
 
       // And it can genuinely be pressed again, rather than merely looking able.
-      await tester.tap(find.text('Share archive'));
+      await tester.tap(find.text('Share'));
       await tester.pump();
       expect(builder.shared.length, 2);
     });
@@ -369,8 +424,9 @@ void main() {
 
       // The abandoned run finishes anyway, as a real one winding down would.
       builder.completeWith(
-        const Success(
+        Success(
           ZipBuildOutcome(
+            document: _archiveDocument,
             path: '/cache/docuai_zip/run/Late.zip',
             fileName: 'Late.zip',
             entryCount: 1,

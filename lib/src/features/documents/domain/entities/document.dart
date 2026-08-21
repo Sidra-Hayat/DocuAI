@@ -20,6 +20,16 @@ enum DocumentSource {
 
   /// Written in the app.
   created,
+
+  /// A ZIP this app built, kept in the library so it can be reopened, shared
+  /// again or deleted.
+  ///
+  /// A source rather than a separate store, because an archive answers the same
+  /// questions every other library item does — what is it called, when was it
+  /// made, do I still want it — and a second list with its own screens, its own
+  /// search and its own delete would be a second library to keep in step with
+  /// this one.
+  archive,
 }
 
 /// A document: ordered pages plus the metadata the library screen, search index
@@ -46,11 +56,36 @@ abstract class Document with _$Document {
     String? pdfPath,
     @Default(false) bool isFavorite,
     @Default(DocumentSource.scanned) DocumentSource source,
+
+    /// Relative path to the `.zip` this document *is*, or null for every
+    /// document that is a set of pages.
+    ///
+    /// The file lives inside the document's own folder, like its page images
+    /// and its exported PDF, which is what makes deleting the document delete
+    /// the archive: `StoragePaths.deleteDocumentDir` already removes the
+    /// folder, and no second cleanup path had to be invented for archives.
+    String? archivePath,
+
+    /// The archive's size on disk. Null unless [archivePath] is set.
+    ///
+    /// Stored rather than measured. The library list rebuilds on every change
+    /// to any document, and stat-ing a file per row on each rebuild is work
+    /// done over and over for a number that cannot change — an archive is
+    /// written once and never edited.
+    int? archiveBytes,
   }) = _Document;
 
   int get pageCount => pages.length;
 
   bool get hasPages => pages.isNotEmpty;
+
+  /// True when this library item is a ZIP rather than a set of pages.
+  ///
+  /// Keyed off the path rather than off [source] because the path is what the
+  /// rest of the app actually needs — a true [isArchive] guarantees there is
+  /// something to open — whereas the source is a label. The two are written
+  /// together and only this class should have to know that.
+  bool get isArchive => archivePath != null;
 
   bool get hasPdf => pdfPath != null;
 
@@ -119,6 +154,12 @@ abstract class Document with _$Document {
   /// page would leave the document pending forever, re-triggering on every
   /// open.
   OcrStatus get ocrStatus {
+    // An archive has no pages and never will. Left to the rule below it would
+    // report [OcrStatus.pending] for ever — which puts "Text not read yet" on
+    // its library card and invites the detail screen to start a recognition run
+    // that has nothing to read.
+    if (isArchive) return OcrStatus.completed;
+
     if (pages.isEmpty) return OcrStatus.pending;
 
     final recognisable = imagePages;

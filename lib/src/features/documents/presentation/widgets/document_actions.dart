@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/widgets/app_action_sheet.dart';
+import '../../../archives/presentation/providers/zip_create_providers.dart';
 import '../../../export/presentation/widgets/share_sheet.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/usecases/rename_document.dart';
@@ -58,13 +60,25 @@ Future<void> showDocumentActionsSheet(
             : 'Add to favourites',
         onSelected: () => toggleDocumentFavorite(context, ref, document),
       ),
-      AppSheetAction(
-        icon: Icons.ios_share,
-        label: 'Share',
-        description: 'Send a PDF or a Word file',
-        enabled: document.hasPages,
-        onSelected: () => showShareSheet(context, ref, document),
-      ),
+      // An archive is already a file. Offering it "as a PDF or a Word file"
+      // would be offering to convert something that has nothing to convert, so
+      // Share here means the ZIP itself and goes straight to the system sheet
+      // — one tap, no intermediate menu asking a question with one answer.
+      if (document.isArchive)
+        AppSheetAction(
+          icon: Icons.ios_share,
+          label: 'Share',
+          description: 'Send the .zip file',
+          onSelected: () => shareArchiveDocument(context, ref, document),
+        )
+      else
+        AppSheetAction(
+          icon: Icons.ios_share,
+          label: 'Share',
+          description: 'Send a PDF or a Word file',
+          enabled: document.hasPages,
+          onSelected: () => showShareSheet(context, ref, document),
+        ),
       AppSheetAction(
         icon: Icons.delete_outline,
         label: 'Delete',
@@ -203,11 +217,20 @@ Future<void> confirmDeleteDocument(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Delete document?'),
+      title: Text(document.isArchive ? 'Delete archive?' : 'Delete document?'),
       content: Text(
-        '"${document.title}" and its ${document.pageCount} '
-        '${document.pageCount == 1 ? 'page' : 'pages'} will be permanently '
-        'removed from this device. This cannot be undone.',
+        document.isArchive
+            // Says what deleting an archive does *not* do, because that is the
+            // question somebody hesitates over: they built this ZIP out of
+            // documents they still want, and nothing on screen has told them
+            // the archive holds copies rather than the originals.
+            ? '"${document.title}" will be permanently removed from this '
+                  'device. The documents and files it was made from are not '
+                  'affected. This cannot be undone.'
+            : '"${document.title}" and its ${document.pageCount} '
+                  '${document.pageCount == 1 ? 'page' : 'pages'} will be '
+                  'permanently removed from this device. This cannot be '
+                  'undone.',
       ),
       actions: [
         TextButton(
@@ -228,6 +251,36 @@ Future<void> confirmDeleteDocument(
   // Nothing to do on success: whichever screens are showing this document
   // react to it leaving the store. Telling them directly would mean calling
   // back into a widget the delete may already have unmounted.
+  result.fold(
+    onSuccess: (_) {},
+    onFailure: (failure) =>
+        messenger.showSnackBar(SnackBar(content: Text(failure.message))),
+  );
+}
+
+/// Hands a saved archive to the system share sheet.
+///
+/// The same repository call the Archive ready screen uses, so sharing a ZIP the
+/// moment it is built and sharing it from the library a week later are one code
+/// path — and the file offered is the persistent one in both cases. Sharing
+/// copies nothing and deletes nothing: the archive is still there afterwards,
+/// to be sent again.
+Future<void> shareArchiveDocument(
+  BuildContext context,
+  WidgetRef ref,
+  Document document,
+) async {
+  final relative = document.archivePath;
+  if (relative == null) return;
+
+  // Read before the await, for the reason the rename dialog gives: a `ref`
+  // whose widget has since been disposed throws when read.
+  final share = ref.read(shareZipProvider);
+  final path = ref.read(storagePathsProvider).absolutePath(relative);
+  final messenger = ScaffoldMessenger.of(context);
+
+  final result = await share.byPath(path);
+
   result.fold(
     onSuccess: (_) {},
     onFailure: (failure) =>

@@ -6,18 +6,25 @@ import '../../domain/entities/zip_build.dart';
 
 /// What a finished archive offers next.
 ///
-/// Deliberately not `PdfToolResult`. That widget's two buttons are View and
-/// Share, and both act on a `Document` — the thing a merge or a compression
-/// produces and the library then holds. An archive is not in the library and
-/// there is nothing in this app to view it with, so the shape is different:
-/// one action, and an account of anything that did not make it in.
+/// Open and Share, laid out the way `PdfToolResult` lays out View and Share,
+/// because an archive is now a library item like anything else those two
+/// screens produce — and there are exactly two reasonable things to do with a
+/// finished one: look inside it, or send it.
 ///
-/// Share is a `FilledButton` and the only prominent control on the screen,
-/// because it is the entire reason the archive exists. A ZIP sitting in a cache
-/// directory that the user has not sent anywhere has not finished being useful.
+/// Still its own widget rather than `PdfToolResult`. That one's View goes to
+/// the document detail screen and its Share offers a PDF or a Word file;
+/// neither is right for a ZIP, which opens in the archive reader and is already
+/// the file it would be shared as. What it also has that this needs is an
+/// account of anything left out.
+///
+/// **Neither action is urgent, and that is the change.** This screen used to
+/// warn that the archive was kept for a few hours and then removed, which made
+/// Share the only thing worth doing before it vanished. The archive is saved
+/// now, so the message says where it went instead.
 class ZipCreateResult extends StatelessWidget {
   const ZipCreateResult({
     required this.outcome,
+    required this.onOpen,
     required this.onShare,
     required this.onDone,
     this.sharing = false,
@@ -25,6 +32,10 @@ class ZipCreateResult extends StatelessWidget {
   });
 
   final ZipBuildOutcome outcome;
+
+  /// Opens the archive in the reader the rest of the app uses.
+  final VoidCallback onOpen;
+
   final VoidCallback onShare;
 
   /// Clears the result and returns the screen to its starting state.
@@ -77,7 +88,7 @@ class ZipCreateResult extends StatelessWidget {
                   AppSpacing.gapHorizontalSm,
                   Expanded(
                     child: Text(
-                      'Archive created',
+                      'Archive saved',
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: foreground,
                         fontWeight: FontWeight.w700,
@@ -109,20 +120,34 @@ class ZipCreateResult extends StatelessWidget {
           _SkippedReport(skipped: outcome.skipped),
         ],
         AppSpacing.gapXl,
-        FilledButton.icon(
-          onPressed: sharing ? null : onShare,
-          icon: sharing
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.ios_share, size: 18),
-          label: Text(sharing ? 'Opening…' : 'Share archive'),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: onOpen,
+                icon: const Icon(Icons.folder_zip_outlined, size: 18),
+                label: const Text('Open'),
+              ),
+            ),
+            AppSpacing.gapHorizontalSm,
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: sharing ? null : onShare,
+                icon: sharing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.ios_share, size: 18),
+                label: Text(sharing ? 'Opening…' : 'Share'),
+              ),
+            ),
+          ],
         ),
         AppSpacing.gapMd,
         Text(
-          'The archive is kept in DocuAI for a few hours so you can send it '
-          'again, then removed. It is not saved to your phone’s storage.',
+          'Your ZIP is saved in the DocuAI Library. You can open it or share it '
+          'again later, and it stays until you delete it.',
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             height: 1.4,

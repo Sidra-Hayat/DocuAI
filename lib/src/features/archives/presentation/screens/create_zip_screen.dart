@@ -5,6 +5,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_state_view.dart';
+import '../../../documents/presentation/widgets/library_navigation.dart';
 import '../../../pdf_tools/domain/entities/pdf_tool_models.dart';
 import '../../domain/entities/zip_build.dart';
 import '../providers/zip_create_providers.dart';
@@ -257,6 +258,7 @@ class _CreateZipScreenState extends ConsumerState<CreateZipScreen>
         body: ZipCreateResult(
           outcome: outcome,
           sharing: _sharing,
+          onOpen: () => openLibraryItem(context, ref, outcome.document),
           onShare: _share,
           onDone: () => setState(() {
             _outcome = null;
@@ -429,7 +431,9 @@ class _SourceTile extends StatelessWidget {
                 // Says where it came from, which is the one thing the name
                 // cannot: "Invoice" from the library and "Invoice.pdf" from
                 // Downloads are different things with nearly the same label.
-                source.isDocument
+                source.isArchive
+                    ? Icons.folder_zip_outlined
+                    : source.isDocument
                     ? Icons.description_outlined
                     : Icons.insert_drive_file_outlined,
                 size: 18,
@@ -471,6 +475,13 @@ class _SourceTile extends StatelessWidget {
   }
 
   static String _subtitleFor(ZipSource source) {
+    // Three kinds, not two. An archive arrives through the library like a
+    // document but has no pages, and reading "Document · 0 pages" beside a ZIP
+    // makes it look empty — which is what this said before archives could be
+    // saved and there was no such row to get wrong.
+    if (source.isArchive) {
+      return 'Archive · ${formatBytes(source.sizeBytes)}';
+    }
     if (source.isDocument) {
       final pages = source.pageCount ?? 0;
       return 'Document · $pages ${pages == 1 ? 'page' : 'pages'}';

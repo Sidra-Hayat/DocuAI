@@ -53,6 +53,23 @@ abstract interface class DocumentRepository {
     PageKind pageKind = PageKind.scanned,
   });
 
+  /// Records a finished `.zip` as a library item, taking ownership of the file.
+  ///
+  /// [sourceZipPath] is an absolute path to an archive the caller built
+  /// somewhere temporary. The implementation **moves** it into the document's
+  /// own storage — one of the few places a path crossing this boundary is
+  /// absolute, for the same reason [createFromImages] takes absolute paths: the
+  /// file does not belong to the app's document store yet.
+  ///
+  /// The resulting document has no pages. It is the archive, rather than a
+  /// document containing one, which is what lets the library, search, rename,
+  /// favourites and delete all treat it as an ordinary item.
+  FutureResult<Document> createArchive({
+    required String title,
+    required String fileName,
+    required String sourceZipPath,
+  });
+
   /// Creates a document to be written rather than captured.
   ///
   /// Starts with one empty text page, because a document with no pages is not

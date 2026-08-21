@@ -53,7 +53,7 @@ void main() {
     ).create(recursive: true);
 
     export = _DeviceExport(documentsRoot);
-    documents = _DeviceDocuments();
+    documents = _DeviceDocuments(documentsRoot);
   });
 
   tearDown(() async {
@@ -166,9 +166,25 @@ void main() {
 
     expect(File(outcome.path).existsSync(), isTrue);
     expect(
-      p.isWithin(cache.path, outcome.path),
+      p.isWithin(documentsRoot.path, outcome.path),
       isTrue,
-      reason: 'the archive must live in the cache, not in the user’s storage',
+      reason: 'a saved archive lives in the library’s own storage',
+    );
+    expect(
+      p.isWithin(cache.path, outcome.path),
+      isFalse,
+      reason: 'the cache is where it is built, never where it is kept',
+    );
+
+    // And the scratch space is empty again — the archive was moved, not copied.
+    final scratch = Directory(
+      p.join(cache.path, ZipBuilderRepositoryImpl.rootDirectory),
+    );
+    expect(
+      scratch.existsSync()
+          ? scratch.listSync(recursive: true).whereType<File>().toList()
+          : <File>[],
+      isEmpty,
     );
 
     // Read back through the app's own reader, on the device, which is the same
@@ -347,9 +363,19 @@ void main() {
   });
 }
 
-/// The library, in memory. Hive is not what these tests are about.
+/// The library, in memory over a real directory.
+///
+/// Hive is not what these tests are about, but the **file move** is: an archive
+/// has to end up in persistent storage and leave nothing in the cache, and only
+/// a fake that actually moves it can show that on a device.
 class _DeviceDocuments implements DocumentRepository {
+  _DeviceDocuments(this.root);
+
+  /// Stands in for the app documents directory.
+  final Directory root;
+
   final Map<String, Document> store = <String, Document>{};
+  var _next = 0;
 
   @override
   FutureResult<Document> getDocument(String id) async {
@@ -361,8 +387,43 @@ class _DeviceDocuments implements DocumentRepository {
   }
 
   @override
+  FutureResult<List<Document>> getDocuments() async =>
+      Success(store.values.toList());
+
+  @override
   FutureResult<Document> saveDocument(Document document) async {
     store[document.id] = document;
+    return Success(document);
+  }
+
+  @override
+  FutureResult<Document> createArchive({
+    required String title,
+    required String fileName,
+    required String sourceZipPath,
+  }) async {
+    final id = 'archive-${_next++}';
+    final relative = p.join('documents', id, fileName);
+    final target = File(p.join(root.path, relative));
+    target.parent.createSync(recursive: true);
+
+    final source = File(sourceZipPath);
+    final sizeBytes = await source.length();
+    await source.rename(target.path);
+
+    final now = DateTime(2026, 8, 21);
+    final document = Document(
+      id: id,
+      title: title,
+      createdAt: now,
+      updatedAt: now,
+      pages: const <DocumentPage>[],
+      source: DocumentSource.archive,
+      archivePath: relative,
+      archiveBytes: sizeBytes,
+    );
+
+    store[id] = document;
     return Success(document);
   }
 

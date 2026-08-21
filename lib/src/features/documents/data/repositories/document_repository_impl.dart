@@ -104,6 +104,20 @@ class DocumentRepositoryImpl implements DocumentRepository {
   });
 
   @override
+  FutureResult<Document> createArchive({
+    required String title,
+    required String fileName,
+    required String sourceZipPath,
+  }) => _guard(() async {
+    final model = await _local.createArchive(
+      title: title,
+      fileName: fileName,
+      sourceZipPath: sourceZipPath,
+    );
+    return model.toEntity();
+  });
+
+  @override
   FutureResult<Document> createTextDocument({required String title}) =>
       _guard(() async {
         final model = await _local.createTextDocument(title: title);

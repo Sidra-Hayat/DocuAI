@@ -1,5 +1,7 @@
 import 'package:path/path.dart' as p;
 
+import '../../../documents/domain/entities/document.dart';
+
 /// Where one thing going into a ZIP came from.
 ///
 /// The distinction is not cosmetic: a file is already a file and goes in as it
@@ -35,6 +37,7 @@ class ZipSource {
     this.documentId,
     this.path,
     this.pageCount,
+    this.isArchive = false,
   });
 
   /// A document, identified by id and titled as the library shows it.
@@ -56,6 +59,30 @@ class ZipSource {
     sizeBytes: 0,
     documentId: documentId,
     pageCount: pageCount,
+  );
+
+  /// An archive already in the library, going into a new one as it stands.
+  ///
+  /// A saved ZIP is a library item, so the picker offers it like anything else
+  /// — and it must not be treated like a page-based document. It has no pages
+  /// to render, its size is known already, and it goes in as the `.zip` it is
+  /// rather than as a PDF of something.
+  ///
+  /// Without this it took the [ZipSource.document] path, where the builder
+  /// tries to export a PDF, finds no pages and drops the entry with "That
+  /// document has nothing in it yet" — a sentence that is both wrong and
+  /// impossible to act on.
+  factory ZipSource.archive({
+    required String documentId,
+    required String title,
+    required int sizeBytes,
+  }) => ZipSource(
+    id: 'document:$documentId',
+    kind: ZipSourceKind.document,
+    name: title,
+    sizeBytes: sizeBytes,
+    documentId: documentId,
+    isArchive: true,
   );
 
   /// A file already copied into the app's cache.
@@ -97,6 +124,14 @@ class ZipSource {
   /// of a size.
   final int? pageCount;
 
+  /// True when this library item is itself a saved archive.
+  ///
+  /// Nesting one ZIP inside another is a real thing to want, and the format
+  /// allows it. DocuAI's own reader will not open an archive *within* an
+  /// archive — that limit is deliberate and unchanged — so what the user gets
+  /// is a valid ZIP whose inner archive they extract elsewhere.
+  final bool isArchive;
+
   bool get isDocument => kind == ZipSourceKind.document;
 
   /// The name this will carry *inside* the archive, before de-duplication.
@@ -104,8 +139,12 @@ class ZipSource {
   /// A document becomes a PDF because a PDF is what was put in for it. A file
   /// keeps the name it already had, which is the name the user recognises and
   /// the one the recipient will see.
-  String get preferredEntryName =>
-      isDocument ? '${sanitiseEntryName(name)}.pdf' : sanitiseEntryName(name);
+  String get preferredEntryName {
+    // An archive's title already ends in `.zip`; appending `.pdf` would name it
+    // for a conversion that never happens.
+    if (isArchive || !isDocument) return sanitiseEntryName(name);
+    return '${sanitiseEntryName(name)}.pdf';
+  }
 
   @override
   bool operator ==(Object other) => other is ZipSource && other.id == id;
@@ -187,6 +226,7 @@ class ZipSkippedSource {
 /// What a finished build produced.
 class ZipBuildOutcome {
   const ZipBuildOutcome({
+    required this.document,
     required this.path,
     required this.fileName,
     required this.entryCount,
@@ -195,10 +235,22 @@ class ZipBuildOutcome {
     this.skipped = const <ZipSkippedSource>[],
   });
 
-  /// Absolute path to the finished `.zip`, inside the app's cache.
+  /// The library item the archive became.
+  ///
+  /// A finished archive is a document from the moment it exists — there is no
+  /// window in which it is written but not yet saved, because the record is
+  /// what the build returns. Carrying the whole entity rather than an id means
+  /// the screen that just made it can open, share or name it without a second
+  /// read of the store.
+  final Document document;
+
+  /// Absolute path to the finished `.zip`.
+  ///
+  /// Inside the document's own folder in the app's private storage — not the
+  /// cache. It stays there until the user deletes the library item.
   final String path;
 
-  /// Its own name, as the share sheet and the recipient will show it.
+  /// Its own name, as the library, the share sheet and the recipient show it.
   final String fileName;
 
   /// How many entries went in — which is not always how many were chosen.
@@ -271,26 +323,39 @@ List<String> uniqueEntryNames(Iterable<String> preferred) {
   final result = <String>[];
 
   for (final name in preferred) {
-    var candidate = name;
-
-    if (taken.contains(candidate.toLowerCase())) {
-      final extension = p.extension(name);
-      final stem = name.substring(0, name.length - extension.length);
-
-      // Starts at 2, so the pair reads "Invoice.pdf" and "Invoice (2).pdf" —
-      // the numbering a person would have written themselves.
-      var counter = 2;
-      do {
-        candidate = '$stem ($counter)$extension';
-        counter++;
-      } while (taken.contains(candidate.toLowerCase()));
-    }
-
+    final candidate = uniqueNameAgainst(name, taken);
     taken.add(candidate.toLowerCase());
     result.add(candidate);
   }
 
   return result;
+}
+
+/// Returns [preferred], or the first numbered variant of it that is not in
+/// [taken]. Comparison is case-insensitive; [taken] must be lower-cased.
+///
+/// The one place the numbering lives. Entry names inside an archive and the
+/// archive's own name in the library are the same problem — a name somebody
+/// will read, that must not silently stand for two different things — and two
+/// implementations of "add a number until it is free" would be two chances to
+/// number them differently.
+String uniqueNameAgainst(String preferred, Set<String> taken) {
+  if (!taken.contains(preferred.toLowerCase())) return preferred;
+
+  final extension = p.extension(preferred);
+  final stem = preferred.substring(0, preferred.length - extension.length);
+
+  // Starts at 2, so the pair reads "Invoice.pdf" and "Invoice (2).pdf" — the
+  // numbering a person would have written themselves.
+  var counter = 2;
+  var candidate = '$stem ($counter)$extension';
+
+  while (taken.contains(candidate.toLowerCase())) {
+    counter++;
+    candidate = '$stem ($counter)$extension';
+  }
+
+  return candidate;
 }
 
 /// The name a new archive is offered under.

@@ -69,6 +69,14 @@ class ShareZip {
 
   final ZipBuilderRepository _archives;
 
-  FutureResult<void> call(ZipBuildOutcome outcome) =>
-      _archives.share(outcome.path);
+  FutureResult<void> call(ZipBuildOutcome outcome) => byPath(outcome.path);
+
+  /// Shares an archive that was built at some point in the past.
+  ///
+  /// The library has a path and no build outcome — the ZIP it is offering was
+  /// made days ago and the object describing that build is long gone. Both
+  /// entry points land here, so "share it now" and "share it again later" are
+  /// the same code offering the same file.
+  FutureResult<void> byPath(String archivePath) =>
+      _archives.share(archivePath);
 }

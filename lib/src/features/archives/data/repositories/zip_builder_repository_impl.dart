@@ -25,14 +25,25 @@ Future<ShareResult> _launchSystemShare(ShareParams params) =>
 
 /// Builds archives in the app's cache and hands them to the share sheet.
 ///
-/// **Where the archive goes, and why it goes there.** Everything is written
-/// under one directory inside `getTemporaryDirectory()` — the app's private
-/// cache. Nothing is written to a folder the user chose, nothing asks for a
-/// storage permission, and `MANAGE_EXTERNAL_STORAGE` does not appear anywhere
-/// in this app. An archive is a thing being *sent*, not a thing being kept: it
-/// exists to be handed to the share sheet, and the cache is exactly the place
-/// for a file whose whole life is the next thirty seconds. Android may reclaim
-/// it, and by then the user has sent it or has not.
+/// **Where the archive goes, and why it goes there.** A finished archive is
+/// kept. It is built in the app's cache and then *moved* into the library, into
+/// the document folder of the record that describes it — the same private
+/// storage every scanned page and exported PDF already lives in. Nothing is
+/// written to a folder the user chose, nothing asks for a storage permission,
+/// and `MANAGE_EXTERNAL_STORAGE` does not appear anywhere in this app.
+///
+/// It used to stop at the cache, on the reasoning that an archive is a thing
+/// being *sent* rather than a thing being kept. That was wrong in the way that
+/// only shows up a day later: the user shares the ZIP, the chat fails to send,
+/// they come back — and Android has reclaimed the only copy, with nothing in
+/// the app that ever admitted it was temporary. Keeping it makes "share it
+/// again" an ordinary thing to do, and makes deleting it the user's decision
+/// rather than the system's.
+///
+/// The cache is still where it is *made*. Building in a scratch directory is
+/// what lets a stopped build leave nothing behind — see [ZipWriter] — and the
+/// move into the library is the last step, taken only once there is a complete
+/// archive to move.
 ///
 /// **How it is handed over.** Through `share_plus`, which is the mechanism the
 /// rest of the app already shares with — the document export has used it since
@@ -87,13 +98,15 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
   /// Root for everything this repository writes, inside the app's cache.
   static const String rootDirectory = 'docuai_zip';
 
-  /// How long a finished archive is kept before it is swept.
+  /// How long an abandoned scratch directory is left before it is swept.
   ///
-  /// The same six hours [IncomingFiles] keeps its copies, and for the same
-  /// reason: a build can end anywhere — shared, dismissed, the process killed
-  /// while the sheet was open — and a cleanup step at each of those is one that
-  /// will be missed at the next. Long enough that nothing is deleted out from
-  /// under a share sheet still on screen.
+  /// Nothing the user owns is in here any more — a finished archive is moved
+  /// into the library, and a stopped one is deleted on the way out. What this
+  /// catches is the case neither of those can: a process killed mid-build,
+  /// which leaves a part file that nothing will ever come back for.
+  ///
+  /// Six hours, generously longer than any build, so a sweep can never delete
+  /// the scratch space of a build still running.
   static const Duration keepFor = Duration(hours: 6);
 
   /// Distinguishes two builds started in the same microsecond.
@@ -233,8 +246,15 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
       if (isCancelled?.call() ?? false) return _cancelled();
 
       // ---- Writing --------------------------------------------------------
+      //
+      // Still built in a scratch directory, and still under a temporary name
+      // inside it. Persisting the archive did not change where it is *made*:
+      // the guarantee that a stopped build leaves nothing behind rests on the
+      // finished name being claimed only by a finished file, and on the whole
+      // run directory being removable in one step. It becomes a library item
+      // afterwards, once there is something worth keeping.
 
-      final fileName = '${sanitiseEntryName(archiveName)}.zip';
+      final fileName = await _freeArchiveName(archiveName);
       final targetPath = p.join(run.path, fileName);
 
       final written = await _writer.write(
@@ -270,24 +290,43 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
         ToolProgress(
           done: sources.length * 2,
           total: sources.length * 2,
-          label: fileName,
+          label: 'Saving',
         ),
       );
 
-      // The run directory is kept: the archive is inside it. It is swept on a
-      // later build, or reclaimed by Android, whichever comes first.
-      run = null;
+      // ---- Keeping it -----------------------------------------------------
+      //
+      // The archive moves out of the cache and into the library. `createArchive`
+      // takes ownership of the file — it is renamed into the new document's own
+      // folder rather than copied, so there is never a second copy of something
+      // that may be hundreds of megabytes.
 
-      return Success(
-        ZipBuildOutcome(
-          path: written.path!,
-          fileName: fileName,
-          entryCount: plans.length,
-          sizeBytes: written.sizeBytes,
-          sourceBytes: sourceBytes,
-          skipped: skipped,
-        ),
+      final saved = await _documents.createArchive(
+        // The library shows the file name, extension and all. A ZIP is a thing
+        // with a name rather than a document with a title, and "DocuAI
+        // 2026-08-21" in a list beside "DocuAI 2026-08-21.zip" in a share sheet
+        // would be two names for one object.
+        title: fileName,
+        fileName: fileName,
+        sourceZipPath: written.path!,
       );
+
+      switch (saved) {
+        case Failed(:final failure):
+          return Failed(failure);
+        case Success(value: final document):
+          return Success(
+            ZipBuildOutcome(
+              document: document,
+              path: _paths.absolutePath(document.archivePath!),
+              fileName: fileName,
+              entryCount: plans.length,
+              sizeBytes: written.sizeBytes,
+              sourceBytes: sourceBytes,
+              skipped: skipped,
+            ),
+          );
+      }
     } catch (error, stackTrace) {
       return Failed(
         ExportFailure(
@@ -298,9 +337,11 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
         ),
       );
     } finally {
-      // Reached on cancellation and on failure, and skipped on success by the
-      // `run = null` above. This is the guarantee that a stopped build leaves
-      // nothing behind: the part file, and the directory that held it, both go.
+      // Reached on *every* path now, success included — the archive has been
+      // moved into the library by then, so the scratch directory is empty of
+      // anything worth keeping. This is the guarantee that a stopped build
+      // leaves nothing behind: the part file, and the directory that held it,
+      // both go, whatever happened.
       if (run != null) await _deleteQuietly(run);
     }
   }
@@ -381,6 +422,20 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
         document = value;
     }
 
+    // A library item that is itself an archive goes in as the file it already
+    // is. Checked before the page test below, which would otherwise refuse it
+    // for having no pages — true, and beside the point.
+    final archive = document.archivePath;
+    if (archive != null) {
+      final absolute = _paths.absolutePath(archive);
+      if (!File(absolute).existsSync()) {
+        return const _ResolvedSkip(
+          'That archive is no longer on this device.',
+        );
+      }
+      return _ResolvedPath(absolute);
+    }
+
     if (!document.hasPages) {
       return const _ResolvedSkip('That document has nothing in it yet.');
     }
@@ -422,6 +477,34 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
     return _ResolvedPath(path);
   }
 
+  /// A `.zip` name no archive in the library is already using.
+  ///
+  /// Two archives made on the same day both want to be called
+  /// "DocuAI 2026-08-21.zip". They no longer live in separate throwaway
+  /// directories where that was harmless — they sit in one library, where two
+  /// rows with the same name are two things the user cannot tell apart, and the
+  /// second would be the one they never find again.
+  ///
+  /// Numbered with the same helper that numbers entries *inside* an archive, so
+  /// the library reads the way the archive does: "(2)", "(3)", and so on.
+  ///
+  /// Checked against the store rather than against the file system. The file
+  /// lands in a folder of its own named by a fresh uuid, so nothing on disk can
+  /// collide; what has to stay unique is the name a person reads.
+  Future<String> _freeArchiveName(String requested) async {
+    final base = '${sanitiseEntryName(requested)}.zip';
+
+    final existing = await _documents.getDocuments();
+    if (existing is! Success<List<Document>>) return base;
+
+    final taken = <String>{
+      for (final document in existing.value)
+        if (document.isArchive) document.title.toLowerCase(),
+    };
+
+    return uniqueNameAgainst(base, taken);
+  }
+
   Failed<ZipBuildOutcome> _cancelled() => const Failed<ZipBuildOutcome>(
     ImportFailure('The archive was not created.', cancelled: true),
   );
@@ -446,13 +529,13 @@ class ZipBuilderRepositoryImpl implements ZipBuilderRepository {
     return run;
   }
 
-  /// Removes builds old enough that nothing can still be sharing one.
+  /// Removes scratch directories left by builds that never finished.
   ///
-  /// Also the backstop for the one case the writer cannot cover: a process
-  /// killed mid-build leaves a run directory with a part file in it, and
-  /// nothing else will ever come back for it. Best effort throughout — a
-  /// directory that will not delete is one the next build will offer to delete
-  /// again, which beats an exception taking down a build that was fine.
+  /// The backstop for the one case the writer cannot cover: a process killed
+  /// mid-build leaves a run directory with a part file in it, and nothing else
+  /// will ever come back for it. Best effort throughout — a directory that will
+  /// not delete is one the next build will offer to delete again, which beats
+  /// an exception taking down a build that was fine.
   Future<void> _sweep(Directory root) async {
     try {
       final cutoff = _now().subtract(keepFor);

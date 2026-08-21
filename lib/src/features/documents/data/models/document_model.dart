@@ -24,6 +24,8 @@ class DocumentModel {
     required this.pdfPath,
     required this.isFavorite,
     this.source,
+    this.archivePath,
+    this.archiveBytes,
   });
 
   factory DocumentModel.fromEntity(Document document) => DocumentModel(
@@ -36,6 +38,8 @@ class DocumentModel {
     pdfPath: document.pdfPath,
     isFavorite: document.isFavorite,
     source: document.source.name,
+    archivePath: document.archivePath,
+    archiveBytes: document.archiveBytes,
   );
 
   @HiveField(0)
@@ -68,6 +72,19 @@ class DocumentModel {
   @HiveField(8)
   final String? source;
 
+  /// Relative path to the `.zip` this record describes, for a library item that
+  /// is an archive rather than a set of pages.
+  ///
+  /// Appended, like [source], and null in every record written before archives
+  /// could be saved — which is what makes this readable by an install that
+  /// predates the feature without a migration step.
+  @HiveField(9)
+  final String? archivePath;
+
+  /// The archive's size on disk. Null whenever [archivePath] is.
+  @HiveField(10)
+  final int? archiveBytes;
+
   Document toEntity() => Document(
     id: id,
     title: title,
@@ -83,6 +100,8 @@ class DocumentModel {
     pdfPath: pdfPath,
     isFavorite: isFavorite,
     source: _decodeSource(source),
+    archivePath: archivePath,
+    archiveBytes: archiveBytes,
   );
 
   /// Stored by name, like every other enum here. An index is a position in a
