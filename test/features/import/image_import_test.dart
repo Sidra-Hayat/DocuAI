@@ -289,4 +289,10 @@ class _FakeImporter implements ImageImportRepository {
   @override
   FutureResult<ImportOutcome> pickImages({int limit = 30}) async =>
       Success(_outcome);
+
+  @override
+  FutureResult<ImportOutcome> readImages(
+    List<String> paths, {
+    int limit = 30,
+  }) async => Success(_outcome);
 }

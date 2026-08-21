@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the FileProvider is allowed to expose, and nothing else.
+
+  Two directories, both inside the app's cache, both belonging to this feature:
+  the copies of files other apps have handed over, and the entries pulled out of
+  an archive so they can be looked at. Neither holds anything of the user's that
+  was not already given to this app by somebody else.
+
+  Deliberately *not* the whole cache, and emphatically not
+  `<files-path path="."/>`. The documents directory holds every scanned page and
+  the Hive database that indexes them, and a provider that could address it
+  would turn "open this spreadsheet in another app" into a way to ask DocuAI for
+  a URI to the user's library.
+-->
+<paths>
+    <cache-path name="docuai_incoming" path="incoming/"/>
+    <cache-path name="docuai_archive" path="docuai_archive/"/>
+</paths>

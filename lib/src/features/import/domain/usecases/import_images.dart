@@ -45,8 +45,24 @@ class ImportImagesAsDocument {
   /// Nothing is indexed here. A freshly imported page has no recognised text
   /// yet, so there is nothing to index — `RecognizeDocumentText` does it once
   /// there is, exactly as it does after a scan.
-  FutureResult<ImportResult> call({required String title}) async {
-    final picked = await _importer.pickImages();
+  FutureResult<ImportResult> call({required String title}) =>
+      _persist(_importer.pickImages(), title: title);
+
+  /// The same import, for pictures another app has already handed over.
+  ///
+  /// Used when several photographs are shared to DocuAI at once: that is one
+  /// gesture, so it becomes one document, exactly as a multi-selection from the
+  /// picker does. Nothing downstream can tell the two apart.
+  FutureResult<ImportResult> fromPaths(
+    List<String> paths, {
+    required String title,
+  }) => _persist(_importer.readImages(paths), title: title);
+
+  Future<Result<ImportResult>> _persist(
+    FutureResult<ImportOutcome> picking, {
+    required String title,
+  }) async {
+    final picked = await picking;
 
     final ImportOutcome outcome;
     switch (picked) {

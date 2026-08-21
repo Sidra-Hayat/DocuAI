@@ -1,5 +1,6 @@
 package com.sidrahayat.docuai
 
+import android.content.Intent
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import io.flutter.embedding.android.FlutterActivity
@@ -9,17 +10,29 @@ import io.flutter.plugin.common.MethodChannel
 /**
  * Host activity.
  *
- * Carries one channel of its own: ML Kit's document scanner is an on-demand
+ * Carries two channels of its own.
+ *
+ * The first is a capability check: ML Kit's document scanner is an on-demand
  * Google Play Services module, so it is simply absent on non-GMS devices and on
  * emulator images without the Play Store. The scanner plugin exposes no way to
  * ask about that, and finding out by launching the activity means showing the
  * user a failure where an explanation belongs.
+ *
+ * The second is [IncomingFiles], which turns a file another app handed over
+ * into a file this one owns. See that class for why the copy happens
+ * immediately and how the three arrival states are covered.
+ *
+ * The third is [ExternalOpener], the way back out: a file inside an archive
+ * that DocuAI cannot read is handed to an app that can.
  */
 class MainActivity : FlutterActivity() {
     private companion object {
         const val CHANNEL = "com.sidrahayat.docuai/scanner"
         const val IS_AVAILABLE = "isPlayServicesAvailable"
     }
+
+    private val incoming by lazy { IncomingFiles(applicationContext) }
+    private val opener by lazy { ExternalOpener(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -31,6 +44,48 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        incoming.attach(flutterEngine.dartExecutor.binaryMessenger)
+        opener.attach(flutterEngine.dartExecutor.binaryMessenger)
+
+        // The cold-start case. This runs inside `onCreate`, so the intent that
+        // started the process is already attached and is read here — long
+        // before Dart is listening, which is why IncomingFiles queues what it
+        // finds rather than pushing it.
+        incoming.handleIntent(intent)
+    }
+
+    /**
+     * The warm and backgrounded cases.
+     *
+     * Reached because the activity is `singleTask`: there is only ever one
+     * instance, and a second file arriving while it is alive is routed here
+     * rather than stacking a new copy of the app — or, as happened before the
+     * launch mode was corrected, being planted inside the sending app's task.
+     *
+     * **The order of these three lines is load-bearing.** `super.onNewIntent`
+     * forwards the intent to the Flutter delegate, which — when deep linking is
+     * enabled — reads `intent.getData()` and pushes the whole URI to the
+     * framework as a route. Handling first means the file has been read and the
+     * intent neutralised before the framework is given a chance to see a
+     * `content://` URI it will try to navigate to.
+     *
+     * The manifest also switches that behaviour off, and that is the actual
+     * fix; this ordering is the belt to its braces, and it is the right order
+     * on its own merits. Nothing in this app registers a `NewIntentListener`,
+     * so no plugin loses anything by being handed an intent whose data has
+     * already been consumed.
+     */
+    override fun onNewIntent(intent: Intent) {
+        incoming.handleIntent(intent)
+        setIntent(intent)
+        super.onNewIntent(intent)
+    }
+
+    override fun onDestroy() {
+        incoming.detach()
+        opener.detach()
+        super.onDestroy()
     }
 
     /**

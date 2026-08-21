@@ -74,6 +74,30 @@ abstract final class AppRoutes {
   static String editPagePath(String id, String pageId) =>
       '${documentDetailPath(id)}/edit/$pageId';
 
+  /// The inside of a ZIP somebody handed to DocuAI.
+  ///
+  /// Above the shell, like the scanner: an archive browser is a place you are
+  /// visiting, not a fourth tab, and the way out of it is Back.
+  ///
+  /// The archive it shows is passed as a route `extra` rather than in the path.
+  /// What identifies it is a file system path into the app's cache, and a URL
+  /// carrying one would be a link that outlives the file — restorable, days
+  /// later, onto whatever happens to be at that path by then.
+  static const String archive = '/archive';
+  static const String archiveName = 'archive';
+
+  /// One file out of that archive, opened for reading.
+  ///
+  /// Nested under the archive so Back returns to the list the user was
+  /// standing in, at the folder they were standing in.
+  static const String archiveEntry = 'entry';
+  static const String archiveEntryName = 'archiveEntry';
+
+  /// A single file handed over from another app — a PDF, a picture, some text
+  /// — opened for reading rather than imported on sight.
+  static const String openedFile = '/opened';
+  static const String openedFileName = 'openedFile';
+
   /// One conversation, nested under the Assistant tab so Back returns to the
   /// list of threads rather than to wherever it was opened from.
   static const String conversation = 'c/:conversation';

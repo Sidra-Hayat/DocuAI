@@ -93,16 +93,33 @@ class FileImportRepositoryImpl implements FileImportRepository {
 
   @override
   FutureResult<ImportedFile> pickFile() async {
+    final String? path;
     try {
-      final path = await _pick();
+      path = await _pick();
+    } catch (error, stackTrace) {
+      return Failed(
+        ImportFailure(
+          'That file could not be opened.',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
 
-      // Dismissed without choosing. Not a failure; the user knows.
-      if (path == null) {
-        return const Failed(
-          ImportFailure('No file was chosen.', cancelled: true),
-        );
-      }
+    // Dismissed without choosing. Not a failure; the user knows.
+    if (path == null) {
+      return const Failed(ImportFailure('No file was chosen.', cancelled: true));
+    }
 
+    return readFile(path);
+  }
+
+  @override
+  FutureResult<ImportedFile> readFile(
+    String path, {
+    bool Function()? isCancelled,
+  }) async {
+    try {
       final name = p.basenameWithoutExtension(path);
       final extension = p.extension(path).replaceFirst('.', '').toLowerCase();
 
@@ -136,7 +153,18 @@ class FileImportRepositoryImpl implements FileImportRepository {
             targetDirectory: directory,
             prefix: prefix,
             onPageLimitReached: () => truncated = true,
+            isCancelled: isCancelled,
           );
+
+          // Stopped part way through a long PDF. The pages rendered so far are
+          // a fragment of somebody's document, and saving a fragment under the
+          // whole file's name is worse than saving nothing — the user would
+          // have a statement that is quietly missing its second half.
+          if (isCancelled?.call() ?? false) {
+            return const Failed(
+              ImportFailure('Import stopped.', cancelled: true),
+            );
+          }
 
           if (pages.isEmpty) {
             return const Failed(

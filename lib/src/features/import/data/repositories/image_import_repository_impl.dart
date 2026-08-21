@@ -49,36 +49,11 @@ class ImageImportRepositoryImpl implements ImageImportRepository {
         return const Success(ImportOutcome(imagePaths: <String>[]));
       }
 
-      final directory = await ImportScratch.prepare(
-        temporaryDirectory: _tempDir,
-      );
-
-      final normalised = <String>[];
-      final rejected = <String>[];
-
-      for (var i = 0; i < picked.take(limit).length; i++) {
-        final source = picked[i];
-        final target = p.join(
-          directory.path,
-          'import_${DateTime.now().microsecondsSinceEpoch}_$i.jpg',
-        );
-
-        final written = await _normalize(
-          sourcePath: source.path,
-          targetPath: target,
-        );
-
-        // One unreadable photo — HEIC, most often — must not cost the user the
-        // other nine. Named rather than counted, so they know which to convert.
-        if (written == null) {
-          rejected.add(source.name);
-          continue;
-        }
-        normalised.add(written);
-      }
-
-      return Success(
-        ImportOutcome(imagePaths: normalised, rejected: rejected),
+      return _normalizeAll(
+        picked
+            .take(limit)
+            .map((file) => (path: file.path, name: file.name))
+            .toList(),
       );
     } catch (error, stackTrace) {
       return Failed(
@@ -89,5 +64,69 @@ class ImageImportRepositoryImpl implements ImageImportRepository {
         ),
       );
     }
+  }
+
+  @override
+  FutureResult<ImportOutcome> readImages(
+    List<String> paths, {
+    int limit = defaultLimit,
+  }) async {
+    if (paths.isEmpty) {
+      return const Success(ImportOutcome(imagePaths: <String>[]));
+    }
+
+    try {
+      return _normalizeAll(
+        paths
+            .take(limit)
+            .map((path) => (path: path, name: p.basename(path)))
+            .toList(),
+      );
+    } catch (error, stackTrace) {
+      return Failed(
+        ImportFailure(
+          'Those pictures could not be read.',
+          cause: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+  }
+
+  /// Makes every picture upright, bounded and JPEG, in the scratch directory.
+  ///
+  /// The one place that does it, whether the pictures came from the picker or
+  /// from another app's share sheet. A second copy of this loop would be a
+  /// second answer to what a page is.
+  Future<Result<ImportOutcome>> _normalizeAll(
+    List<({String path, String name})> sources,
+  ) async {
+    final directory = await ImportScratch.prepare(temporaryDirectory: _tempDir);
+
+    final normalised = <String>[];
+    final rejected = <String>[];
+
+    for (var i = 0; i < sources.length; i++) {
+      final source = sources[i];
+      final target = p.join(
+        directory.path,
+        'import_${DateTime.now().microsecondsSinceEpoch}_$i.jpg',
+      );
+
+      final written = await _normalize(
+        sourcePath: source.path,
+        targetPath: target,
+      );
+
+      // One unreadable photo — HEIC, most often — must not cost the user the
+      // other nine. Named rather than counted, so they know which to convert.
+      if (written == null) {
+        rejected.add(source.name);
+        continue;
+      }
+      normalised.add(written);
+    }
+
+    return Success(ImportOutcome(imagePaths: normalised, rejected: rejected));
   }
 }

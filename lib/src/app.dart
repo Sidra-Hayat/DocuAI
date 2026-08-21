@@ -5,6 +5,7 @@ import 'core/constants/app_constants.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'features/incoming/presentation/incoming_files_listener.dart';
 
 /// Root widget.
 ///
@@ -23,6 +24,9 @@ class DocuAiApp extends ConsumerWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       routerConfig: router,
+      // Owned by the listener below, which has no route context of its own and
+      // still has to be able to say "that file could not be opened".
+      scaffoldMessengerKey: IncomingFilesListener.messengerKey,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
@@ -38,7 +42,13 @@ class DocuAiApp extends ConsumerWidget {
               maxScaleFactor: 1.4,
             ),
           ),
-          child: child ?? const SizedBox.shrink(),
+          // Wraps the navigator rather than sitting inside a screen, because a
+          // file handed over by another app can arrive whatever is on screen —
+          // including nothing, on a cold start. It renders its child and
+          // nothing else.
+          child: IncomingFilesListener(
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );

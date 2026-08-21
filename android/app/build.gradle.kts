@@ -105,4 +105,10 @@ dependencies {
     // scanner plugin later drops would break the build for a non-obvious
     // reason.
     implementation("com.google.android.gms:play-services-base:18.5.0")
+
+    // Declared for the same reason as the line above: ExternalOpener calls
+    // androidx.core.content.FileProvider directly. It arrives transitively
+    // through the Flutter embedding today, and a transitive dependency that
+    // something later drops would break the build for a non-obvious reason.
+    implementation("androidx.core:core:1.13.1")
 }

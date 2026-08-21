@@ -739,6 +739,10 @@ class _FakeRasterizer extends PdfPageRasterizer {
     required Directory targetDirectory,
     required String prefix,
     void Function()? onPageLimitReached,
+    // Accepted and ignored. Only the reader uses these — it wants pages as
+    // they land, and a way to stop — and merging cares about neither.
+    void Function(int index, String path)? onPage,
+    bool Function()? isCancelled,
   }) async {
     if (fails) return const <String>[];
 

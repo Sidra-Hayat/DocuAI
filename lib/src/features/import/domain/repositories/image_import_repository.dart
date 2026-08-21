@@ -18,6 +18,15 @@ abstract interface class ImageImportRepository {
   /// named in [ImportOutcome.rejected], with the rest still imported. One
   /// unreadable photo should not cost the user the other nine.
   FutureResult<ImportOutcome> pickImages({int limit});
+
+  /// The same normalisation, for pictures the app already has in hand.
+  ///
+  /// Added for "Open with": several photographs shared to DocuAI at once are
+  /// one gesture and should become one document, exactly as a multi-selection
+  /// from the picker does. They arrive as files another app copied in rather
+  /// than as a picker result, and everything after that — upright, bounded,
+  /// re-encoded, one page each — has to be identical, so it is the same code.
+  FutureResult<ImportOutcome> readImages(List<String> paths, {int limit});
 }
 
 /// What an import produced.

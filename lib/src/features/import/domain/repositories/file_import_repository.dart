@@ -62,4 +62,27 @@ abstract interface class FileImportRepository {
   /// A dismissed picker is a [Failed] carrying a cancelled `ImportFailure`, so
   /// callers can stay silent about it — the user knows they backed out.
   FutureResult<ImportedFile> pickFile();
+
+  /// Converts a file that is already on disk, with no picker involved.
+  ///
+  /// The other half of [pickFile], separated out when the archive browser
+  /// arrived. A file pulled out of a ZIP is a PDF, a picture or some text like
+  /// any other, and it has to become a document by exactly the same route — the
+  /// same page limit, the same normalisation, the same refusal of the formats
+  /// this app cannot read. A second conversion path written for archives would
+  /// be a second place for "which files can DocuAI import?" to be answered, and
+  /// the two answers would drift.
+  ///
+  /// [path] must be a file inside the app's own storage. Nothing here checks
+  /// that, because nothing here could: it is the caller's business, and every
+  /// caller either picked the file through the system chooser (which copies) or
+  /// extracted it from an archive (which writes into the cache).
+  /// [isCancelled] is polled where the work is divisible — between the pages
+  /// of a PDF, which is the only place a single file's conversion has a seam.
+  /// A file that stops half way returns a cancelled `ImportFailure` and writes
+  /// nothing, because half a document is not a document.
+  FutureResult<ImportedFile> readFile(
+    String path, {
+    bool Function()? isCancelled,
+  });
 }
