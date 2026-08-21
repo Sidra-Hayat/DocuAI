@@ -410,10 +410,15 @@ void main() {
 
       expect(images, hasLength(2));
       for (final image in images) {
+        // Unwrapped, because a picture is decoded at the size it is drawn:
+        // the provider is a `ResizeImage` bounding the decode, wrapping the
+        // `FileImage` that says which file. See `pageDecodeExtent`.
+        final resized = image.image as ResizeImage;
+
         // Not merely *an* image: the one the editor wrote into this document's
         // own `inline/` folder.
         expect(
-          (image.image as FileImage).file.path,
+          (resized.imageProvider as FileImage).file.path,
           StoragePaths(tempDir).inlineImagePath(documentId, imageName),
         );
       }

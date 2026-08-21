@@ -7,6 +7,7 @@ import '../../../../core/storage/storage_paths.dart';
 import '../../../../core/text/markup.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/page_image_decoding.dart';
 
 /// A page of markup, drawn.
 ///
@@ -349,6 +350,10 @@ class ReaderImage extends ConsumerWidget {
           child: Image.file(
             File(path),
             fit: BoxFit.contain,
+            // Bounded by [maxHeight] and fitted inside it, so that is the size
+            // worth decoding. A document with a dozen pictures in its text hit
+            // the same wall the library did.
+            cacheHeight: pageDecodeExtent(context, maxHeight),
             key: ValueKey<String>(path),
             // Said rather than left blank. A picture that silently renders as
             // nothing looks like a document that lost it, which is exactly the
