@@ -60,11 +60,24 @@ class PdfPageRasterizer {
   /// because the PDF tools call this too and neither of them needs the signal:
   /// merging counts its own budget across several files, and compressing a
   /// single PDF is bounded by the same limit its source already was.
+  ///
+  /// [onPage] fires as each page lands, before the rest have been rendered.
+  /// Every caller that *converts* a PDF ignores it — a half-imported document
+  /// is not a document — but the reader that opens a PDF out of an archive
+  /// lives on it: rendering forty pages before showing the first one is a wait
+  /// with nothing on screen, and page one is ready in a fraction of the time
+  /// the whole file takes.
+  ///
+  /// [isCancelled] is polled between pages, which is what lets the reader be
+  /// backed out of without leaving a rasterisation running behind it. It cannot
+  /// interrupt a page already being rendered; nothing here can.
   Future<List<String>> rasterize({
     required Uint8List bytes,
     required Directory targetDirectory,
     required String prefix,
     void Function()? onPageLimitReached,
+    void Function(int index, String path)? onPage,
+    bool Function()? isCancelled,
   }) async {
     final pages = <String>[];
     var index = 0;
@@ -72,6 +85,10 @@ class PdfPageRasterizer {
     if (pageLimit <= 0) return pages;
 
     await for (final raster in Printing.raster(bytes, dpi: dpi.toDouble())) {
+      // Checked before the work rather than after it, so a cancelled reader
+      // stops at the page it is on instead of one page later.
+      if (isCancelled?.call() ?? false) break;
+
       if (index >= pageLimit) {
         // Reached only by receiving a page past the limit, so this is proof
         // there were more rather than a guess from a full-looking result. A
@@ -98,7 +115,10 @@ class PdfPageRasterizer {
       // disk.
       if (png.existsSync()) await png.delete();
 
-      if (jpeg != null) pages.add(jpeg);
+      if (jpeg != null) {
+        pages.add(jpeg);
+        onPage?.call(pages.length - 1, jpeg);
+      }
       index++;
     }
 

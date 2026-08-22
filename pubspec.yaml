@@ -62,6 +62,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  # On-device tests. First-party and SDK-pinned, so it adds nothing to the
+  # dependency graph that `flutter_test` did not already bring — and it is the
+  # only way to exercise the ZIP encoder against a real phone's cache
+  # directory, real isolates and a real fifty-megabyte archive, none of which a
+  # desktop unit test can stand in for.
+  integration_test:
+    sdk: flutter
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your

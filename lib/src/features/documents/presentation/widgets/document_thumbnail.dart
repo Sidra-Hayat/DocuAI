@@ -20,6 +20,7 @@ import '../../domain/entities/document_page.dart';
 class DocumentThumbnail extends ConsumerWidget {
   const DocumentThumbnail({
     required this.page,
+    this.isArchive = false,
     this.width = 48,
     this.height = 64,
     this.borderRadius = 8,
@@ -27,6 +28,16 @@ class DocumentThumbnail extends ConsumerWidget {
   });
 
   final DocumentPage? page;
+
+  /// Draws the archive mark instead of the document one.
+  ///
+  /// An archive has no cover page to render — nothing inside a ZIP is read
+  /// until somebody asks for it, which is the whole design of the reader — so
+  /// the fallback *is* the thumbnail here rather than what is shown when
+  /// something went wrong. Saying which fallback to draw is the only way this
+  /// widget can tell "a ZIP" from "a page whose image is missing", and those
+  /// two must not look the same in a list.
+  final bool isArchive;
   final double width;
   final double height;
   final double borderRadius;
@@ -45,7 +56,7 @@ class DocumentThumbnail extends ConsumerWidget {
         // has anything to draw, and both already have a fallback that reads as
         // a document rather than as a broken image.
         child: switch (coverPage?.imagePath) {
-          null => _Fallback(theme: theme),
+          null => _Fallback(theme: theme, isArchive: isArchive),
           final relative => Image.file(
             File(ref.watch(storagePathsProvider).absolutePath(relative)),
             fit: BoxFit.cover,
@@ -62,7 +73,7 @@ class DocumentThumbnail extends ConsumerWidget {
               width > height ? width : height,
             ),
             errorBuilder: (context, error, stackTrace) =>
-                _Fallback(theme: theme),
+                _Fallback(theme: theme, isArchive: isArchive),
           ),
         },
       ),
@@ -71,17 +82,25 @@ class DocumentThumbnail extends ConsumerWidget {
 }
 
 class _Fallback extends StatelessWidget {
-  const _Fallback({required this.theme});
+  const _Fallback({required this.theme, this.isArchive = false});
 
   final ThemeData theme;
+  final bool isArchive;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: theme.colorScheme.surfaceContainerHighest,
+      // Tinted for an archive rather than grey. A ZIP is a normal, expected
+      // kind of library item and the grey square is what this widget shows
+      // when a page image has gone missing — the two should not read alike.
+      color: isArchive
+          ? theme.colorScheme.secondaryContainer
+          : theme.colorScheme.surfaceContainerHighest,
       child: Icon(
-        Icons.description_outlined,
-        color: theme.colorScheme.onSurfaceVariant,
+        isArchive ? Icons.folder_zip_outlined : Icons.description_outlined,
+        color: isArchive
+            ? theme.colorScheme.onSecondaryContainer
+            : theme.colorScheme.onSurfaceVariant,
       ),
     );
   }

@@ -266,4 +266,14 @@ class _FakeFileImporter implements FileImportRepository {
     if (failure != null) return Failed<ImportedFile>(failure);
     return Success<ImportedFile>(_file!);
   }
+
+  /// The picker-free door, which this fake answers identically.
+  ///
+  /// These tests are about what the use case does with what it is handed, and
+  /// that is the same question whichever door the file came through.
+  @override
+  FutureResult<ImportedFile> readFile(
+    String path, {
+    bool Function()? isCancelled,
+  }) => pickFile();
 }

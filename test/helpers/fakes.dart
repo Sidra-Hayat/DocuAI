@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:docuai/src/core/error/failure.dart';
 import 'package:docuai/src/core/error/result.dart';
@@ -15,6 +16,7 @@ import 'package:docuai/src/features/ocr/domain/repositories/ocr_repository.dart'
 import 'package:docuai/src/features/scanner/domain/repositories/scanner_repository.dart';
 import 'package:docuai/src/features/search/domain/entities/search_hit.dart';
 import 'package:docuai/src/features/search/domain/repositories/search_repository.dart';
+import 'package:path/path.dart' as p;
 
 /// In-memory doubles for every repository contract.
 ///
@@ -41,6 +43,8 @@ Document buildDocument({
   String? pdfPath,
   bool isFavorite = false,
   DocumentSource source = DocumentSource.scanned,
+  String? archivePath,
+  int? archiveBytes,
 }) => Document(
   id: id,
   title: title,
@@ -51,6 +55,8 @@ Document buildDocument({
   pdfPath: pdfPath,
   isFavorite: isFavorite,
   source: source,
+  archivePath: archivePath,
+  archiveBytes: archiveBytes,
 );
 
 DocumentPage buildPage({
@@ -177,6 +183,57 @@ class FakeDocumentRepository implements DocumentRepository {
       ],
       source: source,
     );
+    store[document.id] = document;
+    _emit();
+    return Success(document);
+  }
+
+  /// Archives created through this fake, so a test can assert what was saved.
+  final List<String> archivedFrom = <String>[];
+
+  /// Where archives are moved to, standing in for the app documents directory.
+  ///
+  /// Set it and this fake performs a **real move**, exactly as the live data
+  /// source does. That matters more than it looks: the thing worth testing
+  /// about persistence is that the archive ends up somewhere it will still be
+  /// tomorrow and nowhere else, and a fake that only invented a path would let
+  /// an implementation that lost the file pass every test in the file.
+  Directory? archiveRoot;
+
+  @override
+  FutureResult<Document> createArchive({
+    required String title,
+    required String fileName,
+    required String sourceZipPath,
+  }) async {
+    final failure = saveFailure;
+    if (failure != null) return Failed(failure);
+
+    archivedFrom.add(sourceZipPath);
+
+    final relative = 'documents/archive-${store.length + 1}/$fileName';
+    final source = File(sourceZipPath);
+    final sizeBytes = source.existsSync() ? source.lengthSync() : 0;
+
+    final root = archiveRoot;
+    if (root != null && source.existsSync()) {
+      final target = File(p.join(root.path, relative));
+      target.parent.createSync(recursive: true);
+      source.renameSync(target.path);
+    }
+
+    final now = kNow;
+    final document = Document(
+      id: 'archive-${store.length + 1}',
+      title: title,
+      createdAt: now,
+      updatedAt: now,
+      pages: const <DocumentPage>[],
+      source: DocumentSource.archive,
+      archivePath: relative,
+      archiveBytes: sizeBytes,
+    );
+
     store[document.id] = document;
     _emit();
     return Success(document);

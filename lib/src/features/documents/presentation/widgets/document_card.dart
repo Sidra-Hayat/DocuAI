@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../pdf_tools/domain/entities/pdf_tool_models.dart';
 import '../../domain/entities/document.dart';
 import '../../domain/entities/document_page.dart';
 import 'document_actions.dart';
 import 'document_thumbnail.dart';
+import 'library_navigation.dart';
 
 /// One document in the library.
 ///
@@ -30,10 +30,10 @@ class DocumentCard extends ConsumerWidget {
 
     return Card(
       child: InkWell(
-        onTap: () => context.pushNamed(
-          AppRoutes.documentDetailName,
-          pathParameters: <String, String>{'id': document.id},
-        ),
+        // Not always the detail screen. An archive opens in the archive
+        // browser, which is the one screen that can show what is inside it —
+        // see [openLibraryItem].
+        onTap: () => openLibraryItem(context, ref, document),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -46,6 +46,7 @@ class DocumentCard extends ConsumerWidget {
             children: <Widget>[
               DocumentThumbnail(
                 page: document.coverPage,
+                isArchive: document.isArchive,
                 width: 56,
                 height: 72,
                 borderRadius: AppRadius.sm,
@@ -109,10 +110,16 @@ class _Meta extends StatelessWidget {
       DocumentSource.scanned => (Icons.document_scanner_outlined, 'Scanned'),
       DocumentSource.imported => (Icons.photo_library_outlined, 'Imported'),
       DocumentSource.created => (Icons.edit_note_outlined, 'Written'),
+      DocumentSource.archive => (Icons.folder_zip_outlined, 'Archive'),
     };
 
-    final pages =
-        '${document.pageCount} ${document.pageCount == 1 ? 'page' : 'pages'}';
+    // What the row counts. Pages are the measure of a document and mean nothing
+    // for an archive, whose size is the thing somebody about to send it wants
+    // to know.
+    final measure = document.isArchive
+        ? formatBytes(document.archiveBytes ?? 0)
+        : '${document.pageCount} '
+              '${document.pageCount == 1 ? 'page' : 'pages'}';
 
     return Row(
       children: <Widget>[
@@ -150,7 +157,7 @@ class _Meta extends StatelessWidget {
         AppSpacing.gapHorizontalSm,
         Expanded(
           child: Text(
-            '$pages · ${DateFormat.yMMMd().format(document.updatedAt)}',
+            '$measure · ${DateFormat.yMMMd().format(document.updatedAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../documents/presentation/widgets/document_thumbnail.dart';
+import '../../../documents/presentation/widgets/library_navigation.dart';
 import '../../domain/entities/search_hit.dart';
 import '../providers/search_providers.dart';
 
@@ -38,10 +39,10 @@ class SearchResultTile extends ConsumerWidget {
           InkWell(
             onTap: () {
               remember();
-              context.pushNamed(
-                AppRoutes.documentDetailName,
-                pathParameters: <String, String>{'id': hit.document.id},
-              );
+              // Titles are indexed, so an archive is findable by its file name
+              // — and a hit that opened a pager with no pages in it would be a
+              // search that found the right thing and then lost it.
+              openLibraryItem(context, ref, hit.document);
             },
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),

@@ -145,6 +145,86 @@ class DocumentLocalDataSource {
     );
   }
 
+  /// Takes ownership of a finished `.zip` and records it as a library item.
+  ///
+  /// [sourceZipPath] is a file the caller built somewhere temporary. It is
+  /// **moved**, not copied, and that is the whole point: an archive can be
+  /// hundreds of megabytes, and a copy would mean two of them on a phone that
+  /// may be short of space — plus a window in which the original still exists
+  /// and nothing is responsible for deleting it.
+  ///
+  /// A rename inside one file system is atomic and free. Cache and app storage
+  /// are both under the app's own data directory, so it is a rename in every
+  /// case this app produces; the copy-then-delete fallback is there for the one
+  /// it does not, because `rename` across devices throws rather than degrading.
+  ///
+  /// The archive lands in the document's own folder, beside where its page
+  /// images would have been. That is what makes deletion work with no new code:
+  /// `delete` already removes the record and then the folder.
+  Future<DocumentModel> createArchive({
+    required String title,
+    required String fileName,
+    required String sourceZipPath,
+  }) async {
+    final id = _uuid.v4();
+
+    final int sizeBytes;
+    final String relative;
+
+    try {
+      final directory = await _paths.documentDir(id);
+      final target = p.join(directory.path, fileName);
+
+      final source = File(sourceZipPath);
+      // Read before the move, because afterwards there is nothing at the old
+      // path to ask.
+      sizeBytes = await source.length();
+
+      try {
+        await source.rename(target);
+      } on FileSystemException {
+        // Different file systems. Copy, then drop the original — in that
+        // order, so a failure leaves the archive somewhere rather than nowhere.
+        await source.copy(target);
+        await source.delete();
+      }
+
+      relative = _paths.relativePath(target);
+    } catch (error) {
+      // A folder holding a half-moved archive is worse than none: nothing
+      // points at it, so nothing in the app would ever clean it up.
+      await _paths.deleteDocumentDir(id);
+      throw CacheException('Could not save the archive.', cause: error);
+    }
+
+    final timestamp = _now();
+
+    try {
+      return await write(
+        DocumentModel(
+          id: id,
+          title: title,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          // An archive is not pages, and pretending otherwise would put an
+          // empty page in every list that walks them.
+          pages: const <DocumentPageModel>[],
+          tags: const <String>[],
+          pdfPath: null,
+          isFavorite: false,
+          source: DocumentSource.archive.name,
+          archivePath: relative,
+          archiveBytes: sizeBytes,
+        ),
+      );
+    } catch (error) {
+      // The record is what makes the file findable. Without one the archive is
+      // invisible and unreachable, so it goes with the failed write.
+      await _paths.deleteDocumentDir(id);
+      rethrow;
+    }
+  }
+
   Future<DocumentModel> addTextPage(String documentId) async {
     final model = read(documentId);
 

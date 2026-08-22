@@ -321,6 +321,12 @@ class _ControllableImageImport implements ImageImportRepository {
     // note in `test/app_smoke_test.dart`.
     return (_completer ??= Completer<Result<ImportOutcome>>()).future;
   }
+
+  @override
+  FutureResult<ImportOutcome> readImages(
+    List<String> paths, {
+    int limit = 30,
+  }) => pickImages(limit: limit);
 }
 
 /// The file importer, held open the same way and for the same reasons.
@@ -337,4 +343,10 @@ class _ControllableFileImport implements FileImportRepository {
     // Built here, not in `setUp` — see the note on the photo importer above.
     return (_completer ??= Completer<Result<ImportedFile>>()).future;
   }
+
+  @override
+  FutureResult<ImportedFile> readFile(
+    String path, {
+    bool Function()? isCancelled,
+  }) => pickFile();
 }

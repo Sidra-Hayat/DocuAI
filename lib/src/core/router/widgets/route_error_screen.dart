@@ -8,9 +8,19 @@ import '../app_routes.dart';
 /// A real screen rather than GoRouter's red debug page, so a bad deep link in
 /// production degrades into something recoverable instead of alarming.
 class RouteErrorScreen extends StatelessWidget {
-  const RouteErrorScreen({this.error, super.key});
+  const RouteErrorScreen({this.error, this.message, super.key});
 
   final Exception? error;
+
+  /// A sentence written for the user, used in place of [error].
+  ///
+  /// GoRouter hands this screen an exception, whose `toString` is a developer's
+  /// sentence with a class name in front of it. The routes that build this
+  /// screen deliberately — an archive whose file has gone, a reader restored
+  /// with nothing to read — know exactly what happened and can say it plainly,
+  /// so they pass a sentence instead of manufacturing an exception to carry
+  /// one.
+  final String? message;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +47,9 @@ class RouteErrorScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                error?.toString() ?? 'The link may be broken or out of date.',
+                message ??
+                    error?.toString() ??
+                    'The link may be broken or out of date.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

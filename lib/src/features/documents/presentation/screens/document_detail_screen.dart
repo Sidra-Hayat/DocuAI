@@ -20,6 +20,7 @@ import '../widgets/document_action_bar.dart';
 import '../widgets/document_actions.dart';
 import '../widgets/document_thumbnail.dart';
 import '../widgets/edit_tags_sheet.dart';
+import '../widgets/library_navigation.dart';
 import '../widgets/markup_view.dart';
 
 /// One document: its pages, and the three things you can do with them.
@@ -285,6 +286,7 @@ class _DocumentMeta extends StatelessWidget {
       DocumentSource.scanned => (Icons.document_scanner_outlined, 'Scanned'),
       DocumentSource.imported => (Icons.photo_library_outlined, 'Imported'),
       DocumentSource.created => (Icons.edit_note_outlined, 'Written'),
+      DocumentSource.archive => (Icons.folder_zip_outlined, 'Archive'),
     };
 
     return Wrap(
@@ -427,6 +429,28 @@ class _PageHero extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+
+    if (document.isArchive) {
+      // Reachable only sideways — every route the app offers sends an archive
+      // to the archive browser instead. It is here because "this document has
+      // no pages, use Edit to add one" is a nonsense instruction to give
+      // somebody looking at a ZIP, and a screen that can be reached at all
+      // should say something true when it is.
+      return SizedBox(
+        height: _height,
+        child: AppStateView(
+          icon: Icons.folder_zip_outlined,
+          title: 'This is an archive',
+          message:
+              'Open it to see the files inside, or share the .zip as it is.',
+          action: FilledButton.icon(
+            onPressed: () => openLibraryItem(context, ref, document),
+            icon: const Icon(Icons.folder_zip_outlined, size: 18),
+            label: const Text('Open archive'),
+          ),
+        ),
+      );
+    }
 
     if (!document.hasPages) {
       return const SizedBox(

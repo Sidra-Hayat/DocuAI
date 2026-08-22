@@ -23,11 +23,46 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules">
+        <!--
+          `launchMode` and `taskAffinity` are both load-bearing for "Open with".
+
+          **singleTask, not singleTop.** singleTop was wrong, and the symptom
+          was that opening a ZIP from WhatsApp put DocuAI's archive browser
+          *inside WhatsApp's task*: the card in Recents carried WhatsApp's icon,
+          and backing out of the browser landed in WhatsApp rather than in
+          DocuAI.
+
+          The reason is that `taskAffinity` decides almost nothing on its own.
+          Android consults it only when the incoming intent carries
+          FLAG_ACTIVITY_NEW_TASK — and a sharing app that calls
+          `startActivity(chooser)` from one of its own activities does not set
+          it. Without that flag a `standard` or `singleTop` activity is simply
+          placed on top of the caller's stack, affinity unread.
+
+          `singleTask` is the launch mode that cannot be placed in somebody
+          else's task. The system always hosts it in a task matching its own
+          affinity, creating one if there is none, whatever flags the caller
+          used — and it still delivers a second file to the running instance
+          through `onNewIntent`, which is what this feature needs.
+
+          The affinity below stays, and is now doing the job it is named for:
+          it is the affinity singleTask hosts this activity under. It was `""`
+          in the Flutter scaffold, which would leave singleTask hosting the
+          activity in an unnamed task that nothing can be matched back to.
+
+          What that gives up is a mitigation for task-affinity hijacking
+          (StrandHogg), where a hostile app declares our affinity to get its own
+          activity placed in our task. Android 11 closed that at the platform
+          level, and an app that is a share target — which this one now is —
+          needs a real affinity regardless. Written out as the package name
+          rather than deleted, so the next reader finds a decision instead of an
+          omission.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:taskAffinity="com.sidrahayat.docuai"
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -40,11 +75,139 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+
+            <!--
+              Flutter must not turn an incoming file into a route.
+
+              This defaults to *true* when the key is absent, and what it does
+              is take `intent.getData()` and hand the whole URI to the framework
+              as the app's initial route. For an app with App Links that is the
+              feature; for this one it means GoRouter is asked to navigate to
+              `content://com.whatsapp.provider.media/item/e417…` and shows "no
+              routes for location" instead of the archive browser.
+
+              It cannot be worked around in code. The engine is created — and
+              the Dart entrypoint *run*, with that route already baked in —
+              inside `FlutterActivityAndFragmentDelegate.onAttach`, which
+              happens before `configureFlutterEngine` is ever called. There is
+              no earlier hook to clear the intent from.
+
+              Nothing is lost by turning it off. DocuAI has no App Links, no
+              custom scheme and no web presence; every route it has is pushed
+              from inside the app. Files arriving from other apps come through
+              the `com.sidrahayat.docuai/incoming` channel instead, which reads
+              the same intent — see IncomingFiles.kt.
+            -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!--
+              "Open with DocuAI", from a file manager, a chat app or a browser
+              download.
+
+              Three filters rather than one, because Android matches an action
+              against the *whole* filter: ACTION_VIEW carries a URI and needs a
+              scheme to match on, ACTION_SEND carries its URI as an extra and
+              would never match a filter that demanded one, and
+              ACTION_SEND_MULTIPLE is deliberately narrower than either.
+
+              `android:launchMode="singleTask"` above is what makes these work
+              while the app is already open, and what keeps the app out of the
+              sending app's task. See the note on the activity.
+            -->
+
+            <!--
+              Tapping a file somewhere else and choosing DocuAI.
+
+              The scheme and mimeType lists multiply out: every scheme is
+              matched against every type, which is why both live in one filter
+              rather than fourteen. `file` is here for the handful of older
+              file managers that still send one; everything modern sends
+              `content`.
+
+              BROWSABLE is present so a download notification or a link opened
+              in Chrome can hand the file over. It is scoped by the schemes
+              above — there is no http or https data element here, so this
+              cannot be used to make DocuAI open a URL off the network.
+            -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+
+                <data android:mimeType="application/zip"/>
+                <!-- What Windows-made ZIPs, and most of WhatsApp, report. -->
+                <data android:mimeType="application/x-zip-compressed"/>
+                <data android:mimeType="application/pdf"/>
+                <data android:mimeType="image/jpeg"/>
+                <data android:mimeType="image/png"/>
+                <data android:mimeType="image/webp"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+
+            <!-- Sharing one file *to* DocuAI from another app's share sheet. -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/x-zip-compressed"/>
+                <data android:mimeType="application/pdf"/>
+                <data android:mimeType="image/jpeg"/>
+                <data android:mimeType="image/png"/>
+                <data android:mimeType="image/webp"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+
+            <!--
+              Several files at once, images only.
+
+              Narrower than the filters above on purpose: a multi-share of
+              pictures is a document waiting to happen — the app already builds
+              one out of several photographs — whereas five PDFs and a ZIP
+              shared together have no single sensible outcome.
+            -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+
+                <data android:mimeType="image/*"/>
+            </intent-filter>
         </activity>
+        <!--
+          Lends one file at a time to another app.
+
+          Needed by "Open with another app" in the archive browser: a file
+          inside DocuAI's private storage cannot be handed over as a path — no
+          other app can read it — so it is handed over as a content URI with a
+          one-shot read grant, which the system revokes when the other app is
+          done with it.
+
+          `exported="false"` with `grantUriPermissions="true"` is the pair that
+          makes this safe: nothing can query this provider on its own initiative,
+          and the only URIs that exist are the ones this app mints and attaches
+          to an intent the user themselves chose an app for. What may be minted
+          is fixed by docuai_file_paths.xml.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.sidrahayat.docuai.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/docuai_file_paths"/>
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

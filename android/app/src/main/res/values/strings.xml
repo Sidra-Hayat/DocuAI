@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The label Android shows for DocuAI in the "Open with" chooser.
+
+      Deliberately not the app name on its own. A chooser lists app names, and
+      "DocuAI" beside "Files" and "Drive" says nothing about what tapping it
+      will do; this row is the one that opens the thing for reading.
+    -->
+    <string name="open_with_label">Open in DocuAI</string>
+</resources>

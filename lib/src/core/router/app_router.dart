@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/archives/presentation/screens/archive_screen.dart';
+import '../../features/archives/presentation/screens/create_zip_screen.dart';
+import '../../features/archives/presentation/screens/file_reader_screen.dart';
 import '../../features/assistant/presentation/assistant_intent_codec.dart';
 import '../../features/assistant/presentation/screens/assistant_screen.dart';
 import '../../features/assistant/presentation/screens/conversations_screen.dart';
@@ -13,6 +16,7 @@ import '../../features/documents/presentation/screens/manage_pages_screen.dart';
 import '../../features/documents/presentation/screens/page_viewer_screen.dart';
 import '../../features/documents/presentation/screens/text_editor_screen.dart';
 import '../../features/help/presentation/screens/help_screen.dart';
+import '../../features/incoming/presentation/screens/opened_file_screen.dart';
 import '../../features/pdf_tools/presentation/screens/compress_pdf_screen.dart';
 import '../../features/pdf_tools/presentation/screens/merge_pdfs_screen.dart';
 import '../../features/pdf_tools/presentation/screens/pdf_tools_screen.dart';
@@ -26,6 +30,34 @@ import 'widgets/route_error_screen.dart';
 /// Root navigator key — lets full-screen routes (scan, settings) be pushed
 /// *above* the shell so they cover the bottom navigation bar.
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
+/// Sends anything that is not one of this app's own paths to the library.
+///
+/// The platform can hand Flutter an initial route, and on Android that route is
+/// whatever URI started the activity. A ZIP opened from WhatsApp arrives as
+/// `content://com.whatsapp.provider.media/item/e417…`, and a router asked to
+/// navigate to that can only answer "no routes for location" — which is exactly
+/// what a user who tapped their own file saw: a dead end on first launch,
+/// before anything else in the app had a chance to run.
+///
+/// The real fix is in the manifest: `flutter_deeplinking_enabled` is off, so
+/// the URI never becomes a route in the first place. This is the second lock on
+/// the same door. It is here because the failure mode is severe and silent — an
+/// error screen on the one launch the user cared about — and because the next
+/// person to add an intent filter should not have to know this history for the
+/// app to survive it.
+///
+/// An in-app location is a path: no scheme, no authority, and a leading slash.
+/// Everything else lands on the library, which is where a launch with no
+/// destination belongs anyway.
+///
+/// Returns null for a location that should be left alone, which is what
+/// GoRouter's `redirect` expects.
+String? redirectForeignLocation(Uri location) {
+  if (location.hasScheme || location.hasAuthority) return AppRoutes.documents;
+  if (!location.path.startsWith('/')) return AppRoutes.documents;
+  return null;
+}
 
 /// The application router.
 ///
@@ -45,6 +77,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     // navigation — including document ids — to logcat, where any app holding
     // READ_LOGS on a rooted device can read it.
     debugLogDiagnostics: kDebugMode,
+    redirect: (context, state) => redirectForeignLocation(state.uri),
     errorBuilder: (context, state) => RouteErrorScreen(error: state.error),
     routes: [
       StatefulShellRoute.indexedStack(
@@ -200,6 +233,58 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const HelpScreen(),
       ),
+      // ---- Files handed over by another app --------------------------------
+      //
+      // Both take their subject as an `extra` and both refuse to build without
+      // one. A route that can be reached by typing its path — or restored by
+      // the system after the process was killed — would arrive with `extra`
+      // null, and a browser with no archive is not a screen worth guessing at.
+      // The error route says so instead.
+      GoRoute(
+        path: AppRoutes.archive,
+        name: AppRoutes.archiveName,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final args = state.extra;
+          if (args is! ArchiveArgs) {
+            return const RouteErrorScreen(
+              message: 'That archive is no longer open. Open it again from '
+                  'the app you received it in.',
+            );
+          }
+          return ArchiveScreen(args: args);
+        },
+        routes: <RouteBase>[
+          GoRoute(
+            path: AppRoutes.archiveEntry,
+            name: AppRoutes.archiveEntryName,
+            parentNavigatorKey: _rootNavigatorKey,
+            builder: (context, state) {
+              final args = state.extra;
+              if (args is! FileReaderArgs) {
+                return const RouteErrorScreen(
+                  message: 'That file is no longer open.',
+                );
+              }
+              return FileReaderScreen(args: args);
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.openedFile,
+        name: AppRoutes.openedFileName,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) {
+          final args = state.extra;
+          if (args is! FileReaderArgs) {
+            return const RouteErrorScreen(
+              message: 'That file is no longer open.',
+            );
+          }
+          return OpenedFileScreen(args: args);
+        },
+      ),
       GoRoute(
         path: AppRoutes.pdfTools,
         name: AppRoutes.pdfToolsName,
@@ -217,6 +302,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: AppRoutes.compressPdfName,
             parentNavigatorKey: _rootNavigatorKey,
             builder: (context, state) => const CompressPdfScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.createZip,
+            name: AppRoutes.createZipName,
+            parentNavigatorKey: _rootNavigatorKey,
+            builder: (context, state) => const CreateZipScreen(),
           ),
         ],
       ),

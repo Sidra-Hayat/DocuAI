@@ -16,7 +16,20 @@ mixin _$Document {
 
  String get id; String get title; DateTime get createdAt; DateTime get updatedAt; List<DocumentPage> get pages; List<String> get tags;/// Relative path to the generated PDF, or `null` if it has not been
 /// exported yet. Regenerated whenever the pages change.
- String? get pdfPath; bool get isFavorite; DocumentSource get source;
+ String? get pdfPath; bool get isFavorite; DocumentSource get source;/// Relative path to the `.zip` this document *is*, or null for every
+/// document that is a set of pages.
+///
+/// The file lives inside the document's own folder, like its page images
+/// and its exported PDF, which is what makes deleting the document delete
+/// the archive: `StoragePaths.deleteDocumentDir` already removes the
+/// folder, and no second cleanup path had to be invented for archives.
+ String? get archivePath;/// The archive's size on disk. Null unless [archivePath] is set.
+///
+/// Stored rather than measured. The library list rebuilds on every change
+/// to any document, and stat-ing a file per row on each rebuild is work
+/// done over and over for a number that cannot change — an archive is
+/// written once and never edited.
+ int? get archiveBytes;
 /// Create a copy of Document
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,16 +40,16 @@ $DocumentCopyWith<Document> get copyWith => _$DocumentCopyWithImpl<Document>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Document&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.pages, pages)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.pdfPath, pdfPath) || other.pdfPath == pdfPath)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite)&&(identical(other.source, source) || other.source == source));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Document&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.pages, pages)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.pdfPath, pdfPath) || other.pdfPath == pdfPath)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite)&&(identical(other.source, source) || other.source == source)&&(identical(other.archivePath, archivePath) || other.archivePath == archivePath)&&(identical(other.archiveBytes, archiveBytes) || other.archiveBytes == archiveBytes));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,title,createdAt,updatedAt,const DeepCollectionEquality().hash(pages),const DeepCollectionEquality().hash(tags),pdfPath,isFavorite,source);
+int get hashCode => Object.hash(runtimeType,id,title,createdAt,updatedAt,const DeepCollectionEquality().hash(pages),const DeepCollectionEquality().hash(tags),pdfPath,isFavorite,source,archivePath,archiveBytes);
 
 @override
 String toString() {
-  return 'Document(id: $id, title: $title, createdAt: $createdAt, updatedAt: $updatedAt, pages: $pages, tags: $tags, pdfPath: $pdfPath, isFavorite: $isFavorite, source: $source)';
+  return 'Document(id: $id, title: $title, createdAt: $createdAt, updatedAt: $updatedAt, pages: $pages, tags: $tags, pdfPath: $pdfPath, isFavorite: $isFavorite, source: $source, archivePath: $archivePath, archiveBytes: $archiveBytes)';
 }
 
 
@@ -47,7 +60,7 @@ abstract mixin class $DocumentCopyWith<$Res>  {
   factory $DocumentCopyWith(Document value, $Res Function(Document) _then) = _$DocumentCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, DateTime createdAt, DateTime updatedAt, List<DocumentPage> pages, List<String> tags, String? pdfPath, bool isFavorite, DocumentSource source
+ String id, String title, DateTime createdAt, DateTime updatedAt, List<DocumentPage> pages, List<String> tags, String? pdfPath, bool isFavorite, DocumentSource source, String? archivePath, int? archiveBytes
 });
 
 
@@ -64,7 +77,7 @@ class _$DocumentCopyWithImpl<$Res>
 
 /// Create a copy of Document
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? createdAt = null,Object? updatedAt = null,Object? pages = null,Object? tags = null,Object? pdfPath = freezed,Object? isFavorite = null,Object? source = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? createdAt = null,Object? updatedAt = null,Object? pages = null,Object? tags = null,Object? pdfPath = freezed,Object? isFavorite = null,Object? source = null,Object? archivePath = freezed,Object? archiveBytes = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -75,7 +88,9 @@ as List<DocumentPage>,tags: null == tags ? _self.tags : tags // ignore: cast_nul
 as List<String>,pdfPath: freezed == pdfPath ? _self.pdfPath : pdfPath // ignore: cast_nullable_to_non_nullable
 as String?,isFavorite: null == isFavorite ? _self.isFavorite : isFavorite // ignore: cast_nullable_to_non_nullable
 as bool,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
-as DocumentSource,
+as DocumentSource,archivePath: freezed == archivePath ? _self.archivePath : archivePath // ignore: cast_nullable_to_non_nullable
+as String?,archiveBytes: freezed == archiveBytes ? _self.archiveBytes : archiveBytes // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 
@@ -160,10 +175,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source,  String? archivePath,  int? archiveBytes)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Document() when $default != null:
-return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source);case _:
+return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source,_that.archivePath,_that.archiveBytes);case _:
   return orElse();
 
 }
@@ -181,10 +196,10 @@ return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source,  String? archivePath,  int? archiveBytes)  $default,) {final _that = this;
 switch (_that) {
 case _Document():
-return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source);case _:
+return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source,_that.archivePath,_that.archiveBytes);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +216,10 @@ return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  DateTime createdAt,  DateTime updatedAt,  List<DocumentPage> pages,  List<String> tags,  String? pdfPath,  bool isFavorite,  DocumentSource source,  String? archivePath,  int? archiveBytes)?  $default,) {final _that = this;
 switch (_that) {
 case _Document() when $default != null:
-return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source);case _:
+return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages,_that.tags,_that.pdfPath,_that.isFavorite,_that.source,_that.archivePath,_that.archiveBytes);case _:
   return null;
 
 }
@@ -216,7 +231,7 @@ return $default(_that.id,_that.title,_that.createdAt,_that.updatedAt,_that.pages
 
 
 class _Document extends Document {
-  const _Document({required this.id, required this.title, required this.createdAt, required this.updatedAt, final  List<DocumentPage> pages = const <DocumentPage>[], final  List<String> tags = const <String>[], this.pdfPath, this.isFavorite = false, this.source = DocumentSource.scanned}): _pages = pages,_tags = tags,super._();
+  const _Document({required this.id, required this.title, required this.createdAt, required this.updatedAt, final  List<DocumentPage> pages = const <DocumentPage>[], final  List<String> tags = const <String>[], this.pdfPath, this.isFavorite = false, this.source = DocumentSource.scanned, this.archivePath, this.archiveBytes}): _pages = pages,_tags = tags,super._();
   
 
 @override final  String id;
@@ -242,6 +257,21 @@ class _Document extends Document {
 @override final  String? pdfPath;
 @override@JsonKey() final  bool isFavorite;
 @override@JsonKey() final  DocumentSource source;
+/// Relative path to the `.zip` this document *is*, or null for every
+/// document that is a set of pages.
+///
+/// The file lives inside the document's own folder, like its page images
+/// and its exported PDF, which is what makes deleting the document delete
+/// the archive: `StoragePaths.deleteDocumentDir` already removes the
+/// folder, and no second cleanup path had to be invented for archives.
+@override final  String? archivePath;
+/// The archive's size on disk. Null unless [archivePath] is set.
+///
+/// Stored rather than measured. The library list rebuilds on every change
+/// to any document, and stat-ing a file per row on each rebuild is work
+/// done over and over for a number that cannot change — an archive is
+/// written once and never edited.
+@override final  int? archiveBytes;
 
 /// Create a copy of Document
 /// with the given fields replaced by the non-null parameter values.
@@ -253,16 +283,16 @@ _$DocumentCopyWith<_Document> get copyWith => __$DocumentCopyWithImpl<_Document>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Document&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other._pages, _pages)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.pdfPath, pdfPath) || other.pdfPath == pdfPath)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite)&&(identical(other.source, source) || other.source == source));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Document&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other._pages, _pages)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.pdfPath, pdfPath) || other.pdfPath == pdfPath)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite)&&(identical(other.source, source) || other.source == source)&&(identical(other.archivePath, archivePath) || other.archivePath == archivePath)&&(identical(other.archiveBytes, archiveBytes) || other.archiveBytes == archiveBytes));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,title,createdAt,updatedAt,const DeepCollectionEquality().hash(_pages),const DeepCollectionEquality().hash(_tags),pdfPath,isFavorite,source);
+int get hashCode => Object.hash(runtimeType,id,title,createdAt,updatedAt,const DeepCollectionEquality().hash(_pages),const DeepCollectionEquality().hash(_tags),pdfPath,isFavorite,source,archivePath,archiveBytes);
 
 @override
 String toString() {
-  return 'Document(id: $id, title: $title, createdAt: $createdAt, updatedAt: $updatedAt, pages: $pages, tags: $tags, pdfPath: $pdfPath, isFavorite: $isFavorite, source: $source)';
+  return 'Document(id: $id, title: $title, createdAt: $createdAt, updatedAt: $updatedAt, pages: $pages, tags: $tags, pdfPath: $pdfPath, isFavorite: $isFavorite, source: $source, archivePath: $archivePath, archiveBytes: $archiveBytes)';
 }
 
 
@@ -273,7 +303,7 @@ abstract mixin class _$DocumentCopyWith<$Res> implements $DocumentCopyWith<$Res>
   factory _$DocumentCopyWith(_Document value, $Res Function(_Document) _then) = __$DocumentCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, DateTime createdAt, DateTime updatedAt, List<DocumentPage> pages, List<String> tags, String? pdfPath, bool isFavorite, DocumentSource source
+ String id, String title, DateTime createdAt, DateTime updatedAt, List<DocumentPage> pages, List<String> tags, String? pdfPath, bool isFavorite, DocumentSource source, String? archivePath, int? archiveBytes
 });
 
 
@@ -290,7 +320,7 @@ class __$DocumentCopyWithImpl<$Res>
 
 /// Create a copy of Document
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? createdAt = null,Object? updatedAt = null,Object? pages = null,Object? tags = null,Object? pdfPath = freezed,Object? isFavorite = null,Object? source = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? createdAt = null,Object? updatedAt = null,Object? pages = null,Object? tags = null,Object? pdfPath = freezed,Object? isFavorite = null,Object? source = null,Object? archivePath = freezed,Object? archiveBytes = freezed,}) {
   return _then(_Document(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -301,7 +331,9 @@ as List<DocumentPage>,tags: null == tags ? _self._tags : tags // ignore: cast_nu
 as List<String>,pdfPath: freezed == pdfPath ? _self.pdfPath : pdfPath // ignore: cast_nullable_to_non_nullable
 as String?,isFavorite: null == isFavorite ? _self.isFavorite : isFavorite // ignore: cast_nullable_to_non_nullable
 as bool,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
-as DocumentSource,
+as DocumentSource,archivePath: freezed == archivePath ? _self.archivePath : archivePath // ignore: cast_nullable_to_non_nullable
+as String?,archiveBytes: freezed == archiveBytes ? _self.archiveBytes : archiveBytes // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 
