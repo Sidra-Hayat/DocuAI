@@ -22,6 +22,10 @@ you. No account, no server, no sync.
 |---|---|---|
 | ![The document library](docs/screenshots/1-library.png) | ![Search results with highlighted snippets](docs/screenshots/2-search.png) | ![Reading a document's recognised text](docs/screenshots/3-reader.png) |
 
+| PDF tools | Merge | Compress |
+|---|---|---|
+| ![The PDF tools screen, offering merge and compress](docs/screenshots/5-pdf-tools.png) | ![Two PDFs staged for merging, draggable into order](docs/screenshots/6-merge.png) | ![A compression result: 271 KB reduced to 95 KB, the original left unchanged](docs/screenshots/4-compressed.png) |
+
 ---
 
 ## What DocuAI is
@@ -408,3 +412,9 @@ The policy is published at
 The short version: documents never leave the device, there is no account, DocuAI
 collects nothing, and the one thing that is not absolutely true — the ML Kit
 telemetry component — is named rather than glossed over.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE). Copyright © 2026 Sidra Hayat.
