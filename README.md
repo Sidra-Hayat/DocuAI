@@ -1,51 +1,173 @@
 # DocuAI
 
-**Intelligent Document Scanner & Offline AI Assistant**
+**Intelligent document scanner and offline assistant for Android.**
 
-An Android document scanner that captures, enhances, reads and answers questions
-about your documents — entirely on-device. No account, no server, no analytics,
-and no network layer in DocuAI's own code.
+Scan a document, have its text read on-device, search across everything you have
+scanned, and ask questions that are answered by quoting your own pages back to
+you. No account, no server, no sync.
+
+<!-- TODO: swap for the public store link once production access is granted -->
+[![Google Play — closed testing](https://img.shields.io/badge/Google_Play-closed_testing-01875f?logo=googleplay&logoColor=white)](#)
+
+> **Play Store:** in **closed testing**, version 1.0.2. The store listing,
+> content rating and Data safety declaration are complete and approved. The
+> public link is pending production access — see
+> [Release status](#release-status).
 
 ---
 
-## Status
+## Screenshots
 
-| Phase | Scope | State |
-|---|---|---|
-| 0 | Foundation: tooling, architecture, theme, routing, storage | ✅ Complete |
-| 1 | Domain entities, repository contracts, use cases | ✅ Complete |
-| 2 | Hive persistence and the document library | ✅ Complete |
-| 3 | ML Kit document scanning | ✅ Complete |
-| 4 | On-device OCR (ML Kit Text Recognition) | ✅ Complete |
-| 5 | PDF generation and sharing | ✅ Complete |
-| 6 | Full-text search over extracted text | ✅ Complete |
-| 7 | Offline assistant (retrieval; optional on-device LLM) | ✅ Complete |
-| 8 | Play Store release configuration | 🟨 Code complete — see checklist |
-| 9 | Conversations, tags, markup editing, phrase search | ✅ Complete |
-| 10 | UX redesign, and import from PDF / Word / text files | ✅ Complete |
-| 11 | Assistant intents and extraction quality | ✅ Complete |
+<!--
+  TODO: add screenshots. Suggested set, one per core flow:
+    docs/screenshots/library.png       — the document library
+    docs/screenshots/scan.png          — a scanned page with recognised text
+    docs/screenshots/search.png        — search results with highlighted snippets
+    docs/screenshots/assistant.png     — an answer with its source citations
+    docs/screenshots/pdf-tools.png     — merge / compress
+  Play Store phone screenshots must be at least 320px on the short edge.
+-->
 
-Feature development is complete. Phase 8's code-side work is done — signing
-config, R8 with ML Kit keep rules, backup disabled, launcher icon with a
-monochrome layer, privacy policy — and what remains needs a keystore password,
-a physical device or the Play Console, so it cannot be finished from the
-repository. The [release checklist](#release-checklist) lists exactly what.
+| Library | Scan &amp; read | Search | Assistant |
+|---|---|---|---|
+| _screenshot pending_ | _screenshot pending_ | _screenshot pending_ | _screenshot pending_ |
 
-Phases 9 to 11 came after the original plan and are worth naming, because they
-changed how the app reads rather than what it stores:
+---
 
-- **The library became a workspace.** Creation lives on the Documents screen
-  alone rather than in the shell, so it no longer floats over the page you are
-  writing; a document is opened as Read / Edit / Share instead of a column of
-  navigation rows; search results group by document and open the page the words
-  are on.
-- **Import gained files.** A PDF is rendered to pages through Android's own
-  renderer and read like a scan; Word and text files arrive as text; pictures go
-  through the same normaliser photographs do.
-- **Assistant actions carry their meaning.** A button sends an `AssistantIntent`
-  rather than the English it is labelled with. Sending the sentence is what once
-  had "Explain this document" answered by finding a page containing the words
-  "this document".
+## What DocuAI is
+
+DocuAI turns paper into something you can search and question. The flow it is
+built around:
+
+1. **Capture** a document with the camera, or import one you already have.
+2. **Read it.** Text recognition runs automatically the first time a document is
+   opened, and the recognised text becomes part of the document.
+3. **Find it.** Everything recognised is indexed, so a phrase from page four of a
+   bill you scanned in March is one query away.
+4. **Ask about it.** The assistant answers by finding the passage that best
+   matches your question and quoting it, with a citation pointing at the page it
+   came from.
+
+It is an Android app. There is no iOS target, and none is planned.
+
+---
+
+## Offline by design
+
+DocuAI has **no account system, no backend and no sync.** Scanning, text
+recognition, search, summarising and question answering all execute on the
+device. Documents are written to the app's private storage and are never
+uploaded.
+
+Two things follow from that, and both are deliberate:
+
+- **Cloud backup is switched off explicitly.** `allowBackup` defaults to `true`,
+  which would let Android Auto Backup copy the document database — metadata *and*
+  the full recognised text of every scan — to the user's Google Drive. Both the
+  cloud-backup and device-transfer paths are opted out of in the manifest.
+- **There is no telemetry in DocuAI's own code.** No analytics SDK, no crash
+  reporter, no HTTP client. Release builds do not even write errors to logcat,
+  because an exception string in this app routinely carries a document title.
+
+### One honest caveat
+
+The release build declares `INTERNET` and `ACCESS_NETWORK_STATE`, so those
+permissions appear on the Play listing. **Neither is requested by DocuAI.** They
+arrive with `com.google.android.datatransport`, the usage-telemetry component
+inside Google's ML Kit libraries, which are what perform scanning and text
+recognition. DocuAI's own code makes no network requests of any kind.
+
+They can be stripped with `tools:node="remove"`, but that has to be verified
+against a real scan in a release build before it is claimed. Full detail in
+[PRIVACY.md](PRIVACY.md).
+
+---
+
+## Features
+
+Everything listed here is implemented in this repository.
+
+### Capture and import
+
+- **Document scanning** via ML Kit's document scanner — automatic edge
+  detection, perspective correction and capture, up to 20 pages per scan.
+- **Import from the gallery**, through the system photo picker (no storage
+  permission required). Photos are straightened from their EXIF orientation,
+  capped at 2400px on the long edge and re-encoded, so an imported photo behaves
+  exactly like a scan.
+- **Import files** — `.pdf`, `.docx`, `.txt`, `.md`, `.jpg`, `.png`, `.webp`. A
+  PDF is rendered to page images through Android's own renderer at 150 dpi and
+  read like a scan; Word and text files arrive as editable text.
+- **Open with DocuAI** from another app — a file manager, a chat app or a browser
+  download can hand over a PDF, image, text file or ZIP, either by "Open with" or
+  through the share sheet.
+
+### Reading and text
+
+- **On-device OCR** (ML Kit Text Recognition, Latin script). The model is bundled
+  into the app rather than downloaded, so recognition works on any device.
+- **Layout-aware text rebuilding.** Rather than taking ML Kit's flat output —
+  which returns a bill one word per line — DocuAI walks the block/line/element
+  hierarchy and reassembles the page from the bounding boxes, so labels stay
+  beside their values.
+- **Per-page recognition status.** One unreadable page does not fail the
+  document; the rest is kept, indexed, and the failed page can be retried.
+- **Edit recognised text**, with a hand-corrected page never silently overwritten
+  by a later recognition run.
+- **A reader view** with adjustable text size, persisted between documents.
+
+### Writing
+
+- **Create documents in the app**, mixing typed pages and scanned pages in one
+  document.
+- **Lightweight formatting** — three heading levels, bold, italic, bullet and
+  numbered lists, and quotes. Markers are drawn, never shown as syntax.
+- **Pictures inside text**, with a built-in editor for rotating and cropping
+  them. Files nothing refers to any more are swept up automatically.
+
+### Organise
+
+- **Page management** — add, delete, reorder and replace pages.
+- **Tags and favourites**, both searchable.
+- **Rename and delete**, with deletion removing the record, the page images and
+  any exported file together.
+
+### Search
+
+- **Full-text search** across titles, tags and recognised page text.
+- **Tiered ranking.** An exact title match beats a partial title match, which
+  beats an exact phrase found in the text, which beats a term match ranked by
+  **Okapi BM25**, which beats a tag-only match — so typing a document's name
+  finds that document rather than a page that mentions the same words.
+- **Highlighted snippets** showing where on which page the match was found, and
+  opening straight to that page.
+
+### Assistant
+
+- **Ask questions about your documents** and get an answer drawn from them.
+- **Citations on every answer** — document, page number, an expanded snippet, and
+  which of your question's terms that passage actually contained.
+- **Quick actions** — summarise a document (full or brief), explain a document or
+  a selected passage, and extract every date, amount, name, place, reference
+  number or contact detail on the page.
+- **Suggested questions** generated from your own library, and only offered when
+  the documents actually carry the kind of thing being offered.
+- **Conversations**, kept per document or across the whole library, persisted
+  locally.
+
+### Share and convert
+
+- **Export to PDF**, composed on a background isolate so the app does not freeze,
+  and named after the document.
+- **Export to Word** (`.docx`), built from the document's text.
+- **Share extracted text** directly, without producing a file first.
+- **Merge PDFs** and **compress a PDF** at a chosen quality level.
+- **Create a ZIP** from selected documents and files, kept in the library so it
+  can be reopened, shared again or deleted.
+- **Browse a ZIP without unpacking it** — the archive's central directory is read
+  lazily, so the listing costs a few kilobytes regardless of archive size, and
+  entries are decompressed only when tapped. Zip Slip and zip-bomb defences are
+  applied to every entry.
 
 ---
 
@@ -53,23 +175,25 @@ changed how the app reads rather than what it stores:
 
 | Concern | Choice |
 |---|---|
-| Framework | Flutter 3.41 · Dart 3.11 |
-| UI | Material 3, seeded colour scheme, light + dark |
+| Framework | Flutter 3.41 · Dart SDK `^3.11.0` |
+| UI | Material 3, seeded colour scheme, full light and dark themes |
 | State | Riverpod 3 |
-| Navigation | GoRouter 17 (`StatefulShellRoute`) |
-| Storage | Hive CE (metadata) + app-sandbox files (images, PDFs) |
-| Scanning | Google ML Kit Document Scanner |
-| OCR | Google ML Kit Text Recognition (model bundled — no network) |
-| Export | PDF (`pdf`) and Word (`archive` + `xml`), shared via `share_plus` |
-| Import | Photos (`image_picker`); `.pdf`, `.docx`, `.txt`, `.md` and images (`flutter_file_dialog`), with PDF pages rendered by `printing` |
+| Navigation | GoRouter 17 (`StatefulShellRoute.indexedStack`) |
+| Storage | Hive CE (metadata) + app-sandbox files (images, PDFs, archives) |
+| Models | Freezed entities, hand-mapped to Hive data models |
+| Scanning | Google ML Kit Document Scanner (Play Services module) |
+| OCR | Google ML Kit Text Recognition (bundled model — no download) |
+| PDF out | `pdf` · rendered on a background isolate |
+| PDF in | `printing`, over Android's own `PdfRenderer` |
+| Word | `archive` + `xml` (a `.docx` is a ZIP of XML, read and written directly) |
+| Sharing | `share_plus`; file picking via `flutter_file_dialog` |
 | Backend | **None** — by design |
 
 `flutter_file_dialog` rather than the more obvious `file_picker`: every
 `file_picker` release below 12 pins `win32 ^5.9`, which cannot resolve alongside
 `share_plus 13`, and the version pub settles on instead has no Gradle namespace
 and fails the Android build outright. `flutter_file_dialog` has no third-party
-dependencies at all and is Android/iOS-only, which suits an Android app better
-than a picker carrying desktop packages behind it.
+dependencies at all.
 
 ---
 
@@ -83,7 +207,7 @@ lib/
 ├── bootstrap.dart          composition root: error handlers, Hive, DI, runApp
 └── src/
     ├── app.dart            MaterialApp.router
-    ├── core/               cross-cutting: theme, router, storage, errors, widgets
+    ├── core/               theme, router, storage, errors, shared widgets
     └── features/<feature>/
         ├── domain/         entities · repository interfaces · use cases
         ├── data/           Hive models · data sources · repository impls
@@ -92,369 +216,206 @@ lib/
 
 **The rule:** `presentation → domain ← data`.
 
-The `domain` layer is pure Dart. It imports no Flutter, no Hive, no ML Kit —
-which is what makes use cases unit-testable with no emulator, and what allows
-the storage engine to be swapped without touching business logic.
+The `domain` layer is pure Dart — no Flutter, no Hive, no ML Kit — which is what
+makes use cases testable without an emulator and lets the storage engine change
+without touching business logic.
 
-Two deliberate consequences:
+Three consequences worth knowing before reading the code:
 
-- **Entities are separate from models.** `Document` (domain) and
-  `DocumentModel` (`@HiveType`, data) are distinct classes with explicit
-  mapping. This is the step most tutorials skip.
-- **Errors change shape at the boundary.** Data sources throw
+- **Entities are separate from models.** `Document` (domain, Freezed) and
+  `DocumentModel` (data, `@HiveType`) are distinct classes with explicit mapping.
+- **Nothing throws across the boundary.** Data sources throw
   `CacheException` / `MlKitException`; repositories catch them and return a
-  sealed `Failure`, so the UI handles errors with an exhaustive `switch` the
-  compiler verifies.
-
-### Results, not exceptions
-
-Every repository method and use case returns `FutureResult<T>` —
-`Future<Result<T>>`, where `Result` is a sealed `Success` / `Failed` pair. No
-repository throws across the domain boundary, so a caller cannot forget an
-error path:
-
-```dart
-switch (await recognizeDocumentText(id)) {
-  case Success(:final value): showText(value.extractedText);
-  case Failed(:final failure): showMessage(failure.message);
-}
-```
-
-`Result` is hand-written rather than taken from `dartz` or `fpdart`: sealed
-classes and pattern matching are language features, and a 100-line file with no
-functional-programming vocabulary is easier to defend than a dependency.
-
-Which outcomes count as failures is a deliberate part of each contract — a
-search that matches nothing, a share sheet the user dismisses and a blank page
-that yields no text are all *successes*, because nothing went wrong.
-
-The alias is `FutureResult` rather than the more obvious `AsyncResult` because
-Riverpod 3 exports a type of that name; sharing it would force a `hide` clause
-on every file that touched both.
-
-The one exception is `watchDocuments()`, which returns a plain
-`Stream<List<Document>>`. A stream already has an error channel, and Riverpod
-surfaces it as `AsyncValue.error` — wrapping each event in a `Result` as well
-would give one failure two paths to travel.
-
-### Storage model
-
-Hive holds **metadata only** — ids, titles, timestamps, tags, extracted text and
-page paths. Images and PDFs live on disk under the app documents directory.
-
-Paths are persisted **relative** and resolved through `StoragePaths` at read
-time, because Android does not guarantee the absolute sandbox path survives a
-reinstall or update.
-
-`DocumentLocalDataSource` is the only class where Hive and the file system meet.
-It copies scanned pages in rather than moving them, deletes a half-built folder
-if any copy fails, and on delete removes the Hive record *before* the files — a
-record pointing at missing images shows a broken thumbnail the user cannot get
-rid of, whereas files with no record are invisible and reclaimable later.
-
-Type ids are declared once in `HiveTypeIds` and are append-only. `2` is reserved
-and currently unused: tags are plain normalised strings on `Document`, and
-renumbering after release would reinterpret every stored record.
-
-### Seeing the library before scanning exists
-
-Scanning arrives in Phase 3, so debug builds carry a **Developer → Add sample
-documents** action in Settings that generates a few documents with rendered
-page images. It sits behind `kDebugMode`, a compile-time constant, so the tree
-shaker removes it and the page renderer from release builds. Phase 8 deletes
-the file.
+  sealed `Failure` inside a `Result<T>`, so the compiler forces callers to handle
+  the error path.
+- **Hive stores metadata only.** Images, PDFs and archives live on disk, and
+  their paths are persisted **relative** to the app documents directory —
+  Android does not guarantee the absolute sandbox path survives a reinstall.
 
 ---
 
 ## Getting started
 
+**Requirements**
+
+- Flutter **3.41** or newer on the stable channel (Dart `^3.11.0`)
+- Android SDK, JDK 17
+- An Android device or emulator running API 24+
+
 ```bash
+git clone <this-repo>
+cd docuai
 flutter pub get
 flutter run
 ```
 
-Requires the Flutter stable channel and an Android device or emulator.
+### Code generation
 
-> **Scanning needs a real device.** ML Kit Document Scanner is a Google Play
+Freezed entities, Hive adapters and the Hive registrar are generated. Run this
+after changing an entity or a `@HiveType` model, or on a fresh clone if the
+generated files look stale:
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+### Launcher icons
+
+Regenerate after changing anything in `assets/icons/`. The output under
+`android/app/src/main/res` is committed, so a fresh clone builds the branded icon
+without running this first:
+
+```bash
+dart run flutter_launcher_icons
+```
+
+> **Scanning needs a real device.** The ML Kit Document Scanner is a Google Play
 > Services module downloaded on demand, so it does not work on emulator images
-> without the Play Store, or on non-GMS devices. DocuAI detects this rather
-> than failing on tap — see below.
+> without the Play Store, or on non-GMS devices. DocuAI detects this and hides
+> the scanner rather than failing when it is tapped — importing still works.
+> Text recognition is bundled and works everywhere, including the emulator.
 
-### Scanning
+---
 
-The scanner is a native activity, so `ScanScreen` shows no camera of its own.
-It reports whether the module is usable, starts the flow, and handles what
-comes back.
-
-`MainActivity` carries one method channel of its own, asking
-`GoogleApiAvailability` whether Play Services is present. Without it the only
-way to discover a non-GMS device is to launch the scanner and watch it fail,
-which puts an error where an explanation belongs.
-
-Three details come from the plugin's Android source rather than its docs, and
-`MlKitDocumentScanner` exists to normalise them:
-
-| Plugin behaviour | What the wrapper does |
-|---|---|
-| Cancelling answers with `result.error(...)`, not an empty result | Translates to an empty page list, matching `ScannerRepository`'s contract |
-| Returned paths are `Uri.path` values in the app cache | Left absolute — they belong to the scanner, so `createFromImages` copies rather than moves |
-| Scanner instances live in a Kotlin map until `close()` | One instance per scan, always closed in a `finally` |
-
-`ScanScreen` starts on an explicit tap rather than automatically. An
-auto-launching screen relaunches the scanner every time the user navigates back
-onto it, so backing out of a freshly saved document would reopen the camera.
-
-### Text recognition
-
-Unlike the scanner, the recognition model is **bundled into the APK** rather
-than fetched from Play Services, so it works on every device — including the
-ones where scanning is unavailable and pages came from the gallery.
-
-Recognition starts automatically the first time a document with unread pages is
-opened, which is what makes a freshly scanned document searchable without being
-asked to press anything. This cannot loop: a run leaves every page either
-`completed` or `failed`, so the document's aggregate status is no longer
-`pending` and the trigger is false on every later open. Pages that failed are
-retried only on an explicit tap — a page that cannot be read will not read any
-better for being reopened.
-
-One unreadable page does not fail the document. Each page records its own
-outcome, the run continues, and the text that was recovered is kept and
-indexed. That is why `Document.ocrStatus` is derived from the pages rather than
-stored alongside them.
-
-The native recogniser is created once and reused across a batch. Constructing a
-detector allocates a native model, and a twenty-page document would otherwise
-allocate twenty.
-
-#### Rebuilding the page from the hierarchy
-
-DocuAI does **not** use `RecognizedText.text`. That property is Android's
-`Text.getText()`, which concatenates *block* texts with newlines — fine for a
-page of prose where a block is a paragraph, useless for the documents this app
-exists for. ML Kit segments a bill by visual grouping, so a heading word, a
-field label and its value each become their own block, and the flat string comes
-back as:
-
-```
-Electricity
-Bill
-Amount
-5000
-```
-
-`RecognizedTextComposer` walks `TextBlock → TextLine → TextElement` and
-reassembles the page from the bounding boxes ML Kit already provides: lines are
-rebuilt from their elements in reading order, fragments whose vertical extents
-overlap are merged into one visual row and ordered left to right, and a vertical
-gap wider than 1.4× the median row height becomes a blank line.
-
-```
-Electricity Bill
-Amount: 5000
-```
-
-Two deliberate constraints:
-
-- **Nothing is invented.** Fragments on a row are joined with a single space and
-  nothing else — no colons or dashes inserted to make a label look like a label.
-  The assistant quotes recognised text *verbatim*, so a fabricated separator
-  would end up inside an answer presented as a quotation from the user's own
-  document.
-- **Left-to-right is assumed**, which holds for `TextRecognitionScript.latin` —
-  the only script configured.
-
-This was not only a readability problem. `PassageExtractor` discards candidates
-under 12 characters as fragments, so with the flat output a bill's `Electricity`
-(11), `Amount` (6) and `5000` (4) were *all* dropped — the assistant could see
-almost nothing on exactly the documents it was built for.
-
-### PDF export
-
-Composition runs on a **background isolate**. Rendering decodes and re-encodes
-every page image, which for a twenty-page document is seconds of CPU — on the
-UI isolate that is a frozen app. The `pdf` package is pure Dart, so moving the
-work costs nothing but the hop, and `PdfJob` carries only strings so it can
-cross the isolate boundary.
-
-A page whose image cannot be read aborts the export. A PDF quietly missing
-page 3 is worse than one that failed loudly, because the user would only find
-out after sending it to someone. Missing files are detected before rendering
-starts, so the failure costs milliseconds rather than a full render.
-
-The file is named after the document, sanitised — the title is what the share
-sheet and the receiving app display, and `document.pdf` tells a recipient
-nothing.
-
-Exporting and sharing are one action. Whether a PDF already exists is an
-implementation detail, so `ShareDocument` reuses one when it can and composes
-one when it cannot; a failed share retries with a fresh render, since a
-recorded PDF that Android has since cleared is the likeliest cause.
-
-### Search
-
-Ranking is Okapi BM25. Counting term occurrences gets two things wrong that
-BM25 corrects: a word appearing twenty times is not twenty times as relevant
-(`k1` saturates it), and a long document is not more relevant merely for having
-more words (`b` normalises by length). Titles are weighted 3×, so a document
-*called* "Electricity bill" outranks one that mentions electricity in passing.
-
-The index is stored as a **forward** index — one entry per document holding its
-term frequencies — not the inverted token-to-postings map a search engine would
-use. An inverted index wins when the vocabulary cannot be walked per query;
-this is a personal library of tens to low hundreds of documents, so scoring
-every entry is a few thousand hash lookups. In exchange, updating one document
-is a single write and deleting one is a single delete, where an inverted index
-would have to touch every token that document contributed. `SearchRepository`
-hides the choice, so postings remain a drop-in replacement.
-
-Entries are plain maps, not `@HiveType` models: the index is derived data, so a
-format change needs no migration — only a version bump and a rebuild. The
-reconciler runs when the search screen opens and rebuilds if the version is
-stale or the entry count disagrees with the library, which self-heals both
-documents that predate the index and entries left behind by a failed delete.
-
-Snippet offsets are the fiddly part. Every transformation preserves length —
-newlines become spaces one-for-one — and the ellipses are added last with the
-highlight offset adjusted for them. A `trim()` or a whitespace collapse would
-silently shift the range, producing a highlight over the wrong characters or a
-`RangeError` inside a `build`.
-
-### The offline assistant
-
-Retrieval-first, with **no language model**. `flutter_gemma` is not a
-dependency. `AnswerSource.onDeviceModel` exists on the entity as the seam for
-the optional enhancement; nothing sets it yet.
-
-Answers are **quoted, never composed**. The reply is the highest-scoring passage
-from the user's own documents, whitespace-normalised and nothing else. That is
-what makes an assistant defensible with no model behind it: there is no step at
-which anything could be invented, because every character shown was read off a
-page the user scanned.
-
-Retrieval is coarse-to-fine, reusing the Phase 6 index rather than building a
-second one:
-
-1. **Documents** — BM25 narrows the library to six candidates in one call.
-2. **Passages** — page text is split into sentences, and each is scored against
-   the question.
-
-`SearchHit.snippets` cannot serve stage 2: they are display artefacts with a
-fixed 60-character radius, capped at three per document.
-
-Passage ranking is a different function from BM25 on purpose. BM25 ranks
-documents across a corpus, where the hard problem is rarity. By stage 2 every
-candidate already comes from a relevant document, so what matters is which span
-most completely contains the question — `coverage × frequency × proximity ×
-lengthNorm × intent × documentPrior`, all bounded, all multiplied, so no single
-signal can run away with the ranking.
-
-**Stopwords appear here and nowhere else.** BM25 needs none — `idf` discounts
-common words statistically. A *coverage ratio* does, because it treats "the" as
-worth exactly as much as "deadline": without the list, "when is the deadline"
-scores a passage containing only "is" at one third coverage, and a confident
-answer gets assembled out of a preposition.
-
-The **intent boost** reflects the corpus. Bills and agreements are
-overwhelmingly asked *when* and *how much*, so a question about a date lifts
-passages containing one, and likewise for amounts. It reorders candidates and
-never invents one. The signal patterns deliberately reject bare integers — a
-page number would otherwise register as an amount on every page.
-
-Three outcomes, and the third matters:
-
-| Condition | Answer |
-|---|---|
-| Passages above the coverage floor | Top passage quoted, with citations |
-| Nothing above the floor | "I could not find an answer to that" |
-| **No document has recognised text** | Says *that*, specifically |
-
-"Not found" would send a user whose documents were never OCR'd looking for a
-phrasing problem they do not have.
-
-**History is deliberately not used as retrieval context.** Each question is
-answered independently. Resolving "what about the other one?" needs coreference,
-which a lexical retriever cannot do — feeding it prior turns would silently
-corrupt the query terms and produce confidently wrong retrieval. This is the
-clearest place the optional on-device model would earn its place.
-
-> The exported PDF is images only, not searchable. A searchable text layer
-> needs per-block bounding boxes to position invisible text, and
-> `OcrRepository` currently returns plain text — ML Kit provides the geometry,
-> DocuAI discards it. Worth revisiting if the OCR schema ever grows.
-
-### Quality gates
+## Tests
 
 ```bash
-flutter analyze   # must be clean
-flutter test      # widget + unit tests, no emulator required
+flutter analyze                  # static analysis
+flutter test                     # 85 unit + widget test files, no emulator needed
+flutter test integration_test/   # on-device only
 ```
 
-Entities are generated with Freezed. After changing one, or on a fresh clone if
-the generated files look stale:
+Domain use cases are tested against hand-written fakes in `test/helpers/`; the
+domain layer has no dependencies, and its tests do not add one. The one
+integration test exercises the ZIP encoder against a real device's cache
+directory, real isolates and a real fifty-megabyte archive — none of which a
+host-side test can stand in for.
+
+---
+
+## Release status
+
+DocuAI is in **closed testing** on Google Play, version 1.0.2. Complete and
+approved: the store listing, the content rating questionnaire, the Data safety
+declaration, and the
+[hosted privacy policy](https://sidra-hayat.github.io/DocuAI/privacy.html).
+
+**Production access is expected on 2 September**, after which the public store
+link replaces the placeholder at the top of this file.
+
+Outstanding:
+
+- [ ] Screenshots in this README (the app's Play listing already has its own)
+- [ ] Accessibility pass — TalkBack, and the system font at maximum. Text
+      scaling is clamped to 1.4× in `app.dart`; raising it needs a device to
+      check what the clamp was protecting.
+- [ ] Production access, 2 September
+
+## Release build
 
 ```bash
-dart run build_runner build
+flutter build appbundle --release
 ```
 
-Domain use cases are tested against hand-written fakes in `test/helpers/` — the
-domain layer has no dependencies, and its tests do not add one.
+Already configured in this repository:
+
+- Application ID `com.sidrahayat.docuai`, minSdk 24, targetSdk 36
+- R8 and resource shrinking, with narrow ML Kit keep rules
+- Auto Backup disabled — cloud backup **and** device transfer
+- Adaptive launcher icon with a monochrome layer for Android 13+ themed icons
+- Route logging and error logging gated out of release builds
+
+**Signing credentials are not in the repository.** They are read from
+`android/key.properties`, which is git-ignored, so it is absent on a fresh
+clone. Without it the release build falls back to the **debug** keystore, which
+Play will reject — the Gradle build prints a warning saying exactly that. Copy
+[`android/key.properties.example`](android/key.properties.example) and point it
+at your upload keystore.
+
+See [Release status](#release-status) for what remains before production.
+
+---
+
+## Known limitations
+
+Stated plainly, because most of these are trade-offs rather than bugs.
+
+**Text recognition**
+
+- **Latin script only.** The recogniser is configured for
+  `TextRecognitionScript.latin`, and the code that rebuilds page layout assumes
+  left-to-right reading order. Documents in other scripts will not be read
+  correctly.
+- Recognition quality is ML Kit's. A blurred or badly angled capture produces
+  poor text, and the affected page is marked failed rather than guessed at.
+
+**Backup and data safety**
+
+- **There is no backup, by design.** Cloud backup and device transfer are both
+  disabled, and there is no export-everything feature. If the device is lost or
+  the app is uninstalled, the documents are gone. Individual documents can be
+  shared out as PDF, Word or ZIP, and that is currently the only way to get data
+  off the device.
+
+**PDF**
+
+- **Merged and compressed PDFs lose selectable text.** Both operations work by
+  rendering pages to images and recomposing them, so the output is page images.
+  A true object-level merge would need a PDF engine this app does not bundle;
+  the trade is stated in the UI rather than hidden.
+- **Exported PDFs are not searchable either.** Positioning an invisible text
+  layer needs per-block bounding boxes, and the OCR layer returns plain text.
+- Merging is capped at 200 pages and a single PDF import at 60 pages. Reaching
+  the cap keeps what was rendered and says it was truncated.
+
+**Import and export**
+
+- Only `.docx` is readable — an older `.doc` has to be re-saved first.
+- **Word export cannot include pictures.** A document containing one is refused
+  with an explanation rather than exported without them; PDF keeps them.
+- HEIC photos cannot be decoded. Android hands them over happily and the image
+  library cannot read them, so such a file is skipped and named.
+
+**Assistant**
+
+- **It cannot paraphrase.** There is no language model. Answers are passages
+  quoted verbatim from your documents, and an "explanation" of a document is
+  closer to its table of contents plus the facts it carries than to a
+  description in someone's own words. The upside is that it cannot invent
+  anything.
+- **Each question is answered independently.** Conversation history is not used
+  as retrieval context, so follow-ups like "what about the other one?" will not
+  resolve. Doing that needs coreference, which a lexical retriever cannot do —
+  feeding it prior turns would silently corrupt the query and produce
+  confidently wrong results.
+- **Name detection is a heuristic**, not entity recognition: runs of capitalised
+  words filtered against lists of table furniture, organisation suffixes and
+  headings. It prefers missing a name to inventing one, which is why a names
+  result is reported as a *partial* match while a currency figure is reported as
+  strong.
+- Answer confidence describes **how completely the passage covered your
+  question**, never whether the document is correct. The UI says "match" rather
+  than "confident" for that reason.
+
+**Platform**
+
+- Android only.
+- Scanning requires Google Play Services. Non-GMS devices can still import,
+  read, search and ask.
+- System text scaling is clamped to 1.4× — above that, page thumbnails and text
+  overlays break. Raising the clamp needs a device to check what it was
+  protecting.
+- The assistant transcript is capped at 200 messages per conversation; older
+  turns are dropped.
 
 ---
 
 ## Privacy
 
-DocuAI has no backend, no account system and no analytics of its own. Scanning,
-text recognition, search and the assistant all execute locally, and documents
-never leave the device.
+The policy is published at
+**<https://sidra-hayat.github.io/DocuAI/privacy.html>**, and its source is
+[PRIVACY.md](PRIVACY.md) in this repository.
 
-**Backup is disabled explicitly.** `allowBackup` defaults to `true`, which would
-have let Android Auto Backup copy the Hive database — document metadata *and*
-the full recognised text of every scan — to the user's Google Drive. Both the
-cloud-backup and device-transfer paths are opted out of.
-
-**One honest caveat.** The release build holds `INTERNET` and
-`ACCESS_NETWORK_STATE`, so they appear on the Play listing. Neither is requested
-by DocuAI: they arrive with `com.google.android.datatransport`, the
-usage-telemetry component inside Google's ML Kit libraries. DocuAI's own code
-has no HTTP client and makes no requests. The permissions can be stripped with
-`tools:node="remove"`, but that has to be verified with a real scan in a release
-build first — see [PRIVACY.md](PRIVACY.md).
-
----
-
-## Release checklist
-
-Done:
-
-- [x] Real application ID (`com.sidrahayat.docuai`), minSdk 24, targetSdk 36
-- [x] R8 and resource shrinking enabled, with narrow ML Kit keep rules
-- [x] Auto Backup disabled (cloud backup **and** device transfer)
-- [x] Adaptive launcher icon, generated by `flutter_launcher_icons` from
-      `assets/icons/`, with a monochrome layer for Android 13+ themed icons
-- [x] Splash pinned to the brand ink in both light and dark, so the first frame
-      is DocuAI rather than the platform default
-- [x] Route logging gated behind `kDebugMode`, and error logging silenced in
-      release — an exception string here routinely carries a document title
-- [x] Import scratch files cleared on each import rather than left in the cache
-- [x] Privacy policy written ([PRIVACY.md](PRIVACY.md)), and honest about the
-      ML Kit telemetry permissions
-- [x] `flutter build appbundle --release` succeeds
-
-Yours to complete — these need a keystore password, a physical device or the
-Play Console, and cannot be done from the repository:
-
-- [ ] **Create the upload keystore** and `android/key.properties` — see
-      [`android/key.properties.example`](android/key.properties.example). Until
-      this exists the release build signs with the **debug** key and Play will
-      reject it. The Gradle build prints a warning saying so.
-- [ ] **Re-test on a device in release mode**, with R8 active: scan a document,
-      confirm text recognition, import a large PDF, share a PDF and a Word file.
-      R8 is the change most likely to break something host tests cannot see.
-- [ ] Host the privacy policy and put its URL in the Play Console listing
-- [ ] Accessibility pass — TalkBack, and the system font at maximum. Text
-      scaling is currently clamped to 1.4× in `app.dart`; raising it needs a
-      device to check what the clamp was protecting.
-- [ ] Show the app version in Settings (needs a decision on `package_info_plus`
-      versus a generated constant) and link the hosted policy from there
-- [ ] Play Console: store listing, screenshots, content rating, Data safety form
+The short version: documents never leave the device, there is no account, DocuAI
+collects nothing, and the one thing that is not absolutely true — the ML Kit
+telemetry component — is named rather than glossed over.
