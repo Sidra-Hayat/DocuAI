@@ -18,19 +18,9 @@ you. No account, no server, no sync.
 
 ## Screenshots
 
-<!--
-  TODO: add screenshots. Suggested set, one per core flow:
-    docs/screenshots/library.png       — the document library
-    docs/screenshots/scan.png          — a scanned page with recognised text
-    docs/screenshots/search.png        — search results with highlighted snippets
-    docs/screenshots/assistant.png     — an answer with its source citations
-    docs/screenshots/pdf-tools.png     — merge / compress
-  Play Store phone screenshots must be at least 320px on the short edge.
--->
-
-| Library | Scan &amp; read | Search | Assistant |
-|---|---|---|---|
-| _screenshot pending_ | _screenshot pending_ | _screenshot pending_ | _screenshot pending_ |
+| Library | Search | Reader |
+|---|---|---|
+| ![The document library](docs/screenshots/1-library.png) | ![Search results with highlighted snippets](docs/screenshots/2-search.png) | ![Reading a document's recognised text](docs/screenshots/3-reader.png) |
 
 ---
 
@@ -305,7 +295,6 @@ link replaces the placeholder at the top of this file.
 
 Outstanding:
 
-- [ ] Screenshots in this README (the app's Play listing already has its own)
 - [ ] Accessibility pass — TalkBack, and the system font at maximum. Text
       scaling is clamped to 1.4× in `app.dart`; raising it needs a device to
       check what the clamp was protecting.
